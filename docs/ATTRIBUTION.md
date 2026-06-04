@@ -85,6 +85,14 @@ bedrock_runtime.invoke_model(
 short, stable codes (resolve names later via the CSV). Avoid putting PII in the tags (use
 `u-2001`, not an email) — the tags land in logs that may be retained for years.
 
+**Enforcing it (the reusable wrapper):** to make callers set these tags *consistently* — and to
+screen out PII and unsafe characters automatically — use the helper at
+`backend/lambdas/shared/request-metadata.ts` (`buildRequestMetadata` / `withRequestMetadata`). See
+[INTEGRATION.md](./INTEGRATION.md) for copy-paste usage. Important honesty note documented there:
+**there is no `aws:RequestTag`-style IAM condition key for Bedrock `requestMetadata`**, so IAM
+*cannot* mandate or constrain these tags. Tagging is a client-side discipline; the SDK wrapper
+(plus a "no direct Bedrock calls" convention) is the practical enforcement mechanism.
+
 ## Layer 3 — project mapping (CSV → human-readable rollup)
 
 `project_id` is usually an opaque code. To roll up to a project name and cost center, the
