@@ -7,6 +7,8 @@ import * as sns from 'aws-cdk-lib/aws-sns';
 import * as subs from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as budgets from 'aws-cdk-lib/aws-budgets';
+import * as ce from 'aws-cdk-lib/aws-ce';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 import { EnvConfig } from '../config';
 import { BACKEND_ROOT, BACKEND_LOCK, lambdaEntry } from './paths';
@@ -91,10 +93,40 @@ export class AutomationStack extends cdk.Stack {
       ],
     });
 
-    // NOTE: Cost Anomaly Detection monitor/subscription is created via the AWS CLI
-    // (see scripts/setup-cost-anomaly.sh) because `ce` has limited CloudFormation coverage.
-    // The IMMEDIATE subscription targets this.alertTopic (SNS).
+    // --- Cost Anomaly Detection (ML) — created as code ---
+    // A DIMENSIONAL/SERVICE monitor auto-learns the spend baseline; an IMMEDIATE subscription
+    // routes detected anomalies to the SNS alert topic. Verified params:
+    //   docs/MONITORING_APPROACH.md §1 (Threshold deprecated → ThresholdExpression).
+    const anomalyMonitor = new ce.CfnAnomalyMonitor(this, 'SpendAnomalyMonitor', {
+      monitorName: `bedrock-spend-anomaly-${cfg.env}`,
+      monitorType: 'DIMENSIONAL',
+      monitorDimension: 'SERVICE',
+    });
+
+    // Cost Anomaly Detection publishes via the cost-alerts service principal; allow it on the topic.
+    this.alertTopic.addToResourcePolicy(new iam.PolicyStatement({
+      sid: 'AllowCostAnomalyDetectionPublish',
+      principals: [new iam.ServicePrincipal('costalerts.amazonaws.com')],
+      actions: ['sns:Publish'],
+      resources: [this.alertTopic.topicArn],
+    }));
+
+    new ce.CfnAnomalySubscription(this, 'SpendAnomalySubscription', {
+      subscriptionName: `bedrock-anomaly-alerts-${cfg.env}`,
+      frequency: 'IMMEDIATE', // IMMEDIATE → SNS (DAILY/WEEKLY would require EMAIL)
+      monitorArnList: [anomalyMonitor.attrMonitorArn],
+      subscribers: [{ type: 'SNS', address: this.alertTopic.topicArn }],
+      // ThresholdExpression (Threshold is deprecated): alert when absolute impact ≥ configured USD.
+      thresholdExpression: JSON.stringify({
+        Dimensions: {
+          Key: 'ANOMALY_TOTAL_IMPACT_ABSOLUTE',
+          MatchOptions: ['GREATER_THAN_OR_EQUAL'],
+          Values: [String(cfg.governance.anomalyImpactUsd)],
+        },
+      }),
+    });
 
     new cdk.CfnOutput(this, 'AlertTopicArn', { value: this.alertTopic.topicArn });
+    new cdk.CfnOutput(this, 'AnomalyMonitorArn', { value: anomalyMonitor.attrMonitorArn });
   }
 }

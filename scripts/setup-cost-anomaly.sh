@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# NOTE: As of the AutomationStack, the Cost Anomaly Detection monitor + subscription are created
+# automatically by CDK (AWS::CE::AnomalyMonitor / AWS::CE::AnomalySubscription). This script is
+# kept for reference / manual setup outside the CDK app.
+#
 # Create the Cost Anomaly Detection monitor + IMMEDIATE (SNS) subscription.
 # Done via CLI because `ce` has limited CloudFormation coverage. Verified against:
 #   https://docs.aws.amazon.com/cli/latest/reference/ce/create-anomaly-monitor.html
