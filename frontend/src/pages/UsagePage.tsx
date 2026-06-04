@@ -6,9 +6,10 @@ import { api, UsagePoint } from '../api/client';
 import { Kpi, Panel } from '../components/Layout';
 import { fmtTokens } from '../lib/format';
 
-/** Token usage over time + KPI summary, for the signed-in tenant. */
+/** Token usage over time + KPI summary + Bedrock quota headroom, for the signed-in tenant. */
 export function UsagePage() {
   const [points, setPoints] = useState<UsagePoint[]>([]);
+  const [quota, setQuota] = useState<{ throttles: any; headroom: any[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -17,6 +18,8 @@ export function UsagePage() {
       .then((r) => setPoints(r.points.map((p) => ({ ...p, label: p.timestamp.slice(11, 16) }))))
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
+    // Quota panel is best-effort; don't block the page if it fails.
+    api.quotas().then(setQuota).catch(() => setQuota(null));
   }, []);
 
   if (error) return <div className="empty"><div className="big">⚠️</div>Failed to load usage: {error}</div>;
@@ -59,6 +62,35 @@ export function UsagePage() {
         </ResponsiveContainer>
         {points.length === 0 && <p className="muted">No data yet — once aggregation runs, points appear here.</p>}
       </Panel>
+
+      {quota && (
+        <Panel title="Bedrock token-quota headroom"
+               desc="Per-model rate limits (HTTP 429 on breach). Throttles appear only if a limit is actually hit.">
+          <p style={{ marginTop: 0 }}>
+            <span className={`badge ${quota.throttles?.throttled ? 'critical' : 'info'}`}>
+              {quota.throttles?.throttled ? `⚠ ${quota.throttles.throttledCount} throttled` : '✓ No throttling'}
+            </span>{' '}
+            <span className="muted">client errors (24h): {quota.throttles?.clientErrors ?? 0}</span>
+          </p>
+          <table className="data">
+            <thead>
+              <tr><th>Quota</th><th>Window</th><th className="num">Limit</th><th className="num">Used</th><th className="num">Headroom</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              {quota.headroom.slice(0, 8).map((q, i) => (
+                <tr key={i}>
+                  <td className="mono" style={{ maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis' }}>{q.name}</td>
+                  <td>{q.window}</td>
+                  <td className="num">{fmtTokens(q.limit)}</td>
+                  <td className="num">{fmtTokens(q.used)}</td>
+                  <td className="num">{q.usedPct}%</td>
+                  <td><span className={`badge ${q.status === 'critical' ? 'critical' : q.status === 'warn' ? 'warning' : 'info'}`}>{q.status}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Panel>
+      )}
     </>
   );
 }

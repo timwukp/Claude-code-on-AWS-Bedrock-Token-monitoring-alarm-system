@@ -49,6 +49,7 @@ Cost Anomaly Detection + AWS Budgets ──► SNS / Budget Actions
 | [`docs/MULTI_TENANCY.md`](./docs/MULTI_TENANCY.md) | Tenant isolation model |
 | [`docs/VERIFICATION.md`](./docs/VERIFICATION.md) | Architecture validation + real-data schema findings |
 | [`docs/ROADMAP.md`](./docs/ROADMAP.md) | Honest gap analysis — what's validated vs planned |
+| [`docs/test-reports/`](./docs/test-reports/) | Per-feature test reports (unit + real-AWS validation) |
 | [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md) | Step-by-step deploy guide |
 | [`AGENTS.md`](./AGENTS.md) | Guidance for AI coding agents working in this repo |
 
