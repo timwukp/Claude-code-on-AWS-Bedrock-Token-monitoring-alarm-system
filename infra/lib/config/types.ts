@@ -42,4 +42,15 @@ export interface EnvConfig {
    * Security pillar — opt in deliberately and per tenant.
    */
   readonly enableAutoContainment: boolean;
+
+  /**
+   * Optional hard-stop enforcement config. When `budgetActionThresholdPct` is set (and
+   * `enableAutoContainment` is true), a Budget Action applies a restrictive IAM policy at that
+   * percent of the monthly budget. `budgetActionRoleArns` lists the role(s) the deny policy is
+   * attached to — point these at scoped/test roles, NOT your admin identity, to avoid lockout.
+   */
+  readonly enforcement?: {
+    readonly budgetActionThresholdPct?: number;
+    readonly budgetActionRoleArns?: string[];
+  };
 }
