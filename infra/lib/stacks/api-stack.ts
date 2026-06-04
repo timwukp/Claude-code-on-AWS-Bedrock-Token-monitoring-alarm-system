@@ -60,6 +60,7 @@ export class ApiStack extends cdk.Stack {
     const anomaliesFn = fn('AnomaliesFn', 'anomalies.ts');
     const queriesFn = fn('QueriesFn', 'queries.ts');
     const projectsFn = fn('ProjectsFn', 'projects.ts');
+    const quotasFn = fn('QuotasFn', 'quotas.ts');
 
     // Least-privilege grants.
     tables.aggregates.grantReadData(usageFn);
@@ -94,6 +95,12 @@ export class ApiStack extends cdk.Stack {
     grantAthena(projectsFn);
     curatedBucket.grantRead(projectsFn); // project_mapping CSV lives in the curated bucket
 
+    // quotasFn reads CloudWatch Bedrock metrics + Service Quotas limits (read-only, account-wide).
+    quotasFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['cloudwatch:GetMetricStatistics', 'servicequotas:ListServiceQuotas'],
+      resources: ['*'], // these read-only actions don't support resource-level scoping
+    }));
+
     this.restApi = new apigw.RestApi(this, 'Api', {
       restApiName: `tums-${cfg.env}`,
       deployOptions: { tracingEnabled: true, stageName: cfg.env },
@@ -116,6 +123,7 @@ export class ApiStack extends cdk.Stack {
     v1.addResource('costs').addMethod('GET', new apigw.LambdaIntegration(costsFn), opts);
     v1.addResource('anomalies').addMethod('GET', new apigw.LambdaIntegration(anomaliesFn), opts);
     v1.addResource('projects').addMethod('GET', new apigw.LambdaIntegration(projectsFn), opts);
+    v1.addResource('quotas').addMethod('GET', new apigw.LambdaIntegration(quotasFn), opts);
     const queries = v1.addResource('queries');
     queries.addMethod('POST', new apigw.LambdaIntegration(queriesFn), opts);
     queries.addResource('{id}').addMethod('GET', new apigw.LambdaIntegration(queriesFn), opts);

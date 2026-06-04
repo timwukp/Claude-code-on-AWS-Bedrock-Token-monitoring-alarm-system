@@ -33,6 +33,7 @@ export const api = {
   costs: () => request<{ byModel: any[]; totalEstimatedUsd: number }>('v1/costs'),
   anomalies: () => request<{ anomalies: any[] }>('v1/anomalies'),
   projects: () => request<{ projects: any[] }>('v1/projects'),
+  quotas: () => request<{ throttles: { throttledCount: number; clientErrors: number; throttled: boolean }; headroom: any[] }>('v1/quotas'),
   startQuery: (template: string, days: number) =>
     request<{ id: string }>('v1/queries', { method: 'POST', body: JSON.stringify({ template, days }) }),
   pollQuery: (id: string) => request<{ id: string; state: string; rows?: any[] }>(`v1/queries/${id}`),

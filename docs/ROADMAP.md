@@ -30,7 +30,7 @@ Ordered by impact on a cost-governance rollout.
 | # | Gap | Status | Notes |
 |---|---|---|---|
 | 1 | **Enable Cost Anomaly Detection** | ✅ | Done — the monitor (`AWS::CE::AnomalyMonitor`, DIMENSIONAL/SERVICE) and an IMMEDIATE→SNS subscription (`AWS::CE::AnomalySubscription`, `ThresholdExpression`) are now created by `AutomationStack` and validated against the real account. The manual `scripts/setup-cost-anomaly.sh` remains for reference. |
-| 2 | **Bedrock token-quota / throttle monitoring** | ⬜ | Bedrock enforces per-model **tokens-per-minute** and **max-tokens-per-day** quotas (HTTP 429 on breach). Surface `InvocationThrottles` and quota headroom in the dashboard so a pilot doesn't silently hit limits. See [`GOVERNANCE_FAQ.md`](./GOVERNANCE_FAQ.md) §2. |
+| 2 | **Bedrock token-quota / throttle monitoring** | ✅ | Done — `GET /v1/quotas` reports throttle status (`InvocationThrottles`/client errors, with no-datapoints treated as 0) and per-model TPM/per-day quota headroom from Service Quotas; the Usage page shows a quota panel. Validated against real CloudWatch + Service Quotas data. See [`test-reports/feature-02`](./test-reports/feature-02-token-quota-monitoring.md). |
 | 3 | **Prompt-cache savings KPI** | 🟡 | Cache-read tokens are captured and priced at 0.1×, but the dashboard doesn't surface "$ saved by caching." Add a KPI — it's the strongest counter to "this is expensive." |
 
 ### Tier 2 — core controls (cost-cap credibility)
