@@ -1,0 +1,22 @@
+{
+  "env": "ci",
+  "account": "123456789012",
+  "region": "us-east-1",
+
+  "logBucketName": "token-monitoring-raw-logs-ci",
+  "curatedBucketName": "token-monitoring-curated-ci",
+  "rawLogRetentionDays": 365,
+
+  "frontend": {
+    "domainName": null,
+    "certificateArn": null
+  },
+
+  "governance": {
+    "monthlyBudgetUsd": 1000,
+    "anomalyImpactUsd": 10,
+    "alertEmails": ["finops@example.com"]
+  },
+
+  "enableAutoContainment": false
+}

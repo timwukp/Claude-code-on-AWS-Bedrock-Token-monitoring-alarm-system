@@ -18,7 +18,8 @@ cdk.context.json
 .env.*.local
 infra/lib/config/*.json
 !infra/lib/config/example.env.json
-!infra/lib/config/ci.json    # placeholder account (123456789012) for CI synth only — no secrets
+# ci.json holds a placeholder account (123456789012) for CI synth only — no secrets
+!infra/lib/config/ci.json
 
 # Python
 __pycache__/
