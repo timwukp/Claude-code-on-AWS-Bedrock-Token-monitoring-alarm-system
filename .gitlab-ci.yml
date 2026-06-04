@@ -1,0 +1,38 @@
+# GitLab CI — mirrors the GitHub Actions checks (build, test, synth).
+# Validation gates for the internal mirror.
+default:
+  image: node:20
+
+stages: [test]
+
+backend:
+  stage: test
+  script:
+    - cd backend
+    - npm ci
+    - npx tsc --noEmit
+    - npm test
+  cache:
+    key: backend-$CI_COMMIT_REF_SLUG
+    paths: [backend/node_modules]
+
+frontend:
+  stage: test
+  script:
+    - cd frontend
+    - npm ci
+    - npm run build
+  cache:
+    key: frontend-$CI_COMMIT_REF_SLUG
+    paths: [frontend/node_modules]
+
+infra:
+  stage: test
+  script:
+    - cd infra
+    - npm ci
+    - npm run build
+    - npx cdk synth --context env=ci   # tracked placeholder config; no secrets
+  cache:
+    key: infra-$CI_COMMIT_REF_SLUG
+    paths: [infra/node_modules]

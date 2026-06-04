@@ -1,0 +1,33 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      env:
+        description: 'Environment to deploy (must have a matching infra/lib/config/<env>.json)'
+        required: true
+        default: 'dev'
+
+# Uses GitHub OIDC to assume an AWS role — no long-lived secrets.
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Deploy infrastructure
+        working-directory: infra
+        run: |
+          npm ci
+          npx cdk deploy --all --require-approval never --context env=${{ github.event.inputs.env }}
+      - name: Build & publish frontend
+        run: ./scripts/deploy-frontend.sh ${{ github.event.inputs.env }}
