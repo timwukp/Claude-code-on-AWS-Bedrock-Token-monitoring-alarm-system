@@ -10,17 +10,71 @@ deployable into **any AWS account**. Built AWS-native with the
 
 ---
 
-## Why
+## Executive summary
 
-Native CloudWatch alarms catch token spikes only with **static thresholds**. This system adds:
+Organizations running Bedrock-based workloads (coding assistants, RAG, agents) need to account
+for token consumption with the same rigor as any other cloud cost. That is harder than it looks,
+for reasons specific to how Bedrock works:
 
-- **ML cost anomaly detection** (AWS Cost Anomaly Detection) — adapts to your baseline.
-- **Automated response** (EventBridge + Lambda) — react, don't just alert.
-- **Forensic analytics** (Bedrock Model Invocation Logging → S3 → Athena) — query everything.
-- **Cost hard-stops** (AWS Budgets + Actions) and **rate safety nets** (Service Quotas).
+- Native CloudWatch alarms rely on **static thresholds** that must be set manually and re-tuned
+  as usage grows.
+- Bedrock is a **usage-billed API**. Unlike consumer Claude subscription plans (which ration
+  usage on a rolling window), it provides no quota that auto-resets to cap spend — its token
+  quotas are rate limits, not cost caps.
+- Bedrock invocation logs record the **IAM caller, but not an application-level user or project**,
+  so attributing cost to a team requires additional tagging.
+- Workloads that reuse context generate large volumes of **prompt-cache reads**, billed at a
+  fraction of the standard input rate — so raw token totals overstate the real bill.
 
-The full, source-verified monitoring rationale is in
-[`docs/MONITORING_APPROACH.md`](./docs/MONITORING_APPROACH.md).
+This platform addresses three recurring questions when operationalizing Bedrock cost:
+
+| Concern | What it provides |
+|---|---|
+| **Observability** — proactively track & alert on token cost | Layered: CloudWatch metrics, AWS Cost Anomaly Detection (ML, learns a baseline instead of fixed thresholds), forecasted AWS Budgets, and forensic Athena analytics — in one dashboard. |
+| **Controls** — prevent cost spikes | AWS Budgets Action can apply a restrictive IAM policy at a spend threshold (a hard cost cap); Service Quotas bound per-model throughput; an opt-in, off-by-default automated-response path can contain an offending principal. |
+| **Operating practices** — keep cost predictable | Enable invocation logging on day one; tag requests for project/user attribution; tier models by task; and report prompt-cache reads separately so reported cost reflects the actual bill. |
+
+**Scope of what the platform adds.** It does not change Bedrock's pricing or behavior. Its
+contribution is to **measure, attribute, and present** usage and cost accurately, and to wire
+native AWS governance (anomaly detection, budgets, quotas) into a single, deployable, multi-tenant
+system. Separating prompt-cache reads (priced at the documented 0.1x input rate) from standard
+input tokens yields a materially lower — and more accurate — cost figure than a raw token count
+implies; the magnitude depends on a given workload's cache-hit ratio.
+
+---
+
+## Features
+
+### In the dashboard (operator-facing)
+
+- **Usage** — hourly token time series + a Bedrock token-quota / throttle headroom panel
+- **Cost** — estimated spend per model + a prompt-cache savings KPI
+- **By Project** — per-project/user attribution; fast (DynamoDB) / full (Athena + names) toggle
+- **Governance** — budget status (limit / actual / forecast) + enforcement posture
+- **Anomalies** — anomaly & alert feed with severity
+- Cognito sign-in; per-tenant isolation on every request
+
+### Behind the scenes
+
+- **Data plane** — Bedrock Model Invocation Logging -> S3 (KMS) -> Glue + Athena workgroup
+- **Aggregation** — EventBridge-scheduled Lambda (every 15 min) folds logs into DynamoDB
+  (idempotent, watermarked), including per-project rollups for fast reads
+- **Anomaly detection** — AWS Cost Anomaly Detection (ML) -> SNS
+- **Automated response** — CloudTrail -> EventBridge -> Lambda -> SNS, with a dead-letter queue;
+  opt-in per-principal containment (self-lockout guarded)
+- **Cost controls** — AWS Budgets (actual + forecasted) + opt-in Budget Action hard-stop;
+  Service Quotas headroom surfaced
+- **Heavy ETL** — Step Functions -> ECS Fargate (daily) compacts raw logs to partitioned Parquet
+- **API** — 7 REST endpoints behind a Cognito authorizer, least-privilege IAM per function
+- **Forensics** — parameterized, tenant-scoped Athena query templates
+- **Integration** — a request-metadata tagging helper for project/user attribution
+- **Audit** — CloudTrail trail; CloudWatch metrics & alarms
+
+### Platform
+
+- AWS CDK (TypeScript), 8 independently deployable stacks, config-driven, any AWS account
+- Multi-tenant (JWT tenant claim); CI/CD (GitHub Actions + GitLab CI)
+- KMS encryption at rest, TLS in transit, no public buckets, WAF, scoped IAM
 
 ---
 
