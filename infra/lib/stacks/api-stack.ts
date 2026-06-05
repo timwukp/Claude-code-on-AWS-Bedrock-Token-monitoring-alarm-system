@@ -33,12 +33,18 @@ export class ApiStack extends cdk.Stack {
     super(scope, id, props);
     const { cfg, userPool, tables, athena, rawLogBucket, curatedBucket, dataKey } = props;
 
+    // CORS: restrict to configured origins in production; fall back to "*" for demo.
+    const allowedOrigins = cfg.api?.allowedOrigins?.length ? cfg.api.allowedOrigins : undefined;
+
     const commonEnv = {
       AGGREGATES_TABLE: tables.aggregates.tableName,
       ANOMALIES_TABLE: tables.anomalies.tableName,
       TENANTS_TABLE: tables.tenants.tableName,
       ATHENA_WORKGROUP: athena.workgroupName,
       GLUE_DATABASE: `token_monitoring_${cfg.env}`,
+      // The Lambda response's Access-Control-Allow-Origin must match the preflight. A single
+      // origin is echoed directly; multiple/none → "*" (demo). Production: set one origin.
+      ALLOWED_ORIGIN: allowedOrigins?.length === 1 ? allowedOrigins[0] : '*',
     };
 
     const fn = (name: string, entryFile: string) =>
@@ -106,7 +112,7 @@ export class ApiStack extends cdk.Stack {
       restApiName: `tums-${cfg.env}`,
       deployOptions: { tracingEnabled: true, stageName: cfg.env },
       defaultCorsPreflightOptions: {
-        allowOrigins: apigw.Cors.ALL_ORIGINS, // TODO: restrict to the CloudFront domain
+        allowOrigins: allowedOrigins ?? apigw.Cors.ALL_ORIGINS, // production: set cfg.api.allowedOrigins
         allowMethods: apigw.Cors.ALL_METHODS,
       },
     });

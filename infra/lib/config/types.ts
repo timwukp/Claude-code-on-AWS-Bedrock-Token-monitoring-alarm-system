@@ -27,6 +27,16 @@ export interface EnvConfig {
     readonly certificateArn?: string;
   };
 
+  /** API options. */
+  readonly api?: {
+    /**
+     * Allowed CORS origins for the API. In production set this to your dashboard origin(s)
+     * (the CloudFront domain or custom domain). If omitted/empty, CORS falls back to "*"
+     * (convenient for demo, NOT recommended for production).
+     */
+    readonly allowedOrigins?: string[];
+  };
+
   /** Cost governance. */
   readonly governance: {
     /** Monthly Bedrock budget in USD. */
