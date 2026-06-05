@@ -80,13 +80,14 @@ implies; the magnitude depends on a given workload's cache-hit ratio.
 
 ## Architecture at a glance
 
-```
-React/Vite SPA ──► CloudFront+S3 ──► API Gateway (Cognito) ──► Lambda ──► DynamoDB (hot reads)
-                                                              └────────► Athena (forensics)
-Bedrock Model Invocation Logging ──► S3 (KMS) ──► Glue/Athena ──► Parquet (Fargate ETL)
-CloudTrail ──► EventBridge ──► anomaly-response Lambda ──► SNS
-Cost Anomaly Detection + AWS Budgets ──► SNS / Budget Actions
-```
+![Architecture diagram](./docs/diagrams/architecture.png)
+
+The diagram reflects the deployed stacks. Everything runs inside a single AWS account/region;
+only the **Fargate ETL task runs inside a VPC** (private subnets), reaching S3 via a VPC gateway
+endpoint — the serverless API and ingestion paths intentionally stay outside the VPC. The dashed
+edges are authentication / asynchronous paths (Cognito sign-in and JWT verification, the
+dead-letter queue). The AWS Budgets **Action hard-stop** and per-principal containment are
+opt-in and off by default.
 
 - **Full design:** [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
 - **Well-Architected review (6 pillars):** [`docs/WELL_ARCHITECTED.md`](./docs/WELL_ARCHITECTED.md)
