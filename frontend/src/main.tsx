@@ -8,6 +8,7 @@ import { Layout } from './components/Layout';
 import { UsagePage } from './pages/UsagePage';
 import { CostsPage } from './pages/CostsPage';
 import { ProjectsPage } from './pages/ProjectsPage';
+import { GovernancePage } from './pages/GovernancePage';
 import { AnomaliesPage } from './pages/AnomaliesPage';
 
 configureAuth();
@@ -16,6 +17,7 @@ const PAGE_META: Record<string, { title: string; sub: string }> = {
   '/': { title: 'Token Usage', sub: 'Real-time consumption across models and time' },
   '/costs': { title: 'Estimated Cost', sub: 'Spend by model, derived from token usage' },
   '/projects': { title: 'Usage by Project', sub: 'Attribution via request metadata + project mapping' },
+  '/governance': { title: 'Cost Governance', sub: 'Budget status and enforcement guardrails' },
   '/anomalies': { title: 'Anomalies & Alerts', sub: 'Automated detection and response feed' },
 };
 
@@ -34,6 +36,7 @@ function App() {
           <Route path="/" element={<Shell><UsagePage /></Shell>} />
           <Route path="/costs" element={<Shell><CostsPage /></Shell>} />
           <Route path="/projects" element={<Shell><ProjectsPage /></Shell>} />
+          <Route path="/governance" element={<Shell><GovernancePage /></Shell>} />
           <Route path="/anomalies" element={<Shell><AnomaliesPage /></Shell>} />
         </Routes>
       </BrowserRouter>

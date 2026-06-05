@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-athena": "^3.600.0",
+    "@aws-sdk/client-budgets": "^3.600.0",
     "@aws-sdk/client-cloudwatch": "^3.600.0",
     "@aws-sdk/client-dynamodb": "^3.600.0",
     "@aws-sdk/client-iam": "^3.600.0",

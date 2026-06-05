@@ -68,6 +68,31 @@ export class ApiStack extends cdk.Stack {
     const projectsFn = fn('ProjectsFn', 'projects.ts');
     const quotasFn = fn('QuotasFn', 'quotas.ts');
 
+    // Governance read-only view: budget status + enforcement posture for the dashboard.
+    const governanceFn = new NodejsFunction(this, 'GovernanceFn', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: lambdaEntry('api', 'governance.ts'),
+      projectRoot: BACKEND_ROOT,
+      depsLockFilePath: BACKEND_LOCK,
+      handler: 'handler',
+      memorySize: 256,
+      timeout: cdk.Duration.seconds(15),
+      tracing: lambda.Tracing.ACTIVE,
+      environment: {
+        ...commonEnv,
+        ACCOUNT_ID: cfg.account,
+        BEDROCK_BUDGET_NAME: `bedrock-monthly-${cfg.env}`,
+        ENABLE_AUTO_CONTAINMENT: String(cfg.enableAutoContainment),
+        BUDGET_ACTION_THRESHOLD_PCT: cfg.enforcement?.budgetActionThresholdPct
+          ? String(cfg.enforcement.budgetActionThresholdPct) : '',
+      },
+      bundling: { minify: true, sourceMap: true },
+    });
+    governanceFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['budgets:ViewBudget', 'budgets:DescribeBudget'],
+      resources: [`arn:aws:budgets::${cfg.account}:budget/bedrock-monthly-${cfg.env}`],
+    }));
+
     // Least-privilege grants.
     tables.aggregates.grantReadData(usageFn);
     tables.aggregates.grantReadData(costsFn);
@@ -131,6 +156,7 @@ export class ApiStack extends cdk.Stack {
     v1.addResource('anomalies').addMethod('GET', new apigw.LambdaIntegration(anomaliesFn), opts);
     v1.addResource('projects').addMethod('GET', new apigw.LambdaIntegration(projectsFn), opts);
     v1.addResource('quotas').addMethod('GET', new apigw.LambdaIntegration(quotasFn), opts);
+    v1.addResource('governance').addMethod('GET', new apigw.LambdaIntegration(governanceFn), opts);
     const queries = v1.addResource('queries');
     queries.addMethod('POST', new apigw.LambdaIntegration(queriesFn), opts);
     queries.addResource('{id}').addMethod('GET', new apigw.LambdaIntegration(queriesFn), opts);
