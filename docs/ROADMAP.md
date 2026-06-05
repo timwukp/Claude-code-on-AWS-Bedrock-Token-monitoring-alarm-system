@@ -37,17 +37,17 @@ Ordered by impact on a cost-governance rollout.
 
 | # | Gap | Status | Notes |
 |---|---|---|---|
-| 4 | **Budget Action hard-stop enabled + validated** | 🟡 | A budget is deployed in notify-only mode (`enableAutoContainment: false`). The auto-apply-IAM/SCP hard stop is designed but not enabled or tested. Enable and validate a real spend-cap freeze (carefully — scope it so you don't lock yourself out). |
-| 5 | **Per-project / per-user real-time enforcement** | ⬜ | Today the platform **observes and alerts** on per-project usage but cannot **instantly block** a single project at a $ threshold. Needs a per-tag budget action or a custom enforcement Lambda (EventBridge → scoped IAM deny). This is the largest capability gap for "what if one team runs away?" |
+| 4 | **Budget Action hard-stop enabled + validated** | 🟡 | Implemented as an opt-in `CfnBudgetsAction` (APPLY_IAM_POLICY) that attaches a deny-Bedrock policy at a configured % of budget; off by default. Synth verified (on/off paths) and deployed with enforcement off. **Live freeze deliberately not triggered** (would require a throwaway test IAM role) — see [`test-reports/feature-04-05`](./test-reports/feature-04-05-controls.md). |
+| 5 | **Per-project / per-user real-time enforcement** | 🟡 | The anomaly-response Lambda can now attach the deny policy to an offending IAM principal on AccessDenied — guarded by a pure decision (disabled / allow-listed / unparseable → no-op, preventing self-lockout) and unit-tested. Off by default; deploy-validated (correctly skips when disabled). Live containment of a real principal pending an isolated test role. See [`test-reports/feature-04-05`](./test-reports/feature-04-05-controls.md). |
 
 ### Tier 3 — robustness & scale
 
 | # | Gap | Status | Notes |
 |---|---|---|---|
 | 6 | **Enforce request-metadata tagging** | ⬜ | Per-project attribution depends on callers setting `requestMetadata` (`project_id`, `user_id`); there is guidance but no enforcement. Provide an SDK wrapper/middleware sample, or an IAM/condition-based control. See [`ATTRIBUTION.md`](./ATTRIBUTION.md). |
-| 7 | **Per-project pre-aggregation** | ⬜ | The By-Project view runs Athena per request. Pre-aggregate per-project usage in the scheduled aggregator (write `TENANT#x#PROJECT` items) so it reads DynamoDB instead — faster and cheaper at scale. |
+| 7 | **Per-project pre-aggregation** | ✅ | Done — the aggregator writes `TENANT#<tenant>#PROJECT` rollups (per project+model, with a distinct-user set); `GET /v1/projects?source=fast` reads them from DynamoDB instead of running Athena. Validated against real data. See [`test-reports/feature-07`](./test-reports/feature-07-project-preaggregation.md). |
 | 8 | **Fargate ETL path deploy + validate** | 🟡 | ETL job logic implemented in `backend/analysis/etl.py` (S3 list/gunzip/parse → flatten verified schema → partitioned Parquet to `usage/dt=YYYY-MM-DD/`), with a pure offline-testable `parse_log_lines` and stdlib unit tests (`test_etl.py`, 8 passing). Implemented, pending real-AWS deploy/validation of the Fargate stack against a live bucket. |
-| 9 | **Restrict CORS / custom domain / mapping-upload UX** | ⬜ | API CORS is permissive for demo; lock to the CloudFront origin. Add a custom domain (ACM) and a guided way to refresh the project-mapping CSV. |
+| 9 | **Restrict CORS / custom domain / mapping-upload UX** | ✅ | Done — `api.allowedOrigins` config locks CORS to configured origin(s) (preflight + Lambda response header), default `*` for demo; optional custom domain (ACM) on the CloudFront distribution; `scripts/upload-project-mapping.sh` refreshes the mapping CSV. Validated against the real account. See [`test-reports/feature-09`](./test-reports/feature-09-cors-domain.md). |
 
 ## Notes
 

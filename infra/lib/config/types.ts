@@ -27,6 +27,16 @@ export interface EnvConfig {
     readonly certificateArn?: string;
   };
 
+  /** API options. */
+  readonly api?: {
+    /**
+     * Allowed CORS origins for the API. In production set this to your dashboard origin(s)
+     * (the CloudFront domain or custom domain). If omitted/empty, CORS falls back to "*"
+     * (convenient for demo, NOT recommended for production).
+     */
+    readonly allowedOrigins?: string[];
+  };
+
   /** Cost governance. */
   readonly governance: {
     /** Monthly Bedrock budget in USD. */
@@ -42,4 +52,15 @@ export interface EnvConfig {
    * Security pillar — opt in deliberately and per tenant.
    */
   readonly enableAutoContainment: boolean;
+
+  /**
+   * Optional hard-stop enforcement config. When `budgetActionThresholdPct` is set (and
+   * `enableAutoContainment` is true), a Budget Action applies a restrictive IAM policy at that
+   * percent of the monthly budget. `budgetActionRoleArns` lists the role(s) the deny policy is
+   * attached to — point these at scoped/test roles, NOT your admin identity, to avoid lockout.
+   */
+  readonly enforcement?: {
+    readonly budgetActionThresholdPct?: number;
+    readonly budgetActionRoleArns?: string[];
+  };
 }

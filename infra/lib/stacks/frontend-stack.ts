@@ -5,6 +5,7 @@ import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as apigw from 'aws-cdk-lib/aws-apigateway';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import { Construct } from 'constructs';
 import { EnvConfig } from '../config';
 
@@ -47,6 +48,17 @@ export class FrontendStack extends cdk.Stack {
       ],
     });
 
+    // Optional custom domain: when both domainName + certificateArn are configured, serve the
+    // dashboard on that domain (cert must be an ACM cert in us-east-1). Otherwise use the
+    // default *.cloudfront.net domain.
+    const useCustomDomain = !!(cfg.frontend.domainName && cfg.frontend.certificateArn);
+    const domainConfig = useCustomDomain
+      ? {
+          domainNames: [cfg.frontend.domainName!],
+          certificate: acm.Certificate.fromCertificateArn(this, 'SiteCert', cfg.frontend.certificateArn!),
+        }
+      : {};
+
     const distribution = new cloudfront.Distribution(this, 'Distribution', {
       defaultRootObject: 'index.html',
       defaultBehavior: {
@@ -60,6 +72,7 @@ export class FrontendStack extends cdk.Stack {
         { httpStatus: 404, responseHttpStatus: 200, responsePagePath: '/index.html' },
       ],
       comment: `Token Usage Monitoring dashboard (${cfg.env})`,
+      ...domainConfig,
     });
 
     new cdk.CfnOutput(this, 'SiteBucketName', { value: siteBucket.bucketName });
