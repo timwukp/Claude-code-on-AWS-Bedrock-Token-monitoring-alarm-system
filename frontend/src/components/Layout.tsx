@@ -6,6 +6,7 @@ const NAV = [
   { to: '/', label: 'Usage', ico: '📊', end: true },
   { to: '/costs', label: 'Cost', ico: '💰' },
   { to: '/projects', label: 'By Project', ico: '🗂️' },
+  { to: '/governance', label: 'Governance', ico: '🛡️' },
   { to: '/anomalies', label: 'Anomalies', ico: '🔔' },
 ];
 

@@ -9,15 +9,18 @@ import { fmtTokens, fmtUsd } from '../lib/format';
  */
 export function ProjectsPage() {
   const [rows, setRows] = useState<any[]>([]);
+  const [source, setSource] = useState<'fast' | 'full'>('fast');
+  const [servedFrom, setServedFrom] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.projects()
-      .then((r) => setRows(r.projects ?? []))
+    setLoading(true);
+    api.projects(source)
+      .then((r) => { setRows(r.projects ?? []); setServedFrom(r.source ?? (source === 'fast' ? 'dynamodb' : 'athena')); })
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [source]);
 
   if (loading) return <div className="empty"><span className="spinner" /></div>;
   if (error) return <div className="empty"><div className="big">⚠️</div>Failed to load: {error}</div>;
@@ -34,6 +37,21 @@ export function ProjectsPage() {
       </div>
 
       <Panel title="Usage by project" desc="Attributed via requestMetadata tags + project mapping (CSV)">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+          <div style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+            {(['fast', 'full'] as const).map((s) => (
+              <button key={s} onClick={() => setSource(s)}
+                style={{
+                  padding: '6px 14px', fontSize: 13, border: 'none', cursor: 'pointer',
+                  background: source === s ? 'var(--primary)' : '#fff',
+                  color: source === s ? '#fff' : 'var(--text-dim)', fontWeight: source === s ? 600 : 400,
+                }}>
+                {s === 'fast' ? 'Fast (DynamoDB)' : 'Full (Athena + names)'}
+              </button>
+            ))}
+          </div>
+          {servedFrom && <span className="muted" style={{ fontSize: 12 }}>served from: <strong>{servedFrom}</strong></span>}
+        </div>
         {rows.length === 0 ? (
           <div className="empty">
             <div className="big">🗂️</div>

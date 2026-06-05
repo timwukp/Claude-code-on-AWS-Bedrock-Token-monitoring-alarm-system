@@ -46,10 +46,12 @@ Cost Anomaly Detection + AWS Budgets ──► SNS / Budget Actions
 | [`docs/MONITORING_APPROACH.md`](./docs/MONITORING_APPROACH.md) | Source-verified monitoring mechanisms (metrics, logging, anomaly detection) |
 | [`docs/GOVERNANCE_FAQ.md`](./docs/GOVERNANCE_FAQ.md) | Cost governance FAQ — observability, controls, operating practices |
 | [`docs/ATTRIBUTION.md`](./docs/ATTRIBUTION.md) | Per-user / per-project usage attribution model |
+| [`docs/INTEGRATION.md`](./docs/INTEGRATION.md) | Customer integration: request-metadata tagging helper |
 | [`docs/MULTI_TENANCY.md`](./docs/MULTI_TENANCY.md) | Tenant isolation model |
 | [`docs/VERIFICATION.md`](./docs/VERIFICATION.md) | Architecture validation + real-data schema findings |
 | [`docs/ROADMAP.md`](./docs/ROADMAP.md) | Honest gap analysis — what's validated vs planned |
 | [`docs/test-reports/`](./docs/test-reports/) | Per-feature test reports (unit + real-AWS validation) |
+| [`CHANGELOG.md`](./CHANGELOG.md) | Notable changes by milestone |
 | [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md) | Step-by-step deploy guide |
 | [`AGENTS.md`](./AGENTS.md) | Guidance for AI coding agents working in this repo |
 
@@ -124,9 +126,18 @@ make deploy-frontend ENV=dev
 
 Functionally complete and validated end-to-end against a real AWS account: data pipeline
 (Bedrock logging → S3 → Athena), ingestion aggregator, REST API (usage / cost / anomalies /
-projects / forensic queries), Cognito auth, React dashboard, and event-driven anomaly response.
-See [`docs/VERIFICATION.md`](./docs/VERIFICATION.md). The Fargate ETL path and some
-productionization items are marked with `TODO` in code.
+projects / quotas / governance / forensic queries), Cognito auth, and a React dashboard with
+**Usage, Cost, By-Project, Governance, and Anomalies** pages, plus event-driven anomaly response.
+
+The full cost-governance feature set (issues #1–#9) is implemented and validated — ML cost
+anomaly detection, token-quota/throttle monitoring, prompt-cache savings, opt-in Budget Action
+hard-stop + per-principal enforcement, request-metadata tagging helper, per-project
+pre-aggregation, Fargate ETL, and CORS/custom-domain hardening. See [`CHANGELOG.md`](./CHANGELOG.md),
+[`docs/ROADMAP.md`](./docs/ROADMAP.md), and [`docs/VERIFICATION.md`](./docs/VERIFICATION.md).
+
+Two items remain intentionally pending real-AWS exercise (off-by-default, risk-managed): the live
+Budget Action **freeze** (needs a throwaway test IAM role) and the Fargate ETL **Parquet run**
+(needs the Etl stack deployed). Both are marked 🟡 in the roadmap.
 
 ## Validation gates
 

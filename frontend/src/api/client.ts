@@ -32,8 +32,12 @@ export const api = {
     ),
   costs: () => request<{ byModel: any[]; totalEstimatedUsd: number }>('v1/costs'),
   anomalies: () => request<{ anomalies: any[] }>('v1/anomalies'),
-  projects: () => request<{ projects: any[] }>('v1/projects'),
+  // source 'fast' reads pre-aggregated rollups from DynamoDB (quick, project_id codes);
+  // 'full' runs the Athena join for human-readable project names + cost centers.
+  projects: (source: 'fast' | 'full' = 'fast') =>
+    request<{ projects: any[]; source?: string }>(`v1/projects${source === 'fast' ? '?source=fast' : ''}`),
   quotas: () => request<{ throttles: { throttledCount: number; clientErrors: number; throttled: boolean }; headroom: any[] }>('v1/quotas'),
+  governance: () => request<{ budget: any; enforcement: any }>('v1/governance'),
   startQuery: (template: string, days: number) =>
     request<{ id: string }>('v1/queries', { method: 'POST', body: JSON.stringify({ template, days }) }),
   pollQuery: (id: string) => request<{ id: string; state: string; rows?: any[] }>(`v1/queries/${id}`),

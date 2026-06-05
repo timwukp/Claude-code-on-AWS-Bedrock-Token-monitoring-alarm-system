@@ -100,9 +100,12 @@ Three planes, one account (or one account per environment):
 - **Auth**: Amazon **Cognito User Pool** (hosted UI or embedded). The SPA holds a short-lived
   JWT and calls the API with it.
 - **Dashboard views**:
-  - *Usage* — input/output tokens & invocations over time, by model / tenant / request-metadata tag.
-  - *Cost* — estimated spend (per-model rate card), Budgets actual vs forecast.
-  - *Anomalies* — feed from Cost Anomaly Detection + custom signals, with severity & root cause.
+  - *Usage* — input/output tokens & invocations over time, plus a Bedrock token-quota / throttle panel.
+  - *Cost* — estimated spend (per-model rate card) with a prompt-cache savings KPI.
+  - *By Project* — per-project/user attribution with a Fast (DynamoDB) / Full (Athena + names) toggle.
+  - *Governance* — Bedrock budget (limit / actual / forecast) and enforcement posture (Budget
+    Action hard-stop, auto-containment mode).
+  - *Anomalies* — feed from Cost Anomaly Detection + automated response, with severity & root cause.
   - *Logs* — ad-hoc forensic search backed by Athena (paged, async query pattern).
 - **Charts**: client-side charting library (e.g. Recharts) over JSON from the API. QuickSight
   embedding is an optional alternative documented in the design but not the default.
