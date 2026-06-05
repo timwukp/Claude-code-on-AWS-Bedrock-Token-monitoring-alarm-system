@@ -82,11 +82,47 @@ implies; the magnitude depends on a given workload's cache-hit ratio.
 
 ![Architecture diagram](./docs/diagrams/architecture.png)
 
-The diagram reflects the deployed stacks. Everything runs inside a single AWS account/region;
-only the **Fargate ETL task runs inside a VPC** (private subnets), reaching S3 via a VPC gateway
-endpoint — the serverless API and ingestion paths intentionally stay outside the VPC. The dashed
-edges are authentication / asynchronous paths (Cognito sign-in and JWT verification, the
-dead-letter queue). The AWS Budgets **Action hard-stop** and per-principal containment are
+### How the data flows
+
+The system is organized around **one user-facing request path**, supported by **two background
+flows** that supply its data and guard its cost. Everything runs inside a single AWS account /
+region; only the **Fargate ETL task runs inside a VPC** (private subnets), reaching S3 through a
+VPC gateway endpoint — the serverless API and ingestion paths intentionally stay outside the VPC.
+
+**Main path — from sign-in to seeing data (real-time, synchronous)**
+
+1. The user signs in to **Cognito** and receives a short-lived JWT.
+2. The browser loads the dashboard Single-Page Application (SPA) from **CloudFront** (+ WAF),
+   served from a private S3 bucket via Origin Access Control.
+3. The SPA calls **API Gateway** with the JWT; its Cognito authorizer verifies the token before
+   any request reaches the backend.
+4. Requests fan out to per-route Lambdas (**concurrently**): *Usage / Cost / Anomalies* read
+   pre-aggregated KPIs from **DynamoDB** (single-digit-ms hot path); *By-Project / Forensic
+   queries* use **Athena** (By-Project can also take a fast DynamoDB path); *Governance* reads
+   **AWS Budgets**; *Quotas* reads **CloudWatch + Service Quotas**. Every request is scoped by the
+   JWT's tenant claim.
+
+> The data read in step 4 is **prepared ahead of time** by the background flows below — it is not
+> computed on the fly.
+
+**Background flow 1 — ingestion & aggregation (driven by Bedrock traffic, runs alongside the main path)**
+
+Each call an application makes to **Amazon Bedrock** is written by Model Invocation Logging to
+**S3 (KMS-encrypted)**. Every 15 minutes an EventBridge-scheduled **Aggregator Lambda** reads new
+logs and folds them into per-tenant / per-model / per-project KPIs in **DynamoDB** (idempotent,
+watermarked) — the source the main path reads from. Once a day, **Step Functions** runs the
+in-VPC **Fargate ETL** task, which reads raw logs through the S3 VPC gateway endpoint and compacts
+them into partitioned **Parquet** to cut Athena scan cost; raw logs are also catalogued by **Glue**
+for Athena queries.
+
+**Background flow 2 — governance & alerting (automatic, independent of whether anyone is signed in)**
+
+Three mechanisms guard cost and access **concurrently and independently**: **CloudTrail** Bedrock
+management events trigger an **EventBridge** rule and an **anomaly-response Lambda** (publishes an
+**SNS** alert, with a dead-letter queue on failure; if enabled — off by default — it can contain an
+offending IAM principal); **Cost Anomaly Detection** continuously analyzes spend with ML and alerts
+on deviations; **AWS Budgets** alerts at actual/forecasted thresholds and can optionally apply a
+Budget **Action hard-stop** (a restrictive policy) at the cap. The two enforcing actions are
 opt-in and off by default.
 
 - **Full design:** [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
