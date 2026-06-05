@@ -37,57 +37,22 @@ Three planes, one account (or one account per environment):
 
 ### 2.1 High-level diagram
 
-```
-                          ┌──────────────────────────────────────────────────────┐
-                          │                      End users                         │
-                          │              (operators / FinOps / SecOps)             │
-                          └───────────────────────────┬──────────────────────────┘
-                                                       │ HTTPS
-                                          ┌────────────▼────────────┐
-                                          │        CloudFront        │  (TLS, WAF, OAC)
-                                          │   + S3 (React/Vite SPA)  │
-                                          └────────────┬────────────┘
-                                                       │  JWT (Cognito)
-                                          ┌────────────▼────────────┐
-                                          │   API Gateway (REST)     │
-                                          │   Cognito authorizer     │
-                                          └────────────┬────────────┘
-                                                       │
-                              ┌────────────────────────┼────────────────────────┐
-                              │                         │                        │
-                     ┌────────▼────────┐      ┌─────────▼────────┐     ┌─────────▼─────────┐
-                     │  API Lambdas    │      │  Athena query    │     │  Aggregates       │
-                     │  (usage, costs, │◄────►│  (forensics,     │     │  (DynamoDB:       │
-                     │   anomalies,    │      │   per-tenant SQL)│     │   pre-rolled KPIs)│
-                     │   logs search)  │      └─────────┬────────┘     └─────────▲─────────┘
-                     └─────────────────┘                │                        │
-                                                         │                        │
-   ╔═════════════════════════════════ DATA & AUTOMATION PLANE ════════════════════╪═══════╗
-   ║                                                     │                        │       ║
-   ║  ┌─────────────────┐   logs    ┌──────────────┐     │      ┌─────────────────┴────┐  ║
-   ║  │ Amazon Bedrock  │──────────►│  S3 (raw      │─────┘      │ Scheduled aggregator │  ║
-   ║  │ Model Invocation│           │  invocation   │            │ (EventBridge cron →  │  ║
-   ║  │ Logging         │           │  logs, KMS)   │◄───────────│  Lambda / Step Fn)   │  ║
-   ║  └─────────────────┘           └──────┬───────┘            └──────────────────────┘  ║
-   ║                                        │ Glue catalog                                 ║
-   ║  ┌─────────────────┐  CloudTrail  ┌────▼─────┐    ┌──────────────────────────────┐    ║
-   ║  │ CloudTrail      │─────────────►│ EventBridge│──►│ Anomaly-response Lambda       │    ║
-   ║  │ (InvokeModel    │   events     │  rules    │   │ (notify SNS, optional         │    ║
-   ║  │  mgmt events)   │              └───────────┘   │  containment)                 │    ║
-   ║  └─────────────────┘                              └───────────────┬──────────────┘    ║
-   ║                                                                    │ SNS               ║
-   ║  ┌──────────────────────┐   ┌─────────────────┐                   ▼                   ║
-   ║  │ Cost Anomaly         │──►│ SNS topic       │──► email / chat / ticket             ║
-   ║  │ Detection (ML)       │   └─────────────────┘                                      ║
-   ║  ├──────────────────────┤                                                            ║
-   ║  │ AWS Budgets          │──► forecast + actual alerts, optional Budget Action        ║
-   ║  └──────────────────────┘                                                            ║
-   ╚════════════════════════════════════════════════════════════════════════════════════╝
+![Architecture diagram](./diagrams/architecture.png)
 
-   Heavy/long-running ETL & report generation: ECS Fargate task (triggered by Step Functions),
-   writes curated Parquet partitions back to S3 for cheaper Athena scans.
-```
+*(Generated with the AWS Diagram MCP server and verified against the deployed CDK stacks. For the
+end-to-end request and background data flows, see "How the data flows" in the
+[README](../README.md#architecture-at-a-glance).)*
 
+Key points the diagram encodes:
+
+- Everything runs in a single AWS account / region. **Only the Fargate ETL task runs inside a
+  VPC** (private subnets), reaching S3 through a VPC gateway endpoint; the serverless API and
+  ingestion paths stay outside the VPC.
+- The user signs in to **Cognito**; **API Gateway** (not the Lambdas) verifies the JWT.
+- Dashboard hot reads come from **DynamoDB** pre-aggregates; forensic reads run on **Athena**.
+- Governance is event/schedule-driven: **CloudTrail → EventBridge → anomaly-response Lambda →
+  SNS**, plus **Cost Anomaly Detection** (ML) and **AWS Budgets**. The Budgets **Action
+  hard-stop** and per-principal containment are opt-in and off by default.
 ---
 
 ## 3. Component design
