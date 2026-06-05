@@ -1,4 +1,4 @@
-import { parseLogFile, aggregate, tenantOf, hourBucketOf } from './parse';
+import { parseLogFile, aggregate, tenantOf, hourBucketOf, aggregateByProject, projectOf } from './parse';
 
 /**
  * Fixtures mirror the REAL delivered log schema verified in docs/VERIFICATION.md
@@ -68,5 +68,45 @@ describe('aggregate', () => {
     const twice = aggregate(doubled);
     const sum = (m: Map<string, any>) => [...m.values()].reduce((s, v) => s + v.invocations, 0);
     expect(sum(twice)).toBe(sum(single));
+  });
+});
+
+describe('projectOf', () => {
+  it('returns the project_id metadata tag', () => {
+    expect(projectOf({ requestId: 'x', timestamp: 't', modelId: 'm', requestMetadata: { project_id: 'proj-bravo' } } as any)).toBe('proj-bravo');
+  });
+  it('falls back to "untagged" when no project tag', () => {
+    expect(projectOf({ requestId: 'x', timestamp: 't', modelId: 'm' } as any)).toBe('untagged');
+  });
+});
+
+describe('aggregateByProject', () => {
+  const recs = (n: number, proj: string, user: string, reqId: string) => ({
+    requestId: reqId, timestamp: '2026-06-05T06:00:00Z', modelId: 'm1',
+    identity: { arn: 'arn:aws:iam::1:user/a' },
+    requestMetadata: { tenant: 't1', project_id: proj, user_id: user },
+    input: { inputTokenCount: n, cacheReadInputTokenCount: n * 10 }, output: { outputTokenCount: n * 2 },
+  });
+
+  it('groups by tenant+project+model and counts distinct users', () => {
+    const m = aggregateByProject([recs(10, 'proj-a', 'u1', 'r1'), recs(5, 'proj-a', 'u2', 'r2')] as any);
+    const a = [...m.values()].find((x) => x.projectId === 'proj-a')!;
+    expect(a.inputTokens).toBe(15);
+    expect(a.outputTokens).toBe(30);
+    expect(a.cacheReadTokens).toBe(150);
+    expect(a.invocations).toBe(2);
+    expect(a.users.size).toBe(2); // u1, u2
+  });
+
+  it('is idempotent — duplicate requestIds are not double-counted', () => {
+    const one = aggregateByProject([recs(10, 'proj-a', 'u1', 'r1')] as any);
+    const dup = aggregateByProject([recs(10, 'proj-a', 'u1', 'r1'), recs(10, 'proj-a', 'u1', 'r1')] as any);
+    const inv = (m: Map<string, any>) => [...m.values()].reduce((s, v) => s + v.invocations, 0);
+    expect(inv(dup)).toBe(inv(one));
+  });
+
+  it('rolls untagged records under "untagged"', () => {
+    const m = aggregateByProject([{ requestId: 'r9', timestamp: '2026-06-05T06:00:00Z', modelId: 'm1' }] as any);
+    expect([...m.values()][0].projectId).toBe('untagged');
   });
 });

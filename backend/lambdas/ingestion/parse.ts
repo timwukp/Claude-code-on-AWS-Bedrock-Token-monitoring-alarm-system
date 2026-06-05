@@ -66,6 +66,56 @@ export function hourBucketOf(timestamp: string): string {
   return timestamp.slice(0, 13) + ':00:00Z';
 }
 
+/** Project id from request metadata, or "untagged" when the caller set none (#7). */
+export function projectOf(r: InvocationRecord): string {
+  return r.requestMetadata?.project_id ?? 'untagged';
+}
+
+/** One per-project rollup, ready to upsert (read fast by GET /v1/projects). */
+export interface ProjectAggregate {
+  tenant: string;
+  projectId: string;
+  modelId: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  invocations: number;
+  users: Set<string>; // distinct user_id values seen
+  requestIds: Set<string>; // idempotency / de-dup
+}
+
+/**
+ * Fold records into per-(tenant, project, model) aggregates so the By-Project view can read
+ * DynamoDB instead of running Athena per request (#7). De-dups by requestId; tracks distinct
+ * user_id for a per-project user count. Records without a project tag roll up under "untagged".
+ */
+export function aggregateByProject(records: InvocationRecord[]): Map<string, ProjectAggregate> {
+  const map = new Map<string, ProjectAggregate>();
+  for (const r of records) {
+    const tenant = tenantOf(r);
+    const projectId = projectOf(r);
+    const key = `${tenant}|${projectId}|${r.modelId}`;
+    let agg = map.get(key);
+    if (!agg) {
+      agg = {
+        tenant, projectId, modelId: r.modelId,
+        inputTokens: 0, outputTokens: 0, cacheReadTokens: 0,
+        invocations: 0, users: new Set(), requestIds: new Set(),
+      };
+      map.set(key, agg);
+    }
+    if (agg.requestIds.has(r.requestId)) continue;
+    agg.requestIds.add(r.requestId);
+    agg.invocations += 1;
+    agg.inputTokens += r.input?.inputTokenCount ?? 0;
+    agg.outputTokens += r.output?.outputTokenCount ?? 0;
+    agg.cacheReadTokens += r.input?.cacheReadInputTokenCount ?? 0;
+    const userId = r.requestMetadata?.user_id;
+    if (userId) agg.users.add(userId);
+  }
+  return map;
+}
+
 /**
  * Fold records into per-(tenant, model, hour) aggregates. Keyed map; de-dups by requestId so
  * re-processing the same file is idempotent.
