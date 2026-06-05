@@ -2,12 +2,16 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import {
   AthenaClient, StartQueryExecutionCommand, GetQueryExecutionCommand, GetQueryResultsCommand,
 } from '@aws-sdk/client-athena';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { ok, serverError } from '../shared/response';
 import { getTenantId } from '../shared/tenant';
 
 const athena = new AthenaClient({});
+const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const WORKGROUP = process.env.ATHENA_WORKGROUP!;
 const DATABASE = process.env.GLUE_DATABASE!;
+const AGGREGATES_TABLE = process.env.AGGREGATES_TABLE;
 // Opus 4.8 rate as the default estimate; keep in sync with costs.ts / official pricing.
 const IN = 0.000005, OUT = 0.000025, CACHE = 0.0000005;
 
@@ -22,6 +26,13 @@ const IN = 0.000005, OUT = 0.000025, CACHE = 0.0000005;
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     const tenantId = getTenantId(event);
+
+    // Fast path (#7): ?source=fast reads pre-aggregated PROJECT rollups from DynamoDB — no Athena
+    // scan. Returns project_id codes (no CSV name mapping); the default Athena path adds names.
+    if (event.queryStringParameters?.source === 'fast' && AGGREGATES_TABLE) {
+      return ok({ tenantId, source: 'dynamodb', projects: await fastProjects(tenantId) });
+    }
+
     const sql = `
       SELECT
         COALESCE(m.project_name, l.requestMetadata['project_id'], 'untagged') AS project,
@@ -78,4 +89,37 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
 function sanitize(v: string): string {
   return v.replace(/'/g, "''").replace(/[^\w@.\-:/]/g, '');
+}
+
+/**
+ * Fast per-project rollup from DynamoDB pre-aggregates (#7). Reads TENANT#<tenant>#PROJECT items
+ * (sk = <projectId>#<modelId>), sums across models per project, applies the rate card, and unions
+ * the distinct user sets. No Athena scan — single-digit-ms reads.
+ */
+async function fastProjects(tenantId: string): Promise<any[]> {
+  const res = await ddb.send(new QueryCommand({
+    TableName: AGGREGATES_TABLE,
+    KeyConditionExpression: 'pk = :pk',
+    ExpressionAttributeValues: { ':pk': `TENANT#${tenantId}#PROJECT` },
+  }));
+  const byProject = new Map<string, { tokens: number; estimatedUsd: number; users: Set<string> }>();
+  for (const it of res.Items ?? []) {
+    const projectId = String(it.projectId ?? 'untagged');
+    const inTok = Number(it.inputTokens ?? 0);
+    const outTok = Number(it.outputTokens ?? 0);
+    const cacheTok = Number(it.cacheReadTokens ?? 0);
+    const e = byProject.get(projectId) ?? { tokens: 0, estimatedUsd: 0, users: new Set<string>() };
+    e.tokens += inTok + outTok;
+    e.estimatedUsd += inTok * IN + outTok * OUT + cacheTok * CACHE;
+    const us = it.userSet as Set<string> | string[] | undefined;
+    if (us) for (const u of (us instanceof Set ? us : us)) e.users.add(u);
+    byProject.set(projectId, e);
+  }
+  return [...byProject.entries()]
+    .map(([projectId, v]) => ({
+      projectId, projectName: projectId, costCenter: '—',
+      users: v.users.size, tokens: v.tokens,
+      estimatedUsd: Math.round(v.estimatedUsd * 1e6) / 1e6,
+    }))
+    .sort((a, b) => b.tokens - a.tokens);
 }

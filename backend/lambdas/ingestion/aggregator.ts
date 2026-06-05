@@ -2,7 +2,7 @@ import { S3Client, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/clien
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, UpdateCommand, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { gunzipSync } from 'zlib';
-import { parseLogFile, aggregate, UsageAggregate } from './parse';
+import { parseLogFile, aggregate, aggregateByProject, UsageAggregate, ProjectAggregate } from './parse';
 
 const s3 = new S3Client({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -23,6 +23,7 @@ export const handler = async (): Promise<{ filesProcessed: number; aggregatesWri
   const objects = await listNewLogObjects(watermark);
 
   const allAggregates = new Map<string, UsageAggregate>();
+  const allProjects = new Map<string, ProjectAggregate>();
   let maxKeyTime = watermark;
 
   for (const obj of objects) {
@@ -31,6 +32,7 @@ export const handler = async (): Promise<{ filesProcessed: number; aggregatesWri
     const body = await getDecompressed(obj.key);
     const records = parseLogFile(body);
     mergeInto(allAggregates, aggregate(records));
+    mergeProjects(allProjects, aggregateByProject(records));
     if (obj.lastModified > maxKeyTime) maxKeyTime = obj.lastModified;
   }
 
@@ -38,6 +40,10 @@ export const handler = async (): Promise<{ filesProcessed: number; aggregatesWri
   for (const agg of allAggregates.values()) {
     await upsertUsage(agg);
     await upsertModelRollup(agg);
+    written++;
+  }
+  for (const p of allProjects.values()) {
+    await upsertProjectRollup(p);
     written++;
   }
 
@@ -108,6 +114,41 @@ async function upsertModelRollup(a: UsageAggregate) {
     UpdateExpression: 'SET modelId = :m ADD inputTokens :i, outputTokens :o, cacheReadTokens :cr, invocations :n',
     ExpressionAttributeValues: {
       ':m': a.modelId, ':i': a.inputTokens, ':o': a.outputTokens, ':cr': a.cacheReadTokens, ':n': a.invocations,
+    },
+  }));
+}
+
+/** Merge per-project aggregates across files; de-dup by requestId, union the user sets. */
+function mergeProjects(target: Map<string, ProjectAggregate>, src: Map<string, ProjectAggregate>) {
+  for (const [k, v] of src) {
+    const e = target.get(k);
+    if (!e) { target.set(k, v); continue; }
+    for (const id of v.requestIds) {
+      if (e.requestIds.has(id)) continue;
+      e.requestIds.add(id);
+    }
+    for (const u of v.users) e.users.add(u);
+    e.inputTokens += v.inputTokens; e.outputTokens += v.outputTokens;
+    e.cacheReadTokens += v.cacheReadTokens; e.invocations += v.invocations;
+  }
+}
+
+/**
+ * Per-project rollup: pk=TENANT#<tenant>#PROJECT, sk=<projectId>#<modelId> (read fast by
+ * GET /v1/projects without an Athena scan). `users` is stored as a string set of distinct ids.
+ */
+async function upsertProjectRollup(p: ProjectAggregate) {
+  const users = [...p.users];
+  await ddb.send(new UpdateCommand({
+    TableName: TABLE,
+    Key: { pk: `TENANT#${p.tenant}#PROJECT`, sk: `${p.projectId}#${p.modelId}` },
+    UpdateExpression:
+      'SET projectId = :p, modelId = :m ADD inputTokens :i, outputTokens :o, cacheReadTokens :cr, invocations :n'
+      + (users.length ? ', userSet :u' : ''),
+    ExpressionAttributeValues: {
+      ':p': p.projectId, ':m': p.modelId,
+      ':i': p.inputTokens, ':o': p.outputTokens, ':cr': p.cacheReadTokens, ':n': p.invocations,
+      ...(users.length ? { ':u': new Set(users) } : {}),
     },
   }));
 }

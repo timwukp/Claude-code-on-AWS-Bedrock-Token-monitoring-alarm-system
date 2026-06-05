@@ -45,7 +45,7 @@ Ordered by impact on a cost-governance rollout.
 | # | Gap | Status | Notes |
 |---|---|---|---|
 | 6 | **Enforce request-metadata tagging** | ⬜ | Per-project attribution depends on callers setting `requestMetadata` (`project_id`, `user_id`); there is guidance but no enforcement. Provide an SDK wrapper/middleware sample, or an IAM/condition-based control. See [`ATTRIBUTION.md`](./ATTRIBUTION.md). |
-| 7 | **Per-project pre-aggregation** | ⬜ | The By-Project view runs Athena per request. Pre-aggregate per-project usage in the scheduled aggregator (write `TENANT#x#PROJECT` items) so it reads DynamoDB instead — faster and cheaper at scale. |
+| 7 | **Per-project pre-aggregation** | ✅ | Done — the aggregator writes `TENANT#<tenant>#PROJECT` rollups (per project+model, with a distinct-user set); `GET /v1/projects?source=fast` reads them from DynamoDB instead of running Athena. Validated against real data. See [`test-reports/feature-07`](./test-reports/feature-07-project-preaggregation.md). |
 | 8 | **Fargate ETL path deploy + validate** | 🟡 | ETL job logic implemented in `backend/analysis/etl.py` (S3 list/gunzip/parse → flatten verified schema → partitioned Parquet to `usage/dt=YYYY-MM-DD/`), with a pure offline-testable `parse_log_lines` and stdlib unit tests (`test_etl.py`, 8 passing). Implemented, pending real-AWS deploy/validation of the Fargate stack against a live bucket. |
 | 9 | **Restrict CORS / custom domain / mapping-upload UX** | ⬜ | API CORS is permissive for demo; lock to the CloudFront origin. Add a custom domain (ACM) and a guided way to refresh the project-mapping CSV. |
 

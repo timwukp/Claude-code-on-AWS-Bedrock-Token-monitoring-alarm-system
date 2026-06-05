@@ -94,6 +94,7 @@ export class ApiStack extends cdk.Stack {
     grantAthena(queriesFn);
     grantAthena(projectsFn);
     curatedBucket.grantRead(projectsFn); // project_mapping CSV lives in the curated bucket
+    tables.aggregates.grantReadData(projectsFn); // #7 fast path reads PROJECT rollups from DynamoDB
 
     // quotasFn reads CloudWatch Bedrock metrics + Service Quotas limits (read-only, account-wide).
     quotasFn.addToRolePolicy(new iam.PolicyStatement({
