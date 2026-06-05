@@ -43,16 +43,22 @@ Three planes, one account (or one account per environment):
 end-to-end request and background data flows, see "How the data flows" in the
 [README](../README.md#architecture-at-a-glance).)*
 
-Key points the diagram encodes:
+What this architecture buys you:
 
-- Everything runs in a single AWS account / region. **Only the Fargate ETL task runs inside a
-  VPC** (private subnets), reaching S3 through a VPC gateway endpoint; the serverless API and
-  ingestion paths stay outside the VPC.
-- The user signs in to **Cognito**; **API Gateway** (not the Lambdas) verifies the JWT.
-- Dashboard hot reads come from **DynamoDB** pre-aggregates; forensic reads run on **Athena**.
-- Governance is event/schedule-driven: **CloudTrail → EventBridge → anomaly-response Lambda →
-  SNS**, plus **Cost Anomaly Detection** (ML) and **AWS Budgets**. The Budgets **Action
-  hard-stop** and per-principal containment are opt-in and off by default.
+- **Predictable, low cost.** The real-time paths (API and ingestion) are serverless and
+  scale to zero — when no one is using it, you pay almost nothing; only the heavy batch ETL runs
+  inside a VPC. You don't carry a standing bill just to *be able to* monitor.
+- **Multi-tenant security built in.** After a user signs in, API Gateway verifies identity
+  before a request reaches any logic, and data is isolated per tenant — one deployment safely
+  serves many teams, none able to see another's usage.
+- **Instant dashboards, forensics on demand.** Everyday usage is a millisecond-fast DynamoDB hot
+  read; deeper investigation ("who / which project / when") runs on Athena only when you ask. The
+  common case stays fast and cheap, and heavy queries don't slow it down.
+- **Cost protection that doesn't need a babysitter.** Spend anomalies and suspicious access
+  raise alerts on their own, whether or not anyone is signed in. The enforcing actions that
+  *freeze* access (the Budgets Action hard-stop and per-principal containment) are **off by
+  default** — so you can observe and validate the rules first, then opt in to hard enforcement
+  without risking a self-inflicted lockout on day one.
 ---
 
 ## 3. Component design
