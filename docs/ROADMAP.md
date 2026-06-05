@@ -37,8 +37,8 @@ Ordered by impact on a cost-governance rollout.
 
 | # | Gap | Status | Notes |
 |---|---|---|---|
-| 4 | **Budget Action hard-stop enabled + validated** | 🟡 | A budget is deployed in notify-only mode (`enableAutoContainment: false`). The auto-apply-IAM/SCP hard stop is designed but not enabled or tested. Enable and validate a real spend-cap freeze (carefully — scope it so you don't lock yourself out). |
-| 5 | **Per-project / per-user real-time enforcement** | ⬜ | Today the platform **observes and alerts** on per-project usage but cannot **instantly block** a single project at a $ threshold. Needs a per-tag budget action or a custom enforcement Lambda (EventBridge → scoped IAM deny). This is the largest capability gap for "what if one team runs away?" |
+| 4 | **Budget Action hard-stop enabled + validated** | 🟡 | Implemented as an opt-in `CfnBudgetsAction` (APPLY_IAM_POLICY) that attaches a deny-Bedrock policy at a configured % of budget; off by default. Synth verified (on/off paths) and deployed with enforcement off. **Live freeze deliberately not triggered** (would require a throwaway test IAM role) — see [`test-reports/feature-04-05`](./test-reports/feature-04-05-controls.md). |
+| 5 | **Per-project / per-user real-time enforcement** | 🟡 | The anomaly-response Lambda can now attach the deny policy to an offending IAM principal on AccessDenied — guarded by a pure decision (disabled / allow-listed / unparseable → no-op, preventing self-lockout) and unit-tested. Off by default; deploy-validated (correctly skips when disabled). Live containment of a real principal pending an isolated test role. See [`test-reports/feature-04-05`](./test-reports/feature-04-05-controls.md). |
 
 ### Tier 3 — robustness & scale
 

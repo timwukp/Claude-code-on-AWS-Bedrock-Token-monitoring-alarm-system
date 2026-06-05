@@ -1,12 +1,19 @@
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { IAMClient, AttachRolePolicyCommand, AttachUserPolicyCommand } from '@aws-sdk/client-iam';
+import { decideContainment } from './containment';
 
 const sns = new SNSClient({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const iam = new IAMClient({});
 const TOPIC = process.env.ALERT_TOPIC_ARN!;
 const ANOMALIES_TABLE = process.env.ANOMALIES_TABLE;
 const AUTO_CONTAINMENT = process.env.ENABLE_AUTO_CONTAINMENT === 'true';
+// Deny policy attached to a contained principal (#5). Set by the stack when enforcement is on.
+const DENY_POLICY_ARN = process.env.DENY_POLICY_ARN;
+// Principals that must never be contained (admins, this Lambda's own role). Comma-separated ARNs.
+const CONTAINMENT_ALLOWLIST = (process.env.CONTAINMENT_ALLOWLIST ?? '').split(',').map((s) => s.trim()).filter(Boolean);
 
 type Severity = 'CRITICAL' | 'WARNING' | 'INFO';
 
@@ -32,10 +39,7 @@ export const handler = async (event: any): Promise<void> => {
       message: `${userArn} got AccessDenied on ${eventName} from ${sourceIp}. Possible credential use from an unexpected location.`,
       eventName, sourceIp,
     });
-    if (AUTO_CONTAINMENT) {
-      // TODO: implement scoped containment (attach deny policy / disable key) — opt in per tenant.
-      console.warn('Auto-containment requested but left as a deliberate TODO.');
-    }
+    await maybeContain(userArn, eventTime);
     return;
   }
 
@@ -49,6 +53,42 @@ export const handler = async (event: any): Promise<void> => {
     });
   }
 };
+
+/**
+ * Scoped auto-containment (#5): attach the deny policy to the offending principal — only when
+ * enabled, parseable, not allow-listed, and a deny policy is configured. Conservative by design
+ * to avoid self-lockout; failures are logged + alerted, never thrown (best-effort containment).
+ */
+async function maybeContain(principalArn: string, eventTime: string): Promise<void> {
+  const decision = decideContainment({
+    enabled: AUTO_CONTAINMENT && !!DENY_POLICY_ARN,
+    principalArn,
+    allowList: CONTAINMENT_ALLOWLIST,
+  });
+  if (!decision.act || !decision.target) {
+    console.log(`Containment skipped: ${decision.reason}`);
+    return;
+  }
+  try {
+    if (decision.target.type === 'role') {
+      await iam.send(new AttachRolePolicyCommand({ RoleName: decision.target.name, PolicyArn: DENY_POLICY_ARN }));
+    } else {
+      await iam.send(new AttachUserPolicyCommand({ UserName: decision.target.name, PolicyArn: DENY_POLICY_ARN }));
+    }
+    await raise('CRITICAL', principalArn, eventTime, {
+      type: 'Contained',
+      message: `Auto-containment applied: deny policy attached to ${decision.target.type} ${decision.target.name}.`,
+      eventName: 'Containment', sourceIp: 'n/a',
+    });
+  } catch (err) {
+    console.error('Containment failed:', err);
+    await raise('CRITICAL', principalArn, eventTime, {
+      type: 'ContainmentFailed',
+      message: `Auto-containment FAILED for ${principalArn}: ${String(err)}. Manual review required.`,
+      eventName: 'Containment', sourceIp: 'n/a',
+    });
+  }
+}
 
 /** Publish to SNS and persist to the anomalies table (tenant = caller ARN). */
 async function raise(
