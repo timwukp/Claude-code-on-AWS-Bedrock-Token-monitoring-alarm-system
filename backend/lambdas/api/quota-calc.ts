@@ -60,3 +60,41 @@ export function windowOf(quotaName: string): 'minute' | 'day' | null {
   if (n.includes('per day')) return 'day';
   return null;
 }
+
+/**
+ * Derive matchable keywords from a CloudWatch ModelId so it can be linked to a Service Quotas
+ * quota name. e.g. "us.anthropic.claude-opus-4-8" -> ["claude","opus","4","8"];
+ * "us.anthropic.claude-haiku-4-5-20251001-v1:0" -> ["claude","haiku","4","5"].
+ * Region prefixes (us./global./eu.), provider, version suffixes and dates are dropped.
+ */
+export function modelKeywords(modelId: string): string[] {
+  const tail = modelId.split('.').pop() ?? modelId; // strip us./global./anthropic. prefixes
+  return tail
+    .toLowerCase()
+    .replace(/[:].*$/, '')           // drop ":0" etc.
+    .replace(/-v\d+.*$/, '')          // drop "-v1..."
+    .replace(/-\d{6,}.*$/, '')        // drop date stamps like -20251001
+    .split('-')
+    .filter((t) => t && t !== 'anthropic');
+}
+
+/**
+ * Match a model to its quota for a given window: pick the token quota (of that window) whose name
+ * contains all of the model's keywords. Prefers the most specific (longest) name match; returns
+ * null if none matches (the handler then skips that model/window rather than mis-attributing).
+ */
+export function matchQuotaForModel(
+  quotas: QuotaInfo[], modelId: string, window: 'minute' | 'day',
+): QuotaInfo | null {
+  const kws = modelKeywords(modelId);
+  if (!kws.length) return null;
+  const candidates = quotas
+    .filter((q) => q.window === window)
+    .filter((q) => {
+      const n = q.name.toLowerCase();
+      return kws.every((k) => n.includes(k));
+    })
+    // Prefer on-demand/standard over cross-region/global variants, then the shortest (most direct) name.
+    .sort((a, b) => a.name.length - b.name.length);
+  return candidates[0] ?? null;
+}

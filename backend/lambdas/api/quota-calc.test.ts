@@ -50,3 +50,36 @@ describe('windowOf', () => {
     expect(windowOf('some unrelated quota')).toBeNull();
   });
 });
+
+import { modelKeywords, matchQuotaForModel } from './quota-calc';
+
+describe('modelKeywords', () => {
+  it('strips region/provider/version and keeps model + version-number keywords', () => {
+    expect(modelKeywords('us.anthropic.claude-opus-4-8')).toEqual(['claude', 'opus', '4', '8']);
+  });
+  it('drops date stamps and ":0" suffixes', () => {
+    expect(modelKeywords('us.anthropic.claude-haiku-4-5-20251001-v1:0')).toEqual(['claude', 'haiku', '4', '5']);
+  });
+  it('handles non-anthropic ids', () => {
+    expect(modelKeywords('amazon.nova-micro-v1:0')).toEqual(['nova', 'micro']);
+  });
+});
+
+describe('matchQuotaForModel', () => {
+  const quotas = [
+    { name: 'On-demand model inference tokens per minute for Anthropic Claude Opus 4.8', limit: 30_000_000, window: 'minute' as const, adjustable: true },
+    { name: 'On-demand model inference tokens per minute for Anthropic Claude Haiku 4.5', limit: 100_000_000, window: 'minute' as const, adjustable: true },
+    { name: 'Model invocation max tokens per day for Anthropic Claude Opus 4.8', limit: 21_600_000_000, window: 'day' as const, adjustable: false },
+  ];
+  it('matches Opus 4.8 to its per-minute quota', () => {
+    const q = matchQuotaForModel(quotas, 'us.anthropic.claude-opus-4-8', 'minute');
+    expect(q?.limit).toBe(30_000_000);
+  });
+  it('matches Opus 4.8 to its per-day quota', () => {
+    const q = matchQuotaForModel(quotas, 'us.anthropic.claude-opus-4-8', 'day');
+    expect(q?.limit).toBe(21_600_000_000);
+  });
+  it('does not mis-match a model with no corresponding quota', () => {
+    expect(matchQuotaForModel(quotas, 'amazon.nova-micro-v1:0', 'minute')).toBeNull();
+  });
+});
