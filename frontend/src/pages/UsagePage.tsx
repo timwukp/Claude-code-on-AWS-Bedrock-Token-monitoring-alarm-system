@@ -65,30 +65,46 @@ export function UsagePage() {
 
       {quota && (
         <Panel title="Bedrock token-quota headroom"
-               desc="Per-model rate limits (HTTP 429 on breach). Throttles appear only if a limit is actually hit.">
+               desc="Per-model token rate limits (HTTP 429 on breach). Each row compares one model's own usage against its own quota. Only models with real traffic are shown.">
           <p style={{ marginTop: 0 }}>
             <span className={`badge ${quota.throttles?.throttled ? 'critical' : 'info'}`}>
               {quota.throttles?.throttled ? `⚠ ${quota.throttles.throttledCount} throttled` : '✓ No throttling'}
             </span>{' '}
             <span className="muted">client errors (24h): {quota.throttles?.clientErrors ?? 0}</span>
           </p>
+          {quota.headroom.length === 0 ? (
+            <p className="muted">No per-model token quotas matched to active models yet.</p>
+          ) : (
           <table className="data">
             <thead>
-              <tr><th>Quota</th><th>Window</th><th className="num">Limit</th><th className="num">Used</th><th className="num">Headroom</th><th>Status</th></tr>
+              <tr>
+                <th>Model (quota)</th><th>Window</th>
+                <th className="num">Limit (tokens)</th><th className="num">Used (this model)</th>
+                <th className="num">Used %</th><th className="num">Headroom (left)</th><th>Status</th>
+              </tr>
             </thead>
             <tbody>
-              {quota.headroom.slice(0, 8).map((q, i) => (
+              {quota.headroom.slice(0, 12).map((q: any, i: number) => (
                 <tr key={i}>
-                  <td className="mono" style={{ maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis' }}>{q.name}</td>
-                  <td>{q.window}</td>
+                  <td className="mono" style={{ maxWidth: 380, overflow: 'hidden', textOverflow: 'ellipsis' }}
+                      title={q.name}>{q.name.replace(/^.*tokens per (minute|day) for /i, '').trim() || q.name}</td>
+                  <td>{q.window === 'minute' ? 'per minute' : 'per day'}</td>
                   <td className="num">{fmtTokens(q.limit)}</td>
                   <td className="num">{fmtTokens(q.used)}</td>
                   <td className="num">{q.usedPct}%</td>
+                  <td className="num">{fmtTokens(q.remaining)}</td>
                   <td><span className={`badge ${q.status === 'critical' ? 'critical' : q.status === 'warn' ? 'warning' : 'info'}`}>{q.status}</span></td>
                 </tr>
               ))}
             </tbody>
           </table>
+          )}
+          <p className="muted" style={{ fontSize: 12, marginTop: 10 }}>
+            <strong>Used</strong> is that model's own consumption (CloudWatch AWS/Bedrock metrics,
+            by ModelId). <strong>Used %</strong> = Used ÷ Limit in the same window (per-minute vs
+            the TPM limit; per-day vs the daily limit). <strong>Headroom</strong> = tokens left
+            before the limit. Limits come from Service Quotas. Hover a model for its full id.
+          </p>
         </Panel>
       )}
     </>

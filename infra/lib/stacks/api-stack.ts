@@ -129,7 +129,7 @@ export class ApiStack extends cdk.Stack {
 
     // quotasFn reads CloudWatch Bedrock metrics + Service Quotas limits (read-only, account-wide).
     quotasFn.addToRolePolicy(new iam.PolicyStatement({
-      actions: ['cloudwatch:GetMetricStatistics', 'servicequotas:ListServiceQuotas'],
+      actions: ['cloudwatch:GetMetricStatistics', 'cloudwatch:ListMetrics', 'servicequotas:ListServiceQuotas'],
       resources: ['*'], // these read-only actions don't support resource-level scoping
     }));
 
