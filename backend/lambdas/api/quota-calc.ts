@@ -53,9 +53,15 @@ export function summarizeThrottles(throttledCount?: number, clientErrors?: numbe
   return { throttledCount: t, clientErrors: c, throttled: t > 0 };
 }
 
-/** Classify a Service Quotas quota name into its window; null if not a token quota. */
+/**
+ * Classify a Service Quotas quota name into its window; null if it isn't a token quota we track.
+ * Excludes the `bedrock-mantle` endpoint quotas (our calls go through `bedrock-runtime`, whose
+ * CloudWatch metrics we measure) and latency-optimized variants, so the panel compares like with
+ * like.
+ */
 export function windowOf(quotaName: string): 'minute' | 'day' | null {
   const n = quotaName.toLowerCase();
+  if (n.includes('bedrock-mantle') || n.includes('latency-optimized')) return null;
   if (n.includes('per minute')) return 'minute';
   if (n.includes('per day')) return 'day';
   return null;

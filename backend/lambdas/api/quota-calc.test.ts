@@ -49,6 +49,10 @@ describe('windowOf', () => {
     expect(windowOf('Model invocation max tokens per day for X')).toBe('day');
     expect(windowOf('some unrelated quota')).toBeNull();
   });
+  it('excludes bedrock-mantle endpoint and latency-optimized quotas', () => {
+    expect(windowOf('[bedrock-mantle endpoint] Input tokens per minute for Claude Opus 4.8')).toBeNull();
+    expect(windowOf('Model invocation max latency-optimized tokens per day for Amazon Nova Pro V1')).toBeNull();
+  });
 });
 
 import { modelKeywords, matchQuotaForModel } from './quota-calc';
