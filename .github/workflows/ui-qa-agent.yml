@@ -73,9 +73,21 @@ jobs:
       # ── Guard: how many auto-fix rounds have already run on this branch? ─────
       - name: Count prior fix rounds
         id: rounds
+        env:
+          # base_ref is only set for pull_request events; empty on workflow_dispatch.
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          n=$(git log --oneline "origin/${{ github.base_ref }}..HEAD" 2>/dev/null \
+          # Count auto-fix commits since the base. On manual dispatch there is no base_ref,
+          # so fall back to counting across the whole branch history. Always emit an integer
+          # (never empty) so the downstream fromJSON() comparison can't fail.
+          if [ -n "$BASE_REF" ] && git rev-parse --verify -q "origin/$BASE_REF" >/dev/null; then
+            range="origin/$BASE_REF..HEAD"
+          else
+            range="HEAD"
+          fi
+          n=$(git log --oneline "$range" 2>/dev/null \
               | grep -c 'chore(agent): auto-fix round' || true)
+          n=${n:-0}
           echo "count=$n" >> "$GITHUB_OUTPUT"
           echo "Prior auto-fix rounds on this branch: $n"
 
