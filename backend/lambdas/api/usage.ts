@@ -14,8 +14,12 @@ const TABLE = process.env.AGGREGATES_TABLE!;
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     const tenantId = getTenantId(event);
-    const from = event.queryStringParameters?.from ?? defaultFrom();
-    const to = event.queryStringParameters?.to ?? new Date().toISOString();
+    // Treat missing OR empty query params as absent — an empty `to` would otherwise make the
+    // DynamoDB BETWEEN have an upper bound < lower bound and throw a ValidationException (500).
+    const fromParam = event.queryStringParameters?.from;
+    const toParam = event.queryStringParameters?.to;
+    const from = fromParam ? fromParam : defaultFrom();
+    const to = toParam ? toParam : new Date().toISOString();
 
     // Aggregates are keyed pk=TENANT#<id>#USAGE, sk=<iso-bucket>.
     const res = await ddb.send(
