@@ -66,11 +66,18 @@ STEP 3 — Save artifacts with the code interpreter:
   - upload everything under /mnt/reports (incl. screenshots/) to
     s3://{bucket}/{run_prefix}/ preserving relative paths.
 
-STEP 4 — Final answer: return ONLY a JSON object (no prose around it) of the form:
+STEP 4 — Final answer (CRITICAL — do this even if you run low on time/steps):
+You MUST end your reply with a single fenced ```json block containing ONLY this object:
 {{"overall": "PASS"|"FAIL", "pages_tested": <int>, "findings": [
    {{"id": "...", "page": "...", "severity": "CRITICAL"|"HIGH"|"MEDIUM"|"LOW",
      "summary": "...", "evidence": "...", "suspected_source": "path or area if inferable"}}
 ]}}
+Rules for the final JSON:
+- Every inconsistency, discrepancy, wrong value, missing data, or broken control you noticed
+  during exploration MUST appear as a findings entry — do NOT report "0 findings" if you
+  described any problem above. A cross-page value mismatch is at least HIGH.
+- If you are running out of steps, STOP exploring and emit the JSON now with what you have.
+- overall = "FAIL" if findings is non-empty, else "PASS". Never leave it blank.
 This is REAL testing — report the true state, never invent passes."""
 
 
@@ -128,7 +135,24 @@ def main() -> int:
     text = stream_text(resp)
     print(text)
 
-    report = extract_json(text) or {"overall": "UNKNOWN", "findings": [], "raw": text[-4000:]}
+    report = extract_json(text)
+    # The exploratory reply often ends in prose, not clean JSON. Ask once more, in the SAME
+    # session (so the agent still has its findings in context), for the JSON object only.
+    if not report or not report.get("findings"):
+        followup = (
+            "Now output ONLY the JSON object described in STEP 4 — no prose, no code fence, "
+            "nothing before or after it. Include EVERY issue you observed during the run "
+            "(data discrepancies, missing rows, wrong input types, cross-page mismatches, etc.) "
+            "as a finding with a severity. If you truly saw no issues, return an empty findings array."
+        )
+        resp2 = client.invoke_harness(
+            harnessArn=args.harness_arn, runtimeSessionId=session_id, actorId="ci-pipeline",
+            messages=[{"role": "user", "content": [{"text": followup}]}],
+        )
+        text2 = stream_text(resp2)
+        print("\n--- structured-output pass ---\n" + text2)
+        report = extract_json(text2) or report
+    report = report or {"overall": "UNKNOWN", "findings": [], "raw": text[-4000:]}
     with open(args.out, "w") as f:
         json.dump(report, f, indent=2)
 
