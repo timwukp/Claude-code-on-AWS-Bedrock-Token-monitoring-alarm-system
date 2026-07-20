@@ -1,0 +1,136 @@
+name: UI QA Agent (AgentCore)
+
+# Developer pushes code → CI/CD triggers → UI Test Agent → Test Report → Bug-Fix Agent → PR
+#
+# On a PR touching the frontend, an AgentCore Harness logs into the deployed site, explores
+# every page, and reports findings. If it finds blocking bugs, a second Harness (Bug-Fix Agent)
+# root-causes them against the repo source, patches, and pushes the fix onto the PR branch —
+# which re-triggers this workflow, closing the loop until the QA run is green.
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - 'backend/lambdas/api/**'
+      - '.github/workflows/ui-qa-agent.yml'
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'Target URL to test'
+        required: true
+        default: 'https://your-app.example.com/'
+
+permissions:
+  id-token: write        # OIDC → assume the AWS role
+  contents: write        # push the auto-fix commit onto the PR branch
+  pull-requests: write   # post the results comment
+
+env:
+  AWS_REGION: us-east-1
+  # Account ID comes from a repo secret (Settings → Secrets → Actions → AWS_ACCOUNT_ID),
+  # so no account number is committed to this public repo.
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+  # Harness names come from repo variables (Settings → Secrets and variables → Actions → Variables),
+  # so no environment-specific resource ids are committed to this public repo.
+  HARNESS_ARN: arn:aws:bedrock-agentcore:us-east-1:${{ secrets.AWS_ACCOUNT_ID }}:harness/${{ vars.UI_HARNESS }}
+  BUGFIX_ARN: arn:aws:bedrock-agentcore:us-east-1:${{ secrets.AWS_ACCOUNT_ID }}:harness/${{ vars.BUGFIX_HARNESS }}
+  TARGET_URL: ${{ vars.TARGET_URL }}
+  # Guards the auto-fix→re-run loop from running forever. Bump per commit via the marker below.
+  MAX_FIX_ROUNDS: '3'
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+
+      - run: pip install boto3
+        working-directory: ci-agent
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsUITestRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      # ── UI Test Agent → Test Report ─────────────────────────────────────────
+      - name: Run UI QA Agent
+        id: qa
+        continue-on-error: true
+        run: |
+          python ci-agent/qa_agent.py \
+            --harness-arn "$HARNESS_ARN" \
+            --url "${{ github.event.inputs.url || env.TARGET_URL }}" \
+            --run-prefix "pr-${{ github.event.pull_request.number || 'manual' }}" \
+            --out qa-report.json | tee qa-output.txt
+
+      # ── Guard: how many auto-fix rounds have already run on this branch? ─────
+      - name: Count prior fix rounds
+        id: rounds
+        run: |
+          n=$(git log --oneline "origin/${{ github.base_ref }}..HEAD" 2>/dev/null \
+              | grep -c 'chore(agent): auto-fix round' || true)
+          echo "count=$n" >> "$GITHUB_OUTPUT"
+          echo "Prior auto-fix rounds on this branch: $n"
+
+      # ── Bug-Fix Agent → patch → push (re-triggers this workflow) ─────────────
+      - name: Run Bug-Fix Agent and push fix
+        if: steps.qa.outcome == 'failure' && steps.rounds.outputs.count < env.MAX_FIX_ROUNDS
+        run: |
+          python ci-agent/bugfix_agent.py \
+            --report qa-report.json \
+            --harness-arn "$BUGFIX_ARN" \
+            --repo-root . \
+            --out bugfix-summary.md
+          if ! git diff --quiet; then
+            round=$(( ${{ steps.rounds.outputs.count }} + 1 ))
+            git config user.name  "agentcore-bugfix[bot]"
+            git config user.email "agentcore-bugfix@users.noreply.github.com"
+            git add -A
+            git commit -m "chore(agent): auto-fix round $round — from UI QA findings"
+            git push origin HEAD:${{ github.head_ref }}
+            echo "Pushed auto-fix round $round; workflow will re-trigger."
+          else
+            echo "Bug-Fix Agent produced no applicable patch."
+          fi
+
+      # ── Post results / loop status onto the PR ───────────────────────────────
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const read = (p) => fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '';
+            let report = {};
+            try { report = JSON.parse(read('qa-report.json')); } catch {}
+            const findings = report.findings || [];
+            const rounds = Number('${{ steps.rounds.outputs.count }}');
+            const bugfix = read('bugfix-summary.md');
+            const icon = (report.overall === 'PASS' || findings.length === 0) ? '✅' : '❌';
+            const rows = findings.map(f =>
+              `| ${f.severity} | ${f.page} | ${f.summary} |`).join('\n');
+            const body = [
+              `## ${icon} UI QA Agent — ${findings.length} finding(s)`,
+              `**Target:** ${{ github.event.inputs.url && '`'+github.event.inputs.url+'`' || '`'+process.env.TARGET_URL+'`' }} · **Overall:** ${report.overall || 'n/a'} · **Auto-fix rounds:** ${rounds}`,
+              findings.length ? `\n| Severity | Page | Finding |\n|---|---|---|\n${rows}` : '\nNo blocking issues found. 🎉',
+              bugfix ? `\n<details><summary>🔧 Bug-Fix Agent</summary>\n\n${bugfix}\n</details>` : '',
+              `\n<details><summary>Full agent output</summary>\n\n\`\`\`\n${read('qa-output.txt').slice(-3000)}\n\`\`\`\n</details>`,
+              `\n---\n*Powered by [AgentCore Harness](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness.html) — UI Test Agent + Bug-Fix Agent · screenshots in S3 \`pr-${{ github.event.pull_request.number || 'manual' }}/\`*`,
+            ].join('\n');
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner, repo: context.repo.repo, body,
+            });
+
+      - name: Fail check if unresolved blocking findings remain
+        if: steps.qa.outcome == 'failure' && steps.rounds.outputs.count >= env.MAX_FIX_ROUNDS
+        run: |
+          echo "::error::UI QA still failing after $MAX_FIX_ROUNDS auto-fix rounds — needs human review."
+          exit 1
