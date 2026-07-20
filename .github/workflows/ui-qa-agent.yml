@@ -81,7 +81,7 @@ jobs:
 
       # ── Bug-Fix Agent → patch → push (re-triggers this workflow) ─────────────
       - name: Run Bug-Fix Agent and push fix
-        if: steps.qa.outcome == 'failure' && steps.rounds.outputs.count < env.MAX_FIX_ROUNDS
+        if: steps.qa.outcome == 'failure' && fromJSON(steps.rounds.outputs.count) < fromJSON(env.MAX_FIX_ROUNDS)
         run: |
           python ci-agent/bugfix_agent.py \
             --report qa-report.json \
@@ -130,7 +130,7 @@ jobs:
             });
 
       - name: Fail check if unresolved blocking findings remain
-        if: steps.qa.outcome == 'failure' && steps.rounds.outputs.count >= env.MAX_FIX_ROUNDS
+        if: steps.qa.outcome == 'failure' && fromJSON(steps.rounds.outputs.count) >= fromJSON(env.MAX_FIX_ROUNDS)
         run: |
           echo "::error::UI QA still failing after $MAX_FIX_ROUNDS auto-fix rounds — needs human review."
           exit 1
