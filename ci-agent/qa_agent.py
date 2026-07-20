@@ -20,6 +20,7 @@ import secrets
 import sys
 
 import boto3
+from botocore.config import Config as BotoConfig
 
 REGION = os.environ.get("AWS_REGION", "us-east-1")
 
@@ -91,6 +92,54 @@ def stream_text(resp) -> str:
     return "".join(out)
 
 
+def safe_stream(resp) -> str:
+    """Like stream_text, but if the stream drops (read timeout, connection reset) partway,
+    return whatever text arrived so far instead of raising — a long UI run can outlast the
+    socket, and a partial transcript is still worth salvaging findings from."""
+    out = []
+    try:
+        for event in resp["stream"]:
+            if "contentBlockDelta" in event:
+                delta = event["contentBlockDelta"].get("delta", {})
+                if "text" in delta:
+                    out.append(delta["text"])
+    except Exception as e:  # botocore/urllib3 read timeout, connection reset, etc.
+        print(f"\n⚠️  stream interrupted ({type(e).__name__}: {e}); using partial transcript.",
+              file=sys.stderr)
+    return "".join(out)
+
+
+def salvage_findings(text: str) -> list:
+    """Last-resort recovery: the agent narrated problems but never emitted the STEP 4 JSON.
+    Pull sentences that clearly flag an issue into coarse findings so the run reports something
+    actionable rather than a false '0 findings'. Heuristic and intentionally conservative."""
+    markers = re.compile(
+        r"(discrepan|inconsist|mismatch|does not match|doesn't match|should (?:agree|match|equal)"
+        r"|missing|duplicate|\$0\.00|NaN|contradict|confusing|ambiguous|wrong|broken|fails?\b"
+        r"|critical finding|major finding|found it)", re.I)
+    seen, findings = set(), []
+    for raw in re.split(r"(?<=[.!?])\s+|\n+", text):
+        s = raw.strip()
+        if len(s) < 25 or not markers.search(s):
+            continue
+        key = s[:80].lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        sev = "HIGH" if re.search(r"critical|major|\$0\.00|missing|discrepan|mismatch", s, re.I) else "MEDIUM"
+        findings.append({
+            "id": f"salvaged-{len(findings) + 1}",
+            "page": "unknown",
+            "severity": sev,
+            "summary": s[:300],
+            "evidence": s[:1000],
+            "suspected_source": "",
+        })
+        if len(findings) >= 15:
+            break
+    return findings
+
+
 def extract_json(text: str):
     """Pull the last JSON object out of the agent's reply (it may wrap it in prose/fences)."""
     fenced = re.findall(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
@@ -125,14 +174,18 @@ def main() -> int:
     # The URL is injected via the secret; also state it plainly so the agent has it up front.
     prompt = f"Target URL: {args.url}\n\n" + prompt
 
-    client = boto3.client("bedrock-agentcore", region_name=args.region)
+    # A UI-exploration run streams for many minutes; botocore's default 60s read timeout would
+    # abort mid-stream. Give the socket a long read window and don't let botocore auto-retry a
+    # long-running invoke (that would restart the whole exploration).
+    cfg = BotoConfig(read_timeout=900, connect_timeout=30, retries={"max_attempts": 0})
+    client = boto3.client("bedrock-agentcore", region_name=args.region, config=cfg)
     print(f"🧪 UI QA Agent — session {session_id}\n   target {args.url}", flush=True)
     resp = client.invoke_harness(
         harnessArn=args.harness_arn, runtimeSessionId=session_id,
         actorId="ci-pipeline",
         messages=[{"role": "user", "content": [{"text": prompt}]}],
     )
-    text = stream_text(resp)
+    text = safe_stream(resp)
     print(text)
 
     report = extract_json(text)
@@ -145,13 +198,23 @@ def main() -> int:
             "(data discrepancies, missing rows, wrong input types, cross-page mismatches, etc.) "
             "as a finding with a severity. If you truly saw no issues, return an empty findings array."
         )
-        resp2 = client.invoke_harness(
-            harnessArn=args.harness_arn, runtimeSessionId=session_id, actorId="ci-pipeline",
-            messages=[{"role": "user", "content": [{"text": followup}]}],
-        )
-        text2 = stream_text(resp2)
-        print("\n--- structured-output pass ---\n" + text2)
-        report = extract_json(text2) or report
+        try:
+            resp2 = client.invoke_harness(
+                harnessArn=args.harness_arn, runtimeSessionId=session_id, actorId="ci-pipeline",
+                messages=[{"role": "user", "content": [{"text": followup}]}],
+            )
+            text2 = safe_stream(resp2)
+            print("\n--- structured-output pass ---\n" + text2)
+            report = extract_json(text2) or report
+        except Exception as e:
+            # Never let the structured-output pass crash the stage — fall back to salvaging
+            # findings from the exploration transcript we already have.
+            print(f"\n⚠️  structured-output pass failed ({e}); salvaging from transcript.", file=sys.stderr)
+    if not report or not report.get("findings"):
+        salvaged = salvage_findings(text)
+        if salvaged:
+            report = {"overall": "FAIL", "pages_tested": None, "findings": salvaged,
+                      "note": "findings salvaged from exploration transcript"}
     report = report or {"overall": "UNKNOWN", "findings": [], "raw": text[-4000:]}
     with open(args.out, "w") as f:
         json.dump(report, f, indent=2)
