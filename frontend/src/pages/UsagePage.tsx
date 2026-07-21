@@ -28,6 +28,7 @@ export function UsagePage() {
   const totalIn = points.reduce((s, p) => s + p.inputTokens, 0);
   const totalOut = points.reduce((s, p) => s + p.outputTokens, 0);
   const totalCalls = points.reduce((s, p) => s + p.invocations, 0);
+  const activeHours = points.filter((p) => p.invocations > 0).length;
 
   return (
     <>
@@ -35,7 +36,7 @@ export function UsagePage() {
         <Kpi label="Input tokens" value={fmtTokens(totalIn)} accent="var(--accent-blue)" foot="across window" />
         <Kpi label="Output tokens" value={fmtTokens(totalOut)} accent="var(--accent-green)" foot="across window" />
         <Kpi label="Invocations" value={totalCalls.toLocaleString()} accent="var(--accent-amber)" foot="API calls" />
-        <Kpi label="Active hours" value={String(points.length)} foot="buckets with traffic" />
+        <Kpi label="Active hours" value={String(activeHours)} foot="buckets with traffic" />
       </div>
 
       <Panel title="Token consumption over time" desc="Hourly buckets — input vs output tokens">
@@ -70,7 +71,7 @@ export function UsagePage() {
             <span className={`badge ${quota.throttles?.throttled ? 'critical' : 'info'}`}>
               {quota.throttles?.throttled ? `⚠ ${quota.throttles.throttledCount} throttled` : '✓ No throttling'}
             </span>{' '}
-            <span className="muted">client errors (24h): {quota.throttles?.clientErrors ?? 0}</span>
+            <span className="muted">throttling client errors (24h): {quota.throttles?.clientErrors ?? 0}</span>
           </p>
           {quota.headroom.length === 0 ? (
             <p className="muted">No per-model token quotas matched to active models yet.</p>

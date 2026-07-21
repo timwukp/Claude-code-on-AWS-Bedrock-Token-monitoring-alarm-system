@@ -102,5 +102,6 @@ export function matchQuotaForModel(
     })
     // Prefer on-demand/standard over cross-region/global variants, then the shortest (most direct) name.
     .sort((a, b) => a.name.length - b.name.length);
+    .sort((a, b) => b.name.length - a.name.length);
   return candidates[0] ?? null;
 }

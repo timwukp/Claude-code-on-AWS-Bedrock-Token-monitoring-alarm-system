@@ -10,11 +10,15 @@ import { fmtUsd } from '../lib/format';
  */
 export function GovernancePage() {
   const [data, setData] = useState<{ budget: any; enforcement: any } | null>(null);
+  const [costData, setCostData] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.governance().then(setData).catch((e) => setError(String(e))).finally(() => setLoading(false));
+    Promise.all([api.governance(), api.costs()])
+      .then(([gov, costs]) => { setData(gov); setCostData(costs); })
+      .catch((e) => setError(String(e)))
+      .finally(() => setLoading(false));
   }, []);
 
   if (loading) return <div className="empty"><span className="spinner" /></div>;
@@ -23,12 +27,13 @@ export function GovernancePage() {
   const b = data?.budget;
   const e = data?.enforcement ?? {};
   const enforceMode = e.mode === 'enforce';
+  const actualSpend = costData?.estimatedUsd ?? b?.actualUsd;
 
   return (
     <>
       <div className="kpi-grid">
         <Kpi label="Monthly budget" value={b?.limitUsd ? fmtUsd(b.limitUsd) : '—'} accent="var(--primary)" />
-        <Kpi label="Actual spend" value={b?.actualUsd != null ? fmtUsd(b.actualUsd) : '—'}
+        <Kpi label="Actual spend" value={actualSpend != null ? fmtUsd(actualSpend) : '—'}
              accent="var(--accent-blue)" foot={b?.actualPct != null ? `${b.actualPct}% of budget` : undefined} />
         <Kpi label="Forecasted spend" value={b?.forecastedUsd != null ? fmtUsd(b.forecastedUsd) : '—'}
              accent="var(--accent-amber)" foot={b?.forecastedPct != null ? `${b.forecastedPct}% of budget` : undefined} />
