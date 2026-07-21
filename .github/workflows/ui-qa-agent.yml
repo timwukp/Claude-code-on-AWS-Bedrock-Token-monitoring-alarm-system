@@ -110,16 +110,18 @@ jobs:
             --harness-arn "$BUGFIX_ARN" \
             --repo-root . \
             --out bugfix-summary.md
-          if ! git diff --quiet; then
+          # Only commit source the agent patched — never the CI run artifacts
+          # (qa-report.json, qa-output.txt, bugfix-summary.md) sitting in the workdir.
+          git add -- backend frontend infra 2>/dev/null || true
+          if ! git diff --cached --quiet; then
             round=$(( PRIOR_ROUNDS + 1 ))
             git config user.name  "agentcore-bugfix[bot]"
             git config user.email "agentcore-bugfix@users.noreply.github.com"
-            git add -A
             git commit -m "chore(agent): auto-fix round $round — from UI QA findings"
             git push origin "HEAD:$HEAD_REF"
             echo "Pushed auto-fix round $round; workflow will re-trigger."
           else
-            echo "Bug-Fix Agent produced no applicable patch."
+            echo "Bug-Fix Agent produced no applicable source patch."
           fi
 
       # ── Post results / loop status onto the PR ───────────────────────────────
