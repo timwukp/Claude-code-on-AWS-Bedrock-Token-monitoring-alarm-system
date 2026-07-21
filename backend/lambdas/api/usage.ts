@@ -39,6 +39,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         inputTokens: i.inputTokens ?? 0,
         outputTokens: i.outputTokens ?? 0,
         invocations: i.invocations ?? 0,
+        throttlingErrors: i.throttlingErrors ?? 0,
       })),
     });
   } catch (err) {
@@ -50,5 +51,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 function defaultFrom(): string {
   const d = new Date();
   d.setDate(d.getDate() - 7);
+  d.setUTCHours(0, 0, 0, 0);
   return d.toISOString();
 }

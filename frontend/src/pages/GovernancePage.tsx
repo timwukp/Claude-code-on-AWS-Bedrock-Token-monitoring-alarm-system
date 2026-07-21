@@ -29,9 +29,9 @@ export function GovernancePage() {
       <div className="kpi-grid">
         <Kpi label="Monthly budget" value={b?.limitUsd ? fmtUsd(b.limitUsd) : '—'} accent="var(--primary)" />
         <Kpi label="Actual spend" value={b?.actualUsd != null ? fmtUsd(b.actualUsd) : '—'}
-             accent="var(--accent-blue)" foot={b?.actualPct != null ? `${b.actualPct}% of budget` : undefined} />
+             accent="var(--accent-blue)" foot={b?.actualPct != null ? `${b.actualPct}% of budget · AWS Budgets` : 'AWS Budgets'} />
         <Kpi label="Forecasted spend" value={b?.forecastedUsd != null ? fmtUsd(b.forecastedUsd) : '—'}
-             accent="var(--accent-amber)" foot={b?.forecastedPct != null ? `${b.forecastedPct}% of budget` : undefined} />
+             accent="var(--accent-amber)" foot={b?.forecastedPct != null ? `${b.forecastedPct}% of budget · AWS Budgets` : 'AWS Budgets'} />
         <Kpi label="Enforcement mode" value={enforceMode ? 'Enforce' : 'Notify-only'}
              accent={enforceMode ? 'var(--danger)' : 'var(--accent-green)'} />
       </div>

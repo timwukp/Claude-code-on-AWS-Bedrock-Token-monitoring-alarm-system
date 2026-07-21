@@ -22,7 +22,7 @@ export function CostsPage() {
   return (
     <>
       <div className="kpi-grid">
-        <Kpi label="Estimated spend" value={fmtUsd(data.totalEstimatedUsd)} accent="var(--primary)" foot="current window" />
+        <Kpi label="Estimated spend" value={fmtUsd(beforeCaching)} accent="var(--primary)" foot="current window" />
         <Kpi label="Saved by prompt caching" value={fmtUsd(savings)} accent="var(--accent-green)"
              foot={`${savedPct}% lower than without caching`} />
         <Kpi label="Models used" value={String(data.byModel.length)} accent="var(--accent-blue)" />

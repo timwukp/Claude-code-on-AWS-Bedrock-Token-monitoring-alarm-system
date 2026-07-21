@@ -32,7 +32,18 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       cacheReadTokens: Number(i.cacheReadTokens ?? 0),
     }));
 
-    const summary = summarizeCosts(items);
+    const merged = new Map<string, TokenCounts>();
+    for (const item of items) {
+      const existing = merged.get(item.modelId);
+      if (existing) {
+        existing.inputTokens += item.inputTokens;
+        existing.outputTokens += item.outputTokens;
+        existing.cacheReadTokens += item.cacheReadTokens;
+      } else {
+        merged.set(item.modelId, { ...item });
+      }
+    }
+    const summary = summarizeCosts(Array.from(merged.values()));
     return ok({ tenantId, ...summary });
   } catch (err) {
     console.error(err);
