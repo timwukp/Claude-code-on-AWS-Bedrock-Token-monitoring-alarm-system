@@ -14,7 +14,18 @@ export function GovernancePage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.governance().then(setData).catch((e) => setError(String(e))).finally(() => setLoading(false));
+    Promise.all([api.governance(), api.costs()])
+      .then(([govData, costsData]) => {
+        const actualUsd = costsData?.estimatedSpend ?? govData?.budget?.actualUsd ?? 0;
+        const limitUsd = govData?.budget?.limitUsd;
+        const actualPct = limitUsd ? Math.round((actualUsd / limitUsd) * 100) : govData?.budget?.actualPct;
+        setData({
+          ...govData,
+          budget: { ...govData?.budget, actualUsd, actualPct },
+        });
+      })
+      .catch((e) => setError(String(e)))
+      .finally(() => setLoading(false));
   }, []);
 
   if (loading) return <div className="empty"><span className="spinner" /></div>;

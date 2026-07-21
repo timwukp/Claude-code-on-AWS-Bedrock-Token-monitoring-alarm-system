@@ -46,7 +46,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       LEFT JOIN project_mapping m
         ON l.requestMetadata['project_id'] = m.project_id
       WHERE COALESCE(l.requestMetadata['tenant'], l.identity.arn) = '${sanitize(tenantId)}'
-        AND l.requestMetadata['project_id'] IS NOT NULL
       GROUP BY 1, 2
       ORDER BY tokens DESC
       LIMIT 100`;
