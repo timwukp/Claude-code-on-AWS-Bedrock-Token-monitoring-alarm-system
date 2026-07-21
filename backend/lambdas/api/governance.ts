@@ -17,7 +17,7 @@ const BUDGET_ACTION_THRESHOLD = process.env.BUDGET_ACTION_THRESHOLD_PCT; // stri
  *
  * Read-only: it never changes any control. Missing budget (e.g. fresh deploy) degrades gracefully.
  */
-export const handler = async (_event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     let budget: any = null;
     if (BUDGET_NAME) {

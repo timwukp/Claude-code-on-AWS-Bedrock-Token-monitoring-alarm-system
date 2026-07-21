@@ -17,6 +17,8 @@ const TABLE = process.env.AGGREGATES_TABLE!;
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     const tenantId = getTenantId(event);
+    const modelId = event.pathParameters?.modelId;
+
     const res = await ddb.send(
       new QueryCommand({
         TableName: TABLE,
@@ -31,6 +33,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       outputTokens: Number(i.outputTokens ?? 0),
       cacheReadTokens: Number(i.cacheReadTokens ?? 0),
     }));
+
+    if (modelId) {
+      const match = items.find((i) => i.modelId === modelId);
+      if (!match) return ok({ tenantId, modelId, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, totalCost: 0, cacheSavings: 0 });
+      const summary = summarizeCosts([match]);
+      return ok({ tenantId, modelId, ...summary });
+    }
 
     const summary = summarizeCosts(items);
     return ok({ tenantId, ...summary });

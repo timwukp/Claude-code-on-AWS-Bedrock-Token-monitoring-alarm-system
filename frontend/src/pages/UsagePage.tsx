@@ -3,7 +3,7 @@ import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
 } from 'recharts';
 import { api, UsagePoint } from '../api/client';
-import { Kpi, Panel } from '../components/Layout';
+import { Layout, Kpi, Panel } from '../components/Layout';
 import { fmtTokens } from '../lib/format';
 
 /** Token usage over time + KPI summary + Bedrock quota headroom, for the signed-in tenant. */

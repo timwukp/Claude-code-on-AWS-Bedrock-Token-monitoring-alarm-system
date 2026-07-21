@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { ok, serverError } from '../shared/response';
 import { getTenantId } from '../shared/tenant';
 
@@ -15,6 +15,22 @@ const TABLE = process.env.ANOMALIES_TABLE!;
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     const tenantId = getTenantId(event);
+    const anomalyId = event.pathParameters?.id;
+
+    if (anomalyId) {
+      const res = await ddb.send(
+        new GetCommand({
+          TableName: TABLE,
+          Key: {
+            pk: `TENANT#${tenantId}#ANOMALY`,
+            sk: anomalyId,
+          },
+        }),
+      );
+      if (!res.Item) return { statusCode: 404, body: JSON.stringify({ message: 'Not found' }) };
+      return ok({ tenantId, anomaly: res.Item });
+    }
+
     const res = await ddb.send(
       new QueryCommand({
         TableName: TABLE,

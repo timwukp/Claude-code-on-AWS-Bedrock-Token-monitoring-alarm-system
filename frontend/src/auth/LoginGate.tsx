@@ -37,7 +37,17 @@ export function LoginGate({ children }: { children: ReactNode }) {
           <input placeholder="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           <input placeholder="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
           <button type="submit">Sign in</button>
-          {error && <p style={{ color: 'crimson' }}>{error}</p>}
+          {error && (
+            <div role="alert" style={{
+              background: 'crimson',
+              color: '#fff',
+              padding: '10px 12px',
+              borderRadius: 4,
+              fontWeight: 500,
+            }}>
+              {error}
+            </div>
+          )}
         </form>
       </div>
     );
