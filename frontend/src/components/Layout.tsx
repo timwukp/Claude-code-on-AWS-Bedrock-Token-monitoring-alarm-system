@@ -21,7 +21,7 @@ export function Layout({ title, subtitle, user, children }: {
           <span className="brand-logo">◆</span>
           <span>TokenMonitor</span>
         </div>
-        <div className="nav-section">Monitoring</div>
+        <div className="nav-section">Monitoring &amp; Governance</div>
         {NAV.map((n) => (
           <NavLink key={n.to} to={n.to} end={n.end}
             className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
