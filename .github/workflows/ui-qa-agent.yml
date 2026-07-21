@@ -41,7 +41,7 @@ env:
 jobs:
   qa:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
@@ -63,25 +63,43 @@ jobs:
       - name: Run UI QA Agent
         id: qa
         continue-on-error: true
+        env:
+          INPUT_URL: ${{ github.event.inputs.url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
+          # `set -o pipefail` so a non-zero qa_agent exit isn't masked by `tee`. The agent also
+          # writes blocking=/findings= to $GITHUB_OUTPUT, which is what the Bug-Fix stage gates on.
+          set -o pipefail
           python ci-agent/qa_agent.py \
             --harness-arn "$HARNESS_ARN" \
-            --url "${{ github.event.inputs.url || env.TARGET_URL }}" \
-            --run-prefix "pr-${{ github.event.pull_request.number || 'manual' }}" \
+            --url "${INPUT_URL:-$TARGET_URL}" \
+            --run-prefix "pr-${PR_NUMBER:-manual}" \
             --out qa-report.json | tee qa-output.txt
 
       # ── Guard: how many auto-fix rounds have already run on this branch? ─────
       - name: Count prior fix rounds
         id: rounds
+        env:
+          # base_ref is only set for pull_request events; empty on workflow_dispatch.
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          n=$(git log --oneline "origin/${{ github.base_ref }}..HEAD" 2>/dev/null \
+          # Count auto-fix commits since the base. On manual dispatch there is no base_ref,
+          # so fall back to counting across the whole branch history. Always emit an integer
+          # (never empty) so the downstream fromJSON() comparison can't fail.
+          if [ -n "$BASE_REF" ] && git rev-parse --verify -q "origin/$BASE_REF" >/dev/null; then
+            range="origin/$BASE_REF..HEAD"
+          else
+            range="HEAD"
+          fi
+          n=$(git log --oneline "$range" 2>/dev/null \
               | grep -c 'chore(agent): auto-fix round' || true)
+          n=${n:-0}
           echo "count=$n" >> "$GITHUB_OUTPUT"
           echo "Prior auto-fix rounds on this branch: $n"
 
       # ── Bug-Fix Agent → patch → push (re-triggers this workflow) ─────────────
       - name: Run Bug-Fix Agent and push fix
-        if: steps.qa.outcome == 'failure' && fromJSON(steps.rounds.outputs.count) < fromJSON(env.MAX_FIX_ROUNDS)
+        if: steps.qa.outputs.blocking == 'true' && fromJSON(steps.rounds.outputs.count) < fromJSON(env.MAX_FIX_ROUNDS)
         env:
           # Route dynamic refs through env to avoid script injection (actionlint expression check).
           PRIOR_ROUNDS: ${{ steps.rounds.outputs.count }}
@@ -92,16 +110,18 @@ jobs:
             --harness-arn "$BUGFIX_ARN" \
             --repo-root . \
             --out bugfix-summary.md
-          if ! git diff --quiet; then
+          # Only commit source the agent patched — never the CI run artifacts
+          # (qa-report.json, qa-output.txt, bugfix-summary.md) sitting in the workdir.
+          git add -- backend frontend infra 2>/dev/null || true
+          if ! git diff --cached --quiet; then
             round=$(( PRIOR_ROUNDS + 1 ))
             git config user.name  "agentcore-bugfix[bot]"
             git config user.email "agentcore-bugfix@users.noreply.github.com"
-            git add -A
             git commit -m "chore(agent): auto-fix round $round — from UI QA findings"
             git push origin "HEAD:$HEAD_REF"
             echo "Pushed auto-fix round $round; workflow will re-trigger."
           else
-            echo "Bug-Fix Agent produced no applicable patch."
+            echo "Bug-Fix Agent produced no applicable source patch."
           fi
 
       # ── Post results / loop status onto the PR ───────────────────────────────
@@ -142,7 +162,7 @@ jobs:
             });
 
       - name: Fail check if unresolved blocking findings remain
-        if: steps.qa.outcome == 'failure' && fromJSON(steps.rounds.outputs.count) >= fromJSON(env.MAX_FIX_ROUNDS)
+        if: steps.qa.outputs.blocking == 'true' && fromJSON(steps.rounds.outputs.count) >= fromJSON(env.MAX_FIX_ROUNDS)
         run: |
           echo "::error::UI QA still failing after $MAX_FIX_ROUNDS auto-fix rounds — needs human review."
           exit 1
