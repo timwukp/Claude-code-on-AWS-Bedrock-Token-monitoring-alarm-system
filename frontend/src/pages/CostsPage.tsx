@@ -45,7 +45,7 @@ export function CostsPage() {
             {data.byModel.map((m, i) => (
               <tr key={i}>
                 <td><span className="mono">{shortModel(String(m.modelId))}</span></td>
-                <td className="num">{Number(m.inputTokens ?? 0).toLocaleString()}</td>
+                <td className="num">{(Number(m.inputTokens ?? 0) - Number(m.cacheReadTokens ?? 0)).toLocaleString()}</td>
                 <td className="num">{Number(m.outputTokens ?? 0).toLocaleString()}</td>
                 <td className="num muted">{fmtTokens(Number(m.cacheReadTokens ?? 0))}</td>
                 <td className="num" style={{ color: 'var(--accent-green)' }}>{fmtUsd(Number(m.cacheSavingsUsd ?? 0))}</td>

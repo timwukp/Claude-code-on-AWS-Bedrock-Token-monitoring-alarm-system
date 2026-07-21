@@ -27,7 +27,7 @@ export function GovernancePage() {
   return (
     <>
       <div className="kpi-grid">
-        <Kpi label="Monthly budget" value={b?.limitUsd ? fmtUsd(b.limitUsd) : '—'} accent="var(--primary)" />
+        <Kpi label="Monthly budget" value={b?.limitUsd != null && !b?.error ? fmtUsd(b.limitUsd) : '—'} accent="var(--primary)" />
         <Kpi label="Actual spend" value={b?.actualUsd != null ? fmtUsd(b.actualUsd) : '—'}
              accent="var(--accent-blue)" foot={b?.actualPct != null ? `${b.actualPct}% of budget` : undefined} />
         <Kpi label="Forecasted spend" value={b?.forecastedUsd != null ? fmtUsd(b.forecastedUsd) : '—'}

@@ -28,6 +28,7 @@ export function UsagePage() {
   const totalIn = points.reduce((s, p) => s + p.inputTokens, 0);
   const totalOut = points.reduce((s, p) => s + p.outputTokens, 0);
   const totalCalls = points.reduce((s, p) => s + p.invocations, 0);
+  const totalCost = points.reduce((s, p) => s + (p.cost ?? 0), 0);
 
   return (
     <>
@@ -35,7 +36,8 @@ export function UsagePage() {
         <Kpi label="Input tokens" value={fmtTokens(totalIn)} accent="var(--accent-blue)" foot="across window" />
         <Kpi label="Output tokens" value={fmtTokens(totalOut)} accent="var(--accent-green)" foot="across window" />
         <Kpi label="Invocations" value={totalCalls.toLocaleString()} accent="var(--accent-amber)" foot="API calls" />
-        <Kpi label="Active hours" value={String(points.length)} foot="buckets with traffic" />
+        <Kpi label="Active hours" value={String(points.length)} accent="var(--accent-teal)" foot="buckets with traffic" />
+        <Kpi label="Estimated cost" value={`$${totalCost.toFixed(2)}`} accent="var(--accent-purple)" foot="USD this window" />
       </div>
 
       <Panel title="Token consumption over time" desc="Hourly buckets — input vs output tokens">
@@ -93,7 +95,7 @@ export function UsagePage() {
                   <td className="num">{fmtTokens(q.used)}</td>
                   <td className="num">{q.usedPct}%</td>
                   <td className="num">{fmtTokens(q.remaining)}</td>
-                  <td><span className={`badge ${q.status === 'critical' ? 'critical' : q.status === 'warn' ? 'warning' : 'info'}`}>{q.status}</span></td>
+                  <td><span className={`badge ${q.status === 'critical' ? 'critical' : q.status === 'warn' ? 'warn' : 'info'}`}>{q.status}</span></td>
                 </tr>
               ))}
             </tbody>

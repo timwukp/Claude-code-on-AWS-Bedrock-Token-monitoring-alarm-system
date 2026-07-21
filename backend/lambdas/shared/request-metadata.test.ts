@@ -84,7 +84,7 @@ describe('buildRequestMetadata — sanitization & limits', () => {
 
   it('throws when there are too many pairs', () => {
     const tags: Record<string, string> = {};
-    for (let i = 0; i < MAX_PAIRS; i++) tags[`k${i}`] = 'v';
+    for (let i = 0; i <= MAX_PAIRS; i++) tags[`k${i}`] = 'v';
     expect(() => buildRequestMetadata({ ...VALID, tags })).toThrow(/Too many/i);
   });
 });

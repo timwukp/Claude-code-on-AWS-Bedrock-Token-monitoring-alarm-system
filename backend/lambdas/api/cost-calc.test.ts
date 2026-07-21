@@ -49,4 +49,13 @@ describe('summarizeCosts', () => {
     // Opus 0.5 (cache) + Haiku 1000*1e-6 = 0.001 → 0.501
     expect(s.totalEstimatedUsd).toBeCloseTo(0.501, 6);
   });
+
+  it('deduplicates rows when the same modelId appears more than once', () => {
+    const s = summarizeCosts([
+      { modelId: OPUS, inputTokens: 500, outputTokens: 0, cacheReadTokens: 0 },
+      { modelId: OPUS, inputTokens: 500, outputTokens: 0, cacheReadTokens: 0 },
+    ]);
+    expect(s.byModel).toHaveLength(1);
+    expect(s.byModel[0].estimatedUsd).toBeCloseTo(0.005, 9); // 1000*5e-6 merged
+  });
 });

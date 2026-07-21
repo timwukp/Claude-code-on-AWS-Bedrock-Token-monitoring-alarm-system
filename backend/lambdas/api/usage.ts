@@ -39,6 +39,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         inputTokens: i.inputTokens ?? 0,
         outputTokens: i.outputTokens ?? 0,
         invocations: i.invocations ?? 0,
+        cacheTokens: i.cacheTokens ?? 0,
       })),
     });
   } catch (err) {
