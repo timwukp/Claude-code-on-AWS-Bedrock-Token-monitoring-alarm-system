@@ -25,25 +25,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }),
     );
 
-    const merged = new Map<string, TokenCounts>();
-    for (const i of res.Items ?? []) {
-      const rawModelId = String(i.modelId ?? '');
-      const modelId = rawModelId.replace(/^(us|eu|ap)\./, '');
-      const existing = merged.get(modelId);
-      if (existing) {
-        existing.inputTokens += Number(i.inputTokens ?? 0);
-        existing.outputTokens += Number(i.outputTokens ?? 0);
-        existing.cacheReadTokens += Number(i.cacheReadTokens ?? 0);
-      } else {
-        merged.set(modelId, {
-          modelId,
-          inputTokens: Number(i.inputTokens ?? 0),
-          outputTokens: Number(i.outputTokens ?? 0),
-          cacheReadTokens: Number(i.cacheReadTokens ?? 0),
-        });
-      }
-    }
-    const items: TokenCounts[] = Array.from(merged.values());
+    const items: TokenCounts[] = (res.Items ?? []).map((i) => ({
+      modelId: String(i.modelId ?? ''),
+      inputTokens: Number(i.inputTokens ?? 0),
+      outputTokens: Number(i.outputTokens ?? 0),
+      cacheReadTokens: Number(i.cacheReadTokens ?? 0),
+    }));
 
     const summary = summarizeCosts(items);
     return ok({ tenantId, ...summary });
