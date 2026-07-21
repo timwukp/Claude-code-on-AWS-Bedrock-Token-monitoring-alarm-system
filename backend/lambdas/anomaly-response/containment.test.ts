@@ -19,6 +19,12 @@ describe('parsePrincipal', () => {
 describe('decideContainment', () => {
   const arn = 'arn:aws:iam::123456789012:role/Suspicious';
 
+  it('returns strictly increasing timestamps across sequential decisions', () => {
+    const d1 = decideContainment({ enabled: true, principalArn: arn, allowList: [] });
+    const d2 = decideContainment({ enabled: true, principalArn: arn, allowList: [] });
+    expect(d2.timestamp).toBeGreaterThan(d1.timestamp);
+  });
+
   it('does not act when disabled (notify-only default)', () => {
     expect(decideContainment({ enabled: false, principalArn: arn, allowList: [] }).act).toBe(false);
   });

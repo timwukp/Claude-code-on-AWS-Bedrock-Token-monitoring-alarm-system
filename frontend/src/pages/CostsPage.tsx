@@ -15,8 +15,7 @@ export function CostsPage() {
 
   const totalCacheRead = data.byModel.reduce((s, m) => s + Number(m.cacheReadTokens ?? 0), 0);
   const savings = Number(data.totalCacheSavingsUsd ?? 0);
-  const beforeCaching = data.totalEstimatedUsd + savings;
-  const savedPct = beforeCaching > 0 ? Math.round((savings / beforeCaching) * 100) : 0;
+  const savedPct = data.totalEstimatedUsd > 0 ? Math.round((savings / data.totalEstimatedUsd) * 100) : 0;
   const shortModel = (id: string) => id.split('/').pop() ?? id;
 
   return (

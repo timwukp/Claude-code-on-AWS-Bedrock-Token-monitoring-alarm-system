@@ -33,8 +33,8 @@ export function UsagePage() {
   return (
     <>
       <div className="kpi-grid">
-        <Kpi label="Input tokens" value={fmtTokens(totalIn)} accent="var(--accent-blue)" foot="across window" />
-        <Kpi label="Output tokens" value={fmtTokens(totalOut)} accent="var(--accent-green)" foot="across window" />
+        <Kpi label="Input tokens" value={totalIn.toLocaleString()} accent="var(--accent-blue)" foot="across window" />
+        <Kpi label="Output tokens" value={totalOut.toLocaleString()} accent="var(--accent-green)" foot="across window" />
         <Kpi label="Invocations" value={totalCalls.toLocaleString()} accent="var(--accent-amber)" foot="API calls" />
         <Kpi label="Active hours" value={String(points.length)} accent="var(--accent-teal)" foot="buckets with traffic" />
         <Kpi label="Estimated cost" value={`$${totalCost.toFixed(2)}`} accent="var(--accent-purple)" foot="USD this window" />

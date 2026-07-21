@@ -55,6 +55,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 };
 
 function num(v: string | undefined): number {
+  if (v == null) return 0;
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
