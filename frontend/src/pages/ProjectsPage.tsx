@@ -9,7 +9,7 @@ import { fmtTokens, fmtUsd } from '../lib/format';
  */
 export function ProjectsPage() {
   const [rows, setRows] = useState<any[]>([]);
-  const [source, setSource] = useState<'fast' | 'full'>('full');
+  const [source, setSource] = useState<'fast' | 'full'>('fast');
   const [servedFrom, setServedFrom] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
