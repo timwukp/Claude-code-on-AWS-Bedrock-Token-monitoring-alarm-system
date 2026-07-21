@@ -140,18 +140,77 @@ def salvage_findings(text: str) -> list:
     return findings
 
 
+def _iter_json_objects(text: str):
+    """Yield every balanced {...} substring in text (brace-scanned, so arbitrary nesting works —
+    the old single-level regex could miss the real object)."""
+    depth = start = 0
+    in_str = esc = False
+    for i, ch in enumerate(text):
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}":
+            if depth > 0:
+                depth -= 1
+                if depth == 0:
+                    yield text[start:i + 1]
+
+
 def extract_json(text: str):
-    """Pull the last JSON object out of the agent's reply (it may wrap it in prose/fences)."""
+    """Pull the last JSON object that looks like a report out of the agent's reply
+    (it may wrap it in prose/fences and nest findings arbitrarily)."""
     fenced = re.findall(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
-    candidates = fenced + re.findall(r"(\{(?:[^{}]|\{[^{}]*\})*\})", text, re.DOTALL)
+    candidates = fenced + list(_iter_json_objects(text))
     for c in reversed(candidates):
         try:
             obj = json.loads(c)
-            if "findings" in obj or "overall" in obj:
-                return obj
         except json.JSONDecodeError:
             continue
+        if isinstance(obj, dict) and ("findings" in obj or "overall" in obj):
+            return obj
     return None
+
+
+# Canonical finding fields the downstream comment + Bug-Fix stages rely on.
+def normalize_report(report: dict) -> dict:
+    """Coerce whatever shape the agent emitted into a stable contract:
+      - every finding has id / page / severity / summary / evidence / suspected_source
+        (agents variously use 'title' vs 'summary', 'description' vs 'evidence', etc.)
+      - top-level 'overall' is always set: FAIL if any finding, else PASS."""
+    findings = report.get("findings") or []
+    norm = []
+    for i, f in enumerate(findings):
+        if not isinstance(f, dict):
+            continue
+        summary = f.get("summary") or f.get("title") or f.get("name") or ""
+        evidence = f.get("evidence") or f.get("description") or f.get("actual") or ""
+        sev = str(f.get("severity") or "MEDIUM").upper()
+        if sev not in ("CRITICAL", "HIGH", "MEDIUM", "LOW"):
+            sev = "MEDIUM"
+        norm.append({
+            **f,
+            "id": f.get("id") or f.get("test_case") or f"F-{i + 1:02d}",
+            "page": f.get("page") or f.get("area") or "unknown",
+            "severity": sev,
+            "summary": summary[:300] if summary else "(no summary provided)",
+            "evidence": evidence,
+            "suspected_source": f.get("suspected_source") or f.get("source") or "",
+        })
+    report["findings"] = norm
+    if report.get("overall") not in ("PASS", "FAIL"):
+        report["overall"] = "FAIL" if norm else "PASS"
+    return report
 
 
 def main() -> int:
@@ -216,13 +275,22 @@ def main() -> int:
             report = {"overall": "FAIL", "pages_tested": None, "findings": salvaged,
                       "note": "findings salvaged from exploration transcript"}
     report = report or {"overall": "UNKNOWN", "findings": [], "raw": text[-4000:]}
+    report = normalize_report(report)
     with open(args.out, "w") as f:
         json.dump(report, f, indent=2)
 
     findings = report.get("findings", [])
-    print(f"\n— {len(findings)} finding(s); overall={report.get('overall')} — wrote {args.out}")
-    # Non-zero exit if any real finding, so CI marks the check failed and the loop continues.
     blocking = [f for f in findings if f.get("severity") in ("CRITICAL", "HIGH", "MEDIUM")]
+    print(f"\n— {len(findings)} finding(s), {len(blocking)} blocking; "
+          f"overall={report.get('overall')} — wrote {args.out}")
+    # Emit a machine-readable flag so the workflow can gate the Bug-Fix stage on the report
+    # itself, not on this process's exit code (which continue-on-error would otherwise mask).
+    gho = os.environ.get("GITHUB_OUTPUT")
+    if gho:
+        with open(gho, "a") as f:
+            f.write(f"blocking={'true' if blocking else 'false'}\n")
+            f.write(f"findings={len(findings)}\n")
+    # Non-zero exit if any real finding, so CI marks the check failed and the loop continues.
     return 1 if blocking else 0
 
 
