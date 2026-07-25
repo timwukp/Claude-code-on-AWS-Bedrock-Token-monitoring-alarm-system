@@ -74,6 +74,15 @@ jobs:
             --query "Stacks[0].Outputs[?OutputKey=='SiteBucketName'].OutputValue" --output text)
           DIST_ID=$(aws cloudformation describe-stacks --stack-name "$STACK" \
             --query "Stacks[0].Outputs[?OutputKey=='DistributionId'].OutputValue" --output text)
+          # Vite bakes these in at build time (see frontend/.env.example) — without them the
+          # bundle ships userPoolId=undefined and the QA agent can't even log in.
+          export VITE_API_URL=$(aws cloudformation describe-stacks --stack-name "Tums-dev-Api" \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text)
+          export VITE_COGNITO_USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name "Tums-dev-Auth" \
+            --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text)
+          export VITE_COGNITO_CLIENT_ID=$(aws cloudformation describe-stacks --stack-name "Tums-dev-Auth" \
+            --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text)
+          export VITE_AWS_REGION="$AWS_REGION"
           ( cd frontend && npm ci && npm run build )
           aws s3 sync frontend/dist "s3://$BUCKET" --delete
           INV_ID=$(aws cloudfront create-invalidation --distribution-id "$DIST_ID" \

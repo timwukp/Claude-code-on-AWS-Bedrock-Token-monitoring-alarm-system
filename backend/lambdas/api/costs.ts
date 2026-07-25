@@ -38,9 +38,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     for (const item of items) {
       const existing = deduped.get(item.modelId);
       if (existing) {
-        existing.inputTokens += item.inputTokens;
-        existing.outputTokens += item.outputTokens;
-        existing.cacheReadTokens += item.cacheReadTokens;
+        existing.inputTokens = (existing.inputTokens ?? 0) + (item.inputTokens ?? 0);
+        existing.outputTokens = (existing.outputTokens ?? 0) + (item.outputTokens ?? 0);
+        existing.cacheReadTokens = (existing.cacheReadTokens ?? 0) + (item.cacheReadTokens ?? 0);
       } else {
         deduped.set(item.modelId, { ...item });
       }
