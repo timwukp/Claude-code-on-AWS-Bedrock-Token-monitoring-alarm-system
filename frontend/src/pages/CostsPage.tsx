@@ -14,7 +14,7 @@ export function CostsPage() {
   if (!data) return <div className="empty"><span className="spinner" /></div>;
 
   const totalCacheRead = data.byModel.reduce((s, m) => s + Number(m.cacheReadTokens ?? 0), 0);
-  const totalEstimatedUsd = data.byModel.reduce((s, m) => s + Number(m.estimatedUsd ?? 0), 0);
+  const totalEstimatedUsd = Number(data.totalEstimatedUsd ?? 0);
   const savings = Number(data.totalCacheSavingsUsd ?? 0);
   const beforeCaching = totalEstimatedUsd + savings;
   const savedPct = beforeCaching > 0 ? Math.round((savings / beforeCaching) * 100) : 0;
