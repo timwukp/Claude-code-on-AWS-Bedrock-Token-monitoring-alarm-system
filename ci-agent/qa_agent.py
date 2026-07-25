@@ -305,19 +305,51 @@ appear in "findings" (so it stays blocking)."""
                       "note": "findings salvaged from exploration transcript"}
     report = report or {"overall": "UNKNOWN", "findings": [], "raw": text[-4000:]}
     report = normalize_report(report)
+
+    # Reconciliation contract: every prior finding gets an entry even when the agent's JSON
+    # omitted it — silence must read as a blind spot (UNVERIFIED), never as success.
+    if prior_findings:
+        rec = list(report.get("reconciliation") or [])
+        seen = {r.get("id") for r in rec}
+        for p in prior_findings:
+            if p.get("id") not in seen:
+                rec.append({"id": p.get("id"), "summary": p.get("summary") or p.get("title", ""),
+                            "status": "UNVERIFIED",
+                            "evidence": "agent did not re-verify this finding this round"})
+        report["reconciliation"] = rec
+
     with open(args.out, "w") as f:
         json.dump(report, f, indent=2)
 
+    # Publish from THIS process — the agent is also asked to upload its artifacts, but the
+    # loop's reconciliation input must not depend on the agent remembering to (it has skipped
+    # that step in practice, leaving the loop blind).
+    try:
+        boto3.client("s3", region_name=args.region).upload_file(
+            args.out, args.bucket, f"{args.run_prefix}/test-report-latest.json")
+        print(f"— published report to s3://{args.bucket}/{args.run_prefix}/test-report-latest.json")
+    except Exception as e:
+        print(f"⚠️  report S3 publish failed: {e}", file=sys.stderr)
+
     findings = report.get("findings", [])
     blocking = [f for f in findings if f.get("severity") in ("CRITICAL", "HIGH", "MEDIUM")]
+    fixed = sum(1 for r in report.get("reconciliation") or [] if r.get("status") == "FIXED")
+    prior_blocking = sum(1 for p in prior_findings
+                         if p.get("severity") in ("CRITICAL", "HIGH", "MEDIUM"))
+    # Progress = the loop is converging: something got FIXED, or the blocking set shrank.
+    # First round (no prior report) counts as progress — there is nothing to stall against.
+    progress = (not prior_findings) or fixed > 0 or len(blocking) < prior_blocking
     print(f"\n— {len(findings)} finding(s), {len(blocking)} blocking; "
           f"overall={report.get('overall')} — wrote {args.out}")
-    # Emit a machine-readable flag so the workflow can gate the Bug-Fix stage on the report
-    # itself, not on this process's exit code (which continue-on-error would otherwise mask).
+    print(f"— reconciliation: {fixed} FIXED of {len(prior_findings)} prior; progress={progress}")
+    # Emit machine-readable flags so the workflow can gate the Bug-Fix stage and the
+    # zero-progress circuit breaker on the report itself, not on this process's exit code.
     gho = os.environ.get("GITHUB_OUTPUT")
     if gho:
         with open(gho, "a") as f:
             f.write(f"blocking={'true' if blocking else 'false'}\n")
+            f.write(f"progress={'true' if progress else 'false'}\n")
+            f.write(f"fixed={fixed}\n")
             f.write(f"findings={len(findings)}\n")
     # Non-zero exit if any real finding, so CI marks the check failed and the loop continues.
     return 1 if blocking else 0

@@ -35,8 +35,10 @@ env:
   HARNESS_ARN: arn:aws:bedrock-agentcore:us-east-1:${{ secrets.AWS_ACCOUNT_ID }}:harness/${{ vars.UI_HARNESS }}
   BUGFIX_ARN: arn:aws:bedrock-agentcore:us-east-1:${{ secrets.AWS_ACCOUNT_ID }}:harness/${{ vars.BUGFIX_HARNESS }}
   TARGET_URL: ${{ vars.TARGET_URL }}
-  # Guards the auto-fix→re-run loop from running forever. Bump per commit via the marker below.
-  MAX_FIX_ROUNDS: '3'
+  # Absolute fuse only — the loop's real exits are goal-driven: green when the QA report has
+  # no blocking findings, red early when two consecutive rounds make zero progress (nothing
+  # FIXED and the blocking set not shrinking — the signature of a bug this loop cannot fix).
+  MAX_FIX_ROUNDS: '10'
 
 jobs:
   qa:
@@ -74,6 +76,15 @@ jobs:
             --query "Stacks[0].Outputs[?OutputKey=='SiteBucketName'].OutputValue" --output text)
           DIST_ID=$(aws cloudformation describe-stacks --stack-name "$STACK" \
             --query "Stacks[0].Outputs[?OutputKey=='DistributionId'].OutputValue" --output text)
+          # Vite bakes these in at build time (frontend/.env.example) — without them the bundle
+          # ships userPoolId=undefined and login breaks for everyone, not just the QA agent.
+          export VITE_API_URL=$(aws cloudformation describe-stacks --stack-name "Tums-dev-Api" \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text)
+          export VITE_COGNITO_USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name "Tums-dev-Auth" \
+            --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text)
+          export VITE_COGNITO_CLIENT_ID=$(aws cloudformation describe-stacks --stack-name "Tums-dev-Auth" \
+            --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text)
+          export VITE_AWS_REGION="$AWS_REGION"
           ( cd frontend && npm ci && npm run build )
           aws s3 sync frontend/dist "s3://$BUCKET" --delete
           INV_ID=$(aws cloudfront create-invalidation --distribution-id "$DIST_ID" \
@@ -125,9 +136,30 @@ jobs:
           echo "count=$n" >> "$GITHUB_OUTPUT"
           echo "Prior auto-fix rounds on this branch: $n"
 
+      # ── Zero-progress circuit breaker ────────────────────────────────────────
+      # A round that fixes nothing AND doesn't shrink the blocking set is a stall. Two stalls
+      # in a row means the remaining findings aren't fixable by patching this repo (env/data/
+      # judgment issues) — stop burning rounds and hand off to a human immediately.
+      - name: Track convergence
+        id: stall
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PROGRESS: ${{ steps.qa.outputs.progress }}
+        run: |
+          KEY="pr-${PR_NUMBER:-manual}/stall-count.txt"
+          prev=$(aws s3 cp "s3://token-monitor-qa-reports-${AWS_ACCOUNT_ID}/${KEY}" - 2>/dev/null || echo 0)
+          prev=${prev:-0}
+          if [ "$PROGRESS" = "false" ]; then n=$((prev + 1)); else n=0; fi
+          echo "$n" | aws s3 cp - "s3://token-monitor-qa-reports-${AWS_ACCOUNT_ID}/${KEY}"
+          echo "stalls=$n" >> "$GITHUB_OUTPUT"
+          echo "Consecutive zero-progress rounds: $n"
+
       # ── Bug-Fix Agent → patch → push (re-triggers this workflow) ─────────────
       - name: Run Bug-Fix Agent and push fix
-        if: steps.qa.outputs.blocking == 'true' && fromJSON(steps.rounds.outputs.count) < fromJSON(env.MAX_FIX_ROUNDS)
+        if: >-
+          steps.qa.outputs.blocking == 'true' &&
+          fromJSON(steps.rounds.outputs.count) < fromJSON(env.MAX_FIX_ROUNDS) &&
+          fromJSON(steps.stall.outputs.stalls) < 2
         env:
           # Route dynamic refs through env to avoid script injection (actionlint expression check).
           PRIOR_ROUNDS: ${{ steps.rounds.outputs.count }}
@@ -196,8 +228,22 @@ jobs:
               owner: context.repo.owner, repo: context.repo.repo, body,
             });
 
-      - name: Fail check if unresolved blocking findings remain
+      - name: Fail check if the loop stalled (zero progress twice)
+        if: steps.qa.outputs.blocking == 'true' && fromJSON(steps.stall.outputs.stalls) >= 2
+        run: |
+          echo "::error::Loop stalled - two consecutive rounds with nothing FIXED and no shrink in blocking findings. Remaining issues likely are not fixable by patching this repo (env/config/data). Needs human review."
+          exit 1
+
+      - name: Fail check if the fuse blew (absolute round cap)
         if: steps.qa.outputs.blocking == 'true' && fromJSON(steps.rounds.outputs.count) >= fromJSON(env.MAX_FIX_ROUNDS)
         run: |
-          echo "::error::UI QA still failing after $MAX_FIX_ROUNDS auto-fix rounds — needs human review."
+          echo "::error::UI QA still failing after $MAX_FIX_ROUNDS auto-fix rounds (absolute fuse) - needs human review."
           exit 1
+
+      - name: Converged - clear loop state
+        if: steps.qa.outputs.blocking != 'true'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          aws s3 rm "s3://token-monitor-qa-reports-${AWS_ACCOUNT_ID}/pr-${PR_NUMBER:-manual}/stall-count.txt" 2>/dev/null || true
+          echo "QA green - no blocking findings. Loop converged."
