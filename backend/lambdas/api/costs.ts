@@ -17,11 +17,13 @@ const TABLE = process.env.AGGREGATES_TABLE!;
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     const tenantId = getTenantId(event);
+    const modelId = event.pathParameters?.modelId;
+
     const res = await ddb.send(
       new QueryCommand({
         TableName: TABLE,
-        KeyConditionExpression: 'pk = :pk',
-        ExpressionAttributeValues: { ':pk': `TENANT#${tenantId}#MODEL` },
+        KeyConditionExpression: 'pk = :pk AND begins_with(sk, :sk)',
+        ExpressionAttributeValues: { ':pk': `TENANT#${tenantId}`, ':sk': 'MODEL#' },
       }),
     );
 
@@ -32,7 +34,27 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       cacheReadTokens: Number(i.cacheReadTokens ?? 0),
     }));
 
-    const summary = summarizeCosts(items);
+    const deduped = new Map<string, TokenCounts>();
+    for (const item of items) {
+      const existing = deduped.get(item.modelId);
+      if (existing) {
+        existing.inputTokens = (existing.inputTokens ?? 0) + (item.inputTokens ?? 0);
+        existing.outputTokens = (existing.outputTokens ?? 0) + (item.outputTokens ?? 0);
+        existing.cacheReadTokens = (existing.cacheReadTokens ?? 0) + (item.cacheReadTokens ?? 0);
+      } else {
+        deduped.set(item.modelId, { ...item });
+      }
+    }
+    const mergedItems = Array.from(deduped.values());
+
+    if (modelId) {
+      const match = mergedItems.find((i) => i.modelId === modelId);
+      if (!match) return ok({ tenantId, modelId, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, totalCost: 0, cacheSavings: 0 });
+      const summary = summarizeCosts([match]);
+      return ok({ tenantId, modelId, ...summary });
+    }
+
+    const summary = summarizeCosts(mergedItems);
     return ok({ tenantId, ...summary });
   } catch (err) {
     console.error(err);
