@@ -63,7 +63,7 @@ export function UsagePage() {
         {points.length === 0 && <p className="muted">No data yet — once aggregation runs, points appear here.</p>}
       </Panel>
 
-      {quota && (
+      {!!quota && (
         <Panel title="Bedrock token-quota headroom"
                desc="Per-model token rate limits (HTTP 429 on breach). Each row compares one model's own usage against its own quota. Only models with real traffic are shown.">
           <p style={{ marginTop: 0 }}>
