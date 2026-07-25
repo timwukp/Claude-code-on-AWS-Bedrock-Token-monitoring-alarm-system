@@ -1,1 +1,1 @@
-loop-verification run 2026-07-25 (deploy-before-test + reconciliation)
+run 2026-07-25 round: verify VITE env fix + backend TS fixes
