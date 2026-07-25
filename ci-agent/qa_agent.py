@@ -223,6 +223,9 @@ def main() -> int:
     ap.add_argument("--run-prefix", default="run-latest")
     ap.add_argument("--out", default="qa-report.json")
     ap.add_argument("--session-id", default=None)
+    ap.add_argument("--prior-report", default=None,
+                    help="Path to the previous round's qa report; findings in it are re-verified "
+                         "one by one (FIXED / STILL_FAILING) so the fix loop converges observably.")
     args = ap.parse_args()
 
     session_id = args.session_id or f"qa-ci-{secrets.token_hex(16)}"
@@ -232,6 +235,32 @@ def main() -> int:
     )
     # The URL is injected via the secret; also state it plainly so the agent has it up front.
     prompt = f"Target URL: {args.url}\n\n" + prompt
+
+    # Reconciliation: a prior round's findings must each be explicitly re-verified, so the
+    # auto-fix loop converges observably instead of relying on a fresh exploration to
+    # happen to re-cover them.
+    prior_findings = []
+    if args.prior_report:
+        try:
+            with open(args.prior_report, encoding="utf-8") as f:
+                prior_findings = (json.load(f) or {}).get("findings", [])
+        except (OSError, ValueError):
+            prior_findings = []
+    if prior_findings:
+        lines = "\n".join(
+            f'- {p.get("id","?")} [{p.get("page","?")}] {p.get("summary") or p.get("title","")}'
+            + (f' (evidence was: {(p.get("evidence") or p.get("observed",""))[:160]})' if (p.get("evidence") or p.get("observed")) else "")
+            for p in prior_findings)
+        prompt += f"""
+
+STEP 2b — RE-VERIFY PRIOR FINDINGS (a fix was deployed since the last run):
+The previous round reported these findings. Visit each one's page and check whether it is fixed now:
+{lines}
+Add to your final JSON a top-level key "reconciliation": [
+  {{"id": "<prior id>", "summary": "<prior summary>", "status": "FIXED"|"STILL_FAILING",
+    "evidence": "<what you observed this round>"}}
+] with ONE entry per prior finding above. A prior finding that still reproduces must ALSO
+appear in "findings" (so it stays blocking)."""
 
     # A UI-exploration run streams for many minutes; botocore's default 60s read timeout would
     # abort mid-stream. Give the socket a long read window and don't let botocore auto-retry a
