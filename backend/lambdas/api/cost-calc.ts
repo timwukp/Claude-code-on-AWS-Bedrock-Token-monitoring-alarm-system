@@ -80,9 +80,30 @@ export interface CostSummary {
   totalCacheSavingsUsd: number;
 }
 
-/** Aggregate per-model costs + totals (including total prompt-cache savings). */
+/** The same model can be metered under a bare id and a full inference-profile ARN
+ * (arn:...:inference-profile/<id>). Strip the ARN prefix so both merge into one row. */
+export function normalizeModelId(id: string): string {
+  return id.replace(/^arn:[^/]+\/(?=.)/, '');
+}
+
+/**
+ * Aggregate per-model costs + totals (including total prompt-cache savings).
+ * Duplicate rows for the same (normalized) model are merged, and rows with zero usage
+ * across all token kinds are dropped — they'd only inflate the "Models used" KPI.
+ */
 export function summarizeCosts(items: TokenCounts[], card: ModelRate[] = RATE_CARD): CostSummary {
-  const byModel = items.map((i) => computeModelCost(i, card));
+  const merged = new Map<string, TokenCounts>();
+  for (const raw of items) {
+    const id = normalizeModelId(raw.modelId);
+    const acc = merged.get(id) ?? { modelId: id, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 };
+    acc.inputTokens = (acc.inputTokens ?? 0) + (raw.inputTokens ?? 0);
+    acc.outputTokens = (acc.outputTokens ?? 0) + (raw.outputTokens ?? 0);
+    acc.cacheReadTokens = (acc.cacheReadTokens ?? 0) + (raw.cacheReadTokens ?? 0);
+    merged.set(id, acc);
+  }
+  const byModel = Array.from(merged.values())
+    .filter((i) => (i.inputTokens ?? 0) + (i.outputTokens ?? 0) + (i.cacheReadTokens ?? 0) > 0)
+    .map((i) => computeModelCost(i, card));
   return {
     byModel,
     totalEstimatedUsd: round6(byModel.reduce((s, m) => s + m.estimatedUsd, 0)),

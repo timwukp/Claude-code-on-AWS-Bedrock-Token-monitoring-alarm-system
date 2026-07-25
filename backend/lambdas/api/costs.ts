@@ -3,7 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { ok, serverError } from '../shared/response';
 import { getTenantId } from '../shared/tenant';
-import { summarizeCosts, TokenCounts } from './cost-calc';
+import { summarizeCosts, normalizeModelId, TokenCounts } from './cost-calc';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = process.env.AGGREGATES_TABLE!;
@@ -27,38 +27,23 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }),
     );
 
-    // The same model can be metered under two identities: a bare model id and a full
-    // inference-profile ARN (arn:...:inference-profile/<id>). Normalize to the bare id so
-    // the dedup below merges them into one row instead of showing duplicates.
-    const normalizeModelId = (id: string) => id.replace(/^arn:[^/]+\/(?=.)/, '');
+    // Normalization, duplicate-merging (bare id vs inference-profile ARN), and zero-usage
+    // filtering all live in summarizeCosts — keep raw rows here.
     const items: TokenCounts[] = (res.Items ?? []).map((i) => ({
-      modelId: normalizeModelId(String(i.modelId ?? '')),
+      modelId: String(i.modelId ?? ''),
       inputTokens: Number(i.inputTokens ?? 0),
       outputTokens: Number(i.outputTokens ?? 0),
       cacheReadTokens: Number(i.cacheReadTokens ?? 0),
     }));
 
-    const deduped = new Map<string, TokenCounts>();
-    for (const item of items) {
-      const existing = deduped.get(item.modelId);
-      if (existing) {
-        existing.inputTokens = (existing.inputTokens ?? 0) + (item.inputTokens ?? 0);
-        existing.outputTokens = (existing.outputTokens ?? 0) + (item.outputTokens ?? 0);
-        existing.cacheReadTokens = (existing.cacheReadTokens ?? 0) + (item.cacheReadTokens ?? 0);
-      } else {
-        deduped.set(item.modelId, { ...item });
-      }
-    }
-    const mergedItems = Array.from(deduped.values());
-
     if (modelId) {
-      const match = mergedItems.find((i) => i.modelId === modelId);
+      const match = items.find((i) => normalizeModelId(i.modelId) === normalizeModelId(modelId));
       if (!match) return ok({ tenantId, modelId, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, totalCost: 0, cacheSavings: 0 });
       const summary = summarizeCosts([match]);
       return ok({ tenantId, modelId, ...summary });
     }
 
-    const summary = summarizeCosts(mergedItems);
+    const summary = summarizeCosts(items);
     return ok({ tenantId, ...summary });
   } catch (err) {
     console.error(err);
