@@ -27,8 +27,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }),
     );
 
+    // The same model can be metered under two identities: a bare model id and a full
+    // inference-profile ARN (arn:...:inference-profile/<id>). Normalize to the bare id so
+    // the dedup below merges them into one row instead of showing duplicates.
+    const normalizeModelId = (id: string) => id.replace(/^arn:[^/]+\/(?=.)/, '');
     const items: TokenCounts[] = (res.Items ?? []).map((i) => ({
-      modelId: String(i.modelId ?? ''),
+      modelId: normalizeModelId(String(i.modelId ?? '')),
       inputTokens: Number(i.inputTokens ?? 0),
       outputTokens: Number(i.outputTokens ?? 0),
       cacheReadTokens: Number(i.cacheReadTokens ?? 0),

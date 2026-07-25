@@ -32,8 +32,8 @@ export function UsagePage() {
   return (
     <>
       <div className="kpi-grid">
-        <Kpi label="Input tokens" value={fmtTokens(totalIn)} accent="var(--accent-blue)" foot="across window" />
-        <Kpi label="Output tokens" value={fmtTokens(totalOut)} accent="var(--accent-green)" foot="across window" />
+        <Kpi label="Input tokens" value={fmtTokens(totalIn)} accent="var(--accent-blue)" foot="last 7 days (hourly buckets)" />
+        <Kpi label="Output tokens" value={fmtTokens(totalOut)} accent="var(--accent-green)" foot="last 7 days (hourly buckets)" />
         <Kpi label="Invocations" value={totalCalls.toLocaleString()} accent="var(--accent-amber)" foot="API calls" />
         <Kpi label="Active hours" value={String(points.length)} foot="buckets with traffic" />
       </div>
@@ -68,9 +68,11 @@ export function UsagePage() {
                desc="Per-model token rate limits (HTTP 429 on breach). Each row compares one model's own usage against its own quota. Only models with real traffic are shown.">
           <p style={{ marginTop: 0 }}>
             <span className={`badge ${quota.throttles?.throttled ? 'critical' : 'info'}`}>
-              {quota.throttles?.throttled ? `⚠ ${quota.throttles.throttledCount} throttled` : '✓ No throttling'}
+              {quota.throttles?.throttled ? `⚠ ${quota.throttles.throttledCount} throttled (429s)` : '✓ No throttling (0 × 429)'}
             </span>{' '}
-            <span className="muted">client errors (24h): {quota.throttles?.clientErrors ?? 0}</span>
+            <span className="muted">
+              non-throttle client errors, 24h (4xx: auth/validation): {quota.throttles?.clientErrors ?? 0}
+            </span>
           </p>
           {quota.headroom.length === 0 ? (
             <p className="muted">No per-model token quotas matched to active models yet.</p>

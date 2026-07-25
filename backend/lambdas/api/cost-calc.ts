@@ -12,6 +12,9 @@ export interface ModelRate {
 }
 
 export const RATE_CARD: ModelRate[] = [
+  // Mythos-class tier above Opus ($10/$50 per MTok; cache-read 0.1x input).
+  { key: 'fable-5', inPerToken: 0.00001, outPerToken: 0.00005, cacheReadPerToken: 0.000001 },
+  { key: 'mythos', inPerToken: 0.00001, outPerToken: 0.00005, cacheReadPerToken: 0.000001 },
   { key: 'opus-4-8', inPerToken: 0.000005, outPerToken: 0.000025, cacheReadPerToken: 0.0000005 },
   { key: 'opus', inPerToken: 0.000005, outPerToken: 0.000025, cacheReadPerToken: 0.0000005 },
   { key: 'sonnet', inPerToken: 0.000003, outPerToken: 0.000015, cacheReadPerToken: 0.0000003 },

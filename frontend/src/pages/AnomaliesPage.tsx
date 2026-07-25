@@ -29,7 +29,8 @@ export function AnomaliesPage() {
         <Kpi label="Warning" value={String(warning)} accent="var(--warning)" />
       </div>
 
-      <Panel title="Alert feed" desc="Newest first — from EventBridge → automated response">
+      <Panel title="Alert feed"
+             desc="Newest first — from EventBridge → automated response. Shows the most recent detections; an old top entry means no anomalies have fired since then.">
         {items.length === 0 ? (
           <div className="empty"><div className="big">✅</div>No anomalies recorded. All clear.</div>
         ) : (
