@@ -56,15 +56,21 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const id = start.QueryExecutionId!;
 
     // Poll up to ~25s.
+    let state: string | undefined;
     for (let i = 0; i < 25; i++) {
       const ex = await athena.send(new GetQueryExecutionCommand({ QueryExecutionId: id }));
-      const state = ex.QueryExecution?.Status?.State;
+      state = ex.QueryExecution?.Status?.State;
       if (state === 'SUCCEEDED') break;
       if (state === 'FAILED' || state === 'CANCELLED') {
         // Most common cause in a fresh deployment: project_mapping table not created yet.
         return ok({ projects: [], note: ex.QueryExecution?.Status?.StateChangeReason ?? state });
       }
       await new Promise((r) => setTimeout(r, 1000));
+    }
+    // Poll window elapsed while still RUNNING/QUEUED: don't fetch results on an
+    // incomplete query (that errors and drops the connection — see F-004).
+    if (state !== 'SUCCEEDED') {
+      return ok({ projects: [], note: `timeout: ${state ?? 'UNKNOWN'}` });
     }
 
     const res = await athena.send(new GetQueryResultsCommand({ QueryExecutionId: id, MaxResults: 101 }));
