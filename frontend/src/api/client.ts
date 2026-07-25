@@ -22,6 +22,7 @@ export interface UsagePoint {
   inputTokens: number;
   outputTokens: number;
   invocations: number;
+  cost?: number; // estimated USD for this bucket (optional; older API responses omit it)
   label?: string; // short HH:MM label for chart axis (set client-side)
 }
 
