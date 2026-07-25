@@ -14,15 +14,16 @@ export function CostsPage() {
   if (!data) return <div className="empty"><span className="spinner" /></div>;
 
   const totalCacheRead = data.byModel.reduce((s, m) => s + Number(m.cacheReadTokens ?? 0), 0);
+  const totalEstimatedUsd = data.byModel.reduce((s, m) => s + Number(m.estimatedUsd ?? 0), 0);
   const savings = Number(data.totalCacheSavingsUsd ?? 0);
-  const beforeCaching = data.totalEstimatedUsd + savings;
+  const beforeCaching = totalEstimatedUsd + savings;
   const savedPct = beforeCaching > 0 ? Math.round((savings / beforeCaching) * 100) : 0;
   const shortModel = (id: string) => id.split('/').pop() ?? id;
 
   return (
     <>
       <div className="kpi-grid">
-        <Kpi label="Estimated spend" value={fmtUsd(data.totalEstimatedUsd)} accent="var(--primary)" foot="current window" />
+        <Kpi label="Estimated spend" value={fmtUsd(totalEstimatedUsd)} accent="var(--primary)" foot="current window" />
         <Kpi label="Saved by prompt caching" value={fmtUsd(savings)} accent="var(--accent-green)"
              foot={`${savedPct}% lower than without caching`} />
         <Kpi label="Models used" value={String(data.byModel.length)} accent="var(--accent-blue)" />
