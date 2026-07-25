@@ -12,9 +12,10 @@ export function CostsPage() {
 
   if (error) return <div className="empty"><div className="big">⚠️</div>Failed to load costs: {error}</div>;
   if (!data) return <div className="empty"><span className="spinner" /></div>;
+  if (data.byModel.length === 0) return <div className="empty"><div className="big">⚠️</div>No cost data returned — the costs API reported an empty rollup. Check the costs aggregation backend.</div>;
 
   const totalCacheRead = data.byModel.reduce((s, m) => s + Number(m.cacheReadTokens ?? 0), 0);
-  const totalEstimatedUsd = data.byModel.reduce((s, m) => s + Number(m.estimatedUsd ?? 0), 0);
+  const totalEstimatedUsd = Number(data.totalEstimatedUsd ?? data.byModel.reduce((s, m) => s + Number(m.estimatedUsd ?? 0), 0));
   const savings = Number(data.totalCacheSavingsUsd ?? 0);
   const beforeCaching = totalEstimatedUsd + savings;
   const savedPct = beforeCaching > 0 ? Math.round((savings / beforeCaching) * 100) : 0;
