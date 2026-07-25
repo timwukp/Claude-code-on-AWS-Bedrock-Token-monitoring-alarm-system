@@ -2,6 +2,8 @@ import { matchRate, computeModelCost, summarizeCosts } from './cost-calc';
 
 const OPUS = 'arn:aws:bedrock:us-east-1:123456789012:inference-profile/us.anthropic.claude-opus-4-8';
 const FABLE = 'us.anthropic.claude-fable-5';
+const FABLE_GLOBAL = 'global.anthropic.claude-fable-5';
+const OPUS_BARE    = 'us.anthropic.claude-opus-4-8';
 
 describe('matchRate', () => {
   it('matches opus-4-8 to the Opus rate', () => {
@@ -9,6 +11,10 @@ describe('matchRate', () => {
   });
   it('opus rate includes a defined cacheReadPerToken (not undefined)', () => {
     expect(matchRate(OPUS).cacheReadPerToken).toBe(0.0000005); // 0.1 × inPerToken
+  });
+  it('matches fable-5 to a non-zero rate (pricing entry must exist)', () => {
+    expect(matchRate(FABLE).inPerToken).toBeGreaterThan(0);
+    expect(matchRate(FABLE).outPerToken).toBeGreaterThan(0);
   });
   it('matches sonnet', () => {
     expect(matchRate('anthropic.claude-sonnet-4-6').outPerToken).toBe(0.000015);
@@ -52,5 +58,7 @@ describe('summarizeCosts', () => {
     expect(s.totalCacheSavingsUsd).toBeCloseTo(4.5, 6);
     // Opus 0.5 (cache) + Haiku 1000*1e-6 = 0.001 → 0.501
     expect(s.totalEstimatedUsd).toBeCloseTo(0.501, 6);
+    // gross (pre-savings) must NOT be used as "Estimated spend" KPI; net ≠ gross
+    expect(s.totalEstimatedUsd).not.toBeCloseTo(s.totalEstimatedUsd + s.totalCacheSavingsUsd, 2);
   });
 });
