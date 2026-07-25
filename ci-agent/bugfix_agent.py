@@ -19,6 +19,7 @@ import subprocess
 import sys
 
 import boto3
+from botocore.config import Config as BotoConfig
 
 REGION = os.environ.get("AWS_REGION", "us-east-1")
 _ACCOUNT_ID = os.environ.get("AWS_ACCOUNT_ID") or \
@@ -102,7 +103,11 @@ def main() -> int:
         open(args.out, "w").write("No blocking findings; no fix generated.\n")
         return 0
 
-    client = boto3.client("bedrock-agentcore", region_name=args.region)
+    # Root-causing + patching a finding can stream for many minutes (stronger models think
+    # longer); botocore's default 60s read timeout kills the invoke mid-stream. Mirror the
+    # long-read config qa_agent.py already uses, and don't auto-retry a long invoke.
+    cfg = BotoConfig(read_timeout=900, connect_timeout=30, retries={"max_attempts": 0})
+    client = boto3.client("bedrock-agentcore", region_name=args.region, config=cfg)
     summaries, applied = [], 0
     for finding in findings:
         src_path = guess_source(finding, args.repo_root)
