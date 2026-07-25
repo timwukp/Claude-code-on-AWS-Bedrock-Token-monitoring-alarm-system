@@ -12,9 +12,13 @@ export interface ModelRate {
 }
 
 export const RATE_CARD: ModelRate[] = [
-  // Mythos-class tier above Opus ($10/$50 per MTok; cache-read 0.1x input).
+  // Bedrock on-demand pricing (aws.amazon.com/bedrock/pricing, us-east-1). First substring
+  // match wins, so region-prefixed keys must precede the generic fallback.
+  // us./geo cross-region inference runs at a premium over global CRI.
+  { key: 'us.anthropic.claude-fable-5', inPerToken: 0.000011, outPerToken: 0.000055, cacheReadPerToken: 0.0000011 },
   { key: 'fable-5', inPerToken: 0.00001, outPerToken: 0.00005, cacheReadPerToken: 0.000001 },
   { key: 'mythos', inPerToken: 0.00001, outPerToken: 0.00005, cacheReadPerToken: 0.000001 },
+  { key: 'us.anthropic.claude-opus-4-8', inPerToken: 0.0000055, outPerToken: 0.0000275, cacheReadPerToken: 0.00000055 },
   { key: 'opus-4-8', inPerToken: 0.000005, outPerToken: 0.000025, cacheReadPerToken: 0.0000005 },
   { key: 'opus', inPerToken: 0.000005, outPerToken: 0.000025, cacheReadPerToken: 0.0000005 },
   { key: 'sonnet', inPerToken: 0.000003, outPerToken: 0.000015, cacheReadPerToken: 0.0000003 },

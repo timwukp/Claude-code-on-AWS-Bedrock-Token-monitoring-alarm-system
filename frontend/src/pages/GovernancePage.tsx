@@ -40,8 +40,7 @@ export function GovernancePage() {
 
       <p className="muted" style={{ fontSize: 12, marginTop: -6 }}>
         These figures come from <strong>AWS Budgets</strong> (real billed spend — $0 on accounts
-        without direct billing). The Cost page shows a <strong>token-based estimate</strong>
-        computed from usage logs; the two use different data sources and will not match.
+        without direct billing). The Cost page shows a <strong>token-based estimate</strong> computed from usage logs; the two use different data sources and will not match.
       </p>
 
       <Panel title="Cost guardrails" desc="Spend caps and automated containment posture">

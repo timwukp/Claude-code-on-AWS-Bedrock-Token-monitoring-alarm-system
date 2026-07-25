@@ -22,8 +22,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const res = await ddb.send(
       new QueryCommand({
         TableName: TABLE,
-        KeyConditionExpression: 'pk = :pk AND begins_with(sk, :sk)',
-        ExpressionAttributeValues: { ':pk': `TENANT#${tenantId}`, ':sk': 'MODEL#' },
+        // Aggregator writes pk=TENANT#<tenant>#MODEL with sk=<modelId> (see ingestion/aggregator.ts).
+        KeyConditionExpression: 'pk = :pk',
+        ExpressionAttributeValues: { ':pk': `TENANT#${tenantId}#MODEL` },
       }),
     );
 

@@ -63,7 +63,7 @@ export function UsagePage() {
         {points.length === 0 && <p className="muted">No data yet — once aggregation runs, points appear here.</p>}
       </Panel>
 
-      {!!quota && (
+      {quota && (
         <Panel title="Bedrock token-quota headroom"
                desc="Per-model token rate limits (HTTP 429 on breach). Each row compares one model's own usage against its own quota. Only models with real traffic are shown.">
           <p style={{ marginTop: 0 }}>
@@ -71,7 +71,7 @@ export function UsagePage() {
               {quota.throttles?.throttled ? `⚠ ${quota.throttles.throttledCount} throttled (429s)` : '✓ No throttling (0 × 429)'}
             </span>{' '}
             <span className="muted">
-              non-throttle client errors, 24h (4xx: auth/validation): {quota.throttles?.clientErrors ?? 0}
+              other 4xx client errors (24h): {quota.throttles?.clientErrors ?? 0}
             </span>
           </p>
           {quota.headroom.length === 0 ? (
