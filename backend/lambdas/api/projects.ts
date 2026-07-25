@@ -13,6 +13,9 @@ const WORKGROUP = process.env.ATHENA_WORKGROUP!;
 const DATABASE = process.env.GLUE_DATABASE!;
 const AGGREGATES_TABLE = process.env.AGGREGATES_TABLE;
 // Opus 4.8 rate as the default estimate; keep in sync with costs.ts / official pricing.
+// Reference rates for project attribution (Opus-tier). PROJECT rollups don't record which
+// model served each request, so exact per-model pricing (what /v1/costs does) is impossible
+// here — this is a uniform-rate approximation and will NOT match the Cost page total.
 const IN = 0.000005, OUT = 0.000025, CACHE = 0.0000005;
 
 /**

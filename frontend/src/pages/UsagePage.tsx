@@ -38,7 +38,8 @@ export function UsagePage() {
         <Kpi label="Active hours" value={String(points.length)} foot="buckets with traffic" />
       </div>
 
-      <Panel title="Token consumption over time" desc="Hourly buckets — input vs output tokens">
+      <Panel title="Token consumption over time"
+             desc="Hourly buckets — input vs output tokens share one Y axis; output typically dominates in agent traffic, so the tall line is output, not input.">
         <ResponsiveContainer width="100%" height={340}>
           <AreaChart data={points} margin={{ left: 4, right: 12, top: 8 }}>
             <defs>
@@ -69,8 +70,8 @@ export function UsagePage() {
           <p style={{ marginTop: 0 }}>
             <span className={`badge ${quota.throttles?.throttled ? 'critical' : 'info'}`}>
               {quota.throttles?.throttled ? `⚠ ${quota.throttles.throttledCount} throttled (429s)` : '✓ No throttling (0 × 429)'}
-            </span>{' '}
-            <span className="muted">
+            </span>
+            <span className="muted" style={{ marginLeft: 10, paddingLeft: 10, borderLeft: '1px solid var(--border, #ccc)' }}>
               other 4xx client errors (24h): {quota.throttles?.clientErrors ?? 0}
             </span>
           </p>
