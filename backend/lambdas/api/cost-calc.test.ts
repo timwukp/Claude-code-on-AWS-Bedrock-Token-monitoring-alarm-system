@@ -1,10 +1,14 @@
 import { matchRate, computeModelCost, summarizeCosts } from './cost-calc';
 
 const OPUS = 'arn:aws:bedrock:us-east-1:123456789012:inference-profile/us.anthropic.claude-opus-4-8';
+const FABLE = 'us.anthropic.claude-fable-5';
 
 describe('matchRate', () => {
   it('matches opus-4-8 to the Opus rate', () => {
     expect(matchRate(OPUS).inPerToken).toBe(0.000005);
+  });
+  it('opus rate includes a defined cacheReadPerToken (not undefined)', () => {
+    expect(matchRate(OPUS).cacheReadPerToken).toBe(0.0000005); // 0.1 × inPerToken
   });
   it('matches sonnet', () => {
     expect(matchRate('anthropic.claude-sonnet-4-6').outPerToken).toBe(0.000015);

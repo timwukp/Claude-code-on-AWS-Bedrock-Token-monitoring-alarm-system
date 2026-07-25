@@ -11,13 +11,19 @@ export function ProjectsPage() {
   const [rows, setRows] = useState<any[]>([]);
   const [source, setSource] = useState<'fast' | 'full'>('fast');
   const [servedFrom, setServedFrom] = useState<string>('');
+  const [apiTotalTokens, setApiTotalTokens] = useState<number | null>(null);
+  const [apiTotalCost, setApiTotalCost]     = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
     api.projects(source)
-      .then((r) => { setRows(r.projects ?? []); setServedFrom(r.source ?? (source === 'fast' ? 'dynamodb' : 'athena')); })
+      .then((r) => {
+        setRows(r.projects ?? []);
+        setServedFrom(r.source ?? (source === 'fast' ? 'dynamodb' : 'athena'));
+        setApiTotalTokens(r.totalTokens != null ? Number(r.totalTokens) : null);
+      })
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
   }, [source]);
@@ -25,14 +31,14 @@ export function ProjectsPage() {
   if (loading) return <div className="empty"><span className="spinner" /></div>;
   if (error) return <div className="empty"><div className="big">⚠️</div>Failed to load: {error}</div>;
 
-  const totalTokens = rows.reduce((s, r) => s + Number(r.tokens ?? 0), 0);
-  const totalCost = rows.reduce((s, r) => s + Number(r.estimatedUsd ?? 0), 0);
+  const totalTokens = rows.reduce((s, r) => s + (Number(r.tokens) || 0), 0);
+  const totalCost   = rows.reduce((s, r) => s + (Number(r.estimatedUsd) || 0), 0);
 
   return (
     <>
       <div className="kpi-grid">
         <Kpi label="Projects tracked" value={String(rows.length)} accent="var(--primary)" />
-        <Kpi label="Total tokens" value={fmtTokens(totalTokens)} accent="var(--accent-blue)" />
+        <Kpi label="Total tokens" value={fmtTokens(apiTotalTokens ?? totalTokens)} accent="var(--accent-blue)" />
         <Kpi label="Total est. cost" value={fmtUsd(totalCost)} accent="var(--accent-green)" />
       </div>
 
