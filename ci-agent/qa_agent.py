@@ -279,7 +279,11 @@ appear in "findings" (so it stays blocking)."""
     report = extract_json(text)
     # The exploratory reply often ends in prose, not clean JSON. Ask once more, in the SAME
     # session (so the agent still has its findings in context), for the JSON object only.
-    if not report or not report.get("findings"):
+    # NB: an empty findings array is a VALID PASS report — only re-ask when there is no
+    # report at all or it lacks the findings key entirely (treating [] as missing made a
+    # green run fall through to salvage_findings(), which fabricated a phantom finding
+    # from the transcript's description of an already-FIXED prior issue).
+    if report is None or "findings" not in report:
         followup = (
             "Now output ONLY the JSON object described in STEP 4 — no prose, no code fence, "
             "nothing before or after it. Include EVERY issue you observed during the run "
@@ -298,7 +302,7 @@ appear in "findings" (so it stays blocking)."""
             # Never let the structured-output pass crash the stage — fall back to salvaging
             # findings from the exploration transcript we already have.
             print(f"\n⚠️  structured-output pass failed ({e}); salvaging from transcript.", file=sys.stderr)
-    if not report or not report.get("findings"):
+    if report is None or "findings" not in report:
         salvaged = salvage_findings(text)
         if salvaged:
             report = {"overall": "FAIL", "pages_tested": None, "findings": salvaged,
