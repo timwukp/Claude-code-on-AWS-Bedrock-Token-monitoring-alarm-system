@@ -5,6 +5,7 @@ import {
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { ok, serverError } from '../shared/response';
+import { summarizeCosts, TokenCounts } from './cost-calc';
 import { getTenantId } from '../shared/tenant';
 
 const athena = new AthenaClient({});
@@ -13,6 +14,9 @@ const WORKGROUP = process.env.ATHENA_WORKGROUP!;
 const DATABASE = process.env.GLUE_DATABASE!;
 const AGGREGATES_TABLE = process.env.AGGREGATES_TABLE;
 // Opus 4.8 rate as the default estimate; keep in sync with costs.ts / official pricing.
+// Reference rates for project attribution (Opus-tier). PROJECT rollups don't record which
+// model served each request, so exact per-model pricing (what /v1/costs does) is impossible
+// here — this is a uniform-rate approximation and will NOT match the Cost page total.
 const IN = 0.000005, OUT = 0.000025, CACHE = 0.0000005;
 
 /**
@@ -30,7 +34,21 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Fast path (#7): ?source=fast reads pre-aggregated PROJECT rollups from DynamoDB — no Athena
     // scan. Returns project_id codes (no CSV name mapping); the default Athena path adds names.
     if (event.queryStringParameters?.source === 'fast' && AGGREGATES_TABLE) {
-      return ok({ tenantId, source: 'dynamodb', projects: await fastProjects(tenantId) });
+      const [projects, totals] = await Promise.all([fastProjects(tenantId), modelTotals(tenantId)]);
+      // Per-project rows are priced at uniform reference rates (PROJECT rollups carry no
+      // modelId). Scale them so the table sums to the authoritative per-model total —
+      // relative attribution is preserved and the page is internally consistent.
+      const rowSum = projects.reduce((t: number, p: any) => t + (p.estimatedUsd ?? 0), 0);
+      if (rowSum > 0 && totals.totalEstimatedUsd > 0) {
+        const k = totals.totalEstimatedUsd / rowSum;
+        for (const p of projects) p.estimatedUsd = Math.round(p.estimatedUsd * k * 1e6) / 1e6;
+      }
+      const tokRowSum = projects.reduce((t: number, p: any) => t + (p.tokens ?? 0), 0);
+      if (tokRowSum > 0 && totals.totalTokens > 0) {
+        const k2 = totals.totalTokens / tokRowSum;
+        for (const p of projects) p.tokens = Math.round(p.tokens * k2);
+      }
+      return ok({ tenantId, source: 'dynamodb', projects, ...totals });
     }
 
     const sql = `
@@ -46,7 +64,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       LEFT JOIN project_mapping m
         ON l.requestMetadata['project_id'] = m.project_id
       WHERE COALESCE(l.requestMetadata['tenant'], l.identity.arn) = '${sanitize(tenantId)}'
-        AND l.requestMetadata['project_id'] IS NOT NULL
       GROUP BY 1, 2
       ORDER BY tokens DESC
       LIMIT 100`;
@@ -57,9 +74,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const id = start.QueryExecutionId!;
 
     // Poll up to ~25s.
+    let state: string | undefined;
     for (let i = 0; i < 25; i++) {
       const ex = await athena.send(new GetQueryExecutionCommand({ QueryExecutionId: id }));
-      const state = ex.QueryExecution?.Status?.State;
+      state = ex.QueryExecution?.Status?.State;
       if (state === 'SUCCEEDED') break;
       if (state === 'FAILED' || state === 'CANCELLED') {
         // Most common cause in a fresh deployment: project_mapping table not created yet.
@@ -67,10 +85,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
       await new Promise((r) => setTimeout(r, 1000));
     }
+    // Poll window elapsed while still RUNNING/QUEUED: don't fetch results on an
+    // incomplete query (that errors and drops the connection — see F-004).
+    if (state !== 'SUCCEEDED') {
+      return ok({ projects: [], note: `timeout: ${state ?? 'UNKNOWN'}` });
+    }
 
     const res = await athena.send(new GetQueryResultsCommand({ QueryExecutionId: id, MaxResults: 101 }));
     const rows = res.ResultSet?.Rows ?? [];
-    const projects = rows.slice(1).map((r) => {
+    const athenaProjects = rows.slice(1).map((r) => {
       const c = r.Data ?? [];
       return {
         projectName: c[0]?.VarCharValue ?? 'untagged',
@@ -80,7 +103,23 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         estimatedUsd: Math.round(Number(c[4]?.VarCharValue ?? 0) * 1e6) / 1e6,
       };
     });
-    return ok({ tenantId, projects });
+    // Same treatment as the fast path: scale rows to the authoritative per-model totals so
+    // Fast, Full, and the Cost page all agree (Athena prices at flat reference rates and its
+    // log coverage window differs from the rollups).
+    const totals = AGGREGATES_TABLE ? await modelTotals(tenantId) : null;
+    if (totals) {
+      const rowSum = athenaProjects.reduce((t, p) => t + (p.estimatedUsd ?? 0), 0);
+      if (rowSum > 0 && totals.totalEstimatedUsd > 0) {
+        const k = totals.totalEstimatedUsd / rowSum;
+        for (const p of athenaProjects) p.estimatedUsd = Math.round(p.estimatedUsd * k * 1e6) / 1e6;
+      }
+      const tokSum = athenaProjects.reduce((t, p) => t + (p.tokens ?? 0), 0);
+      if (tokSum > 0 && totals.totalTokens > 0) {
+        const k2 = totals.totalTokens / tokSum;
+        for (const p of athenaProjects) p.tokens = Math.round(p.tokens * k2);
+      }
+    }
+    return ok({ tenantId, projects: athenaProjects, ...(totals ?? {}) });
   } catch (err) {
     console.error(err);
     return serverError();
@@ -96,6 +135,26 @@ function sanitize(v: string): string {
  * (sk = <projectId>#<modelId>), sums across models per project, applies the rate card, and unions
  * the distinct user sets. No Athena scan — single-digit-ms reads.
  */
+/** Page-level totals from the SAME #MODEL rollups and rate card the Cost page uses, so the
+ * two pages agree numerically. Per-project rows keep uniform reference rates (attribution
+ * only — PROJECT rollups don't record modelId). */
+async function modelTotals(tenantId: string): Promise<{ totalTokens: number; totalEstimatedUsd: number }> {
+  const res = await ddb.send(new QueryCommand({
+    TableName: AGGREGATES_TABLE,
+    KeyConditionExpression: 'pk = :pk',
+    ExpressionAttributeValues: { ':pk': `TENANT#${tenantId}#MODEL` },
+  }));
+  const items: TokenCounts[] = (res.Items ?? []).map((i: any) => ({
+    modelId: String(i.modelId ?? ''),
+    inputTokens: Number(i.inputTokens ?? 0),
+    outputTokens: Number(i.outputTokens ?? 0),
+    cacheReadTokens: Number(i.cacheReadTokens ?? 0),
+  }));
+  const s = summarizeCosts(items);
+  const totalTokens = s.byModel.reduce((t, m) => t + m.inputTokens + m.outputTokens, 0);
+  return { totalTokens, totalEstimatedUsd: s.totalEstimatedUsd };
+}
+
 async function fastProjects(tenantId: string): Promise<any[]> {
   const res = await ddb.send(new QueryCommand({
     TableName: AGGREGATES_TABLE,

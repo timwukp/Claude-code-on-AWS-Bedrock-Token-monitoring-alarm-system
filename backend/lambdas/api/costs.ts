@@ -3,7 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { ok, serverError } from '../shared/response';
 import { getTenantId } from '../shared/tenant';
-import { summarizeCosts, TokenCounts } from './cost-calc';
+import { summarizeCosts, normalizeModelId, TokenCounts } from './cost-calc';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = process.env.AGGREGATES_TABLE!;
@@ -17,20 +17,32 @@ const TABLE = process.env.AGGREGATES_TABLE!;
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     const tenantId = getTenantId(event);
+    const modelId = event.pathParameters?.modelId;
+
     const res = await ddb.send(
       new QueryCommand({
         TableName: TABLE,
+        // Aggregator writes pk=TENANT#<tenant>#MODEL with sk=<modelId> (see ingestion/aggregator.ts).
         KeyConditionExpression: 'pk = :pk',
         ExpressionAttributeValues: { ':pk': `TENANT#${tenantId}#MODEL` },
       }),
     );
 
+    // Normalization, duplicate-merging (bare id vs inference-profile ARN), and zero-usage
+    // filtering all live in summarizeCosts — keep raw rows here.
     const items: TokenCounts[] = (res.Items ?? []).map((i) => ({
-      modelId: String(i.modelId ?? ''),
+      modelId: String(i.modelId ?? i.sk ?? ''),
       inputTokens: Number(i.inputTokens ?? 0),
       outputTokens: Number(i.outputTokens ?? 0),
       cacheReadTokens: Number(i.cacheReadTokens ?? 0),
     }));
+
+    if (modelId) {
+      const match = items.find((i) => normalizeModelId(i.modelId) === normalizeModelId(modelId));
+      if (!match) return ok({ tenantId, modelId, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, totalCost: 0, cacheSavings: 0 });
+      const summary = summarizeCosts([match]);
+      return ok({ tenantId, modelId, ...summary });
+    }
 
     const summary = summarizeCosts(items);
     return ok({ tenantId, ...summary });

@@ -4,7 +4,7 @@ import {
 } from 'recharts';
 import { api, UsagePoint } from '../api/client';
 import { Kpi, Panel } from '../components/Layout';
-import { fmtTokens } from '../lib/format';
+import { fmtTokens, fmtAxisTokens } from '../lib/format';
 
 /** Token usage over time + KPI summary + Bedrock quota headroom, for the signed-in tenant. */
 export function UsagePage() {
@@ -32,13 +32,14 @@ export function UsagePage() {
   return (
     <>
       <div className="kpi-grid">
-        <Kpi label="Input tokens" value={fmtTokens(totalIn)} accent="var(--accent-blue)" foot="across window" />
-        <Kpi label="Output tokens" value={fmtTokens(totalOut)} accent="var(--accent-green)" foot="across window" />
+        <Kpi label="Input tokens" value={fmtTokens(totalIn)} accent="var(--accent-blue)" foot="last 7 days (hourly buckets)" />
+        <Kpi label="Output tokens" value={fmtTokens(totalOut)} accent="var(--accent-green)" foot="last 7 days (hourly buckets)" />
         <Kpi label="Invocations" value={totalCalls.toLocaleString()} accent="var(--accent-amber)" foot="API calls" />
         <Kpi label="Active hours" value={String(points.length)} foot="buckets with traffic" />
       </div>
 
-      <Panel title="Token consumption over time" desc="Hourly buckets — input vs output tokens">
+      <Panel title="Token consumption over time"
+             desc="Hourly buckets — input vs output tokens share one Y axis; output typically dominates in agent traffic, so the tall line is output, not input.">
         <ResponsiveContainer width="100%" height={340}>
           <AreaChart data={points} margin={{ left: 4, right: 12, top: 8 }}>
             <defs>
@@ -53,7 +54,7 @@ export function UsagePage() {
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
             <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} />
-            <YAxis tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={false} tickFormatter={fmtTokens} width={48} />
+            <YAxis tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={false} tickFormatter={fmtAxisTokens} width={48} />
             <Tooltip contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 13 }} />
             <Legend iconType="circle" wrapperStyle={{ fontSize: 13, paddingTop: 8 }} />
             <Area type="monotone" dataKey="inputTokens" name="Input tokens" stroke="#2563eb" strokeWidth={2} fill="url(#gIn)" />
@@ -65,13 +66,17 @@ export function UsagePage() {
 
       {quota && (
         <Panel title="Bedrock token-quota headroom"
-               desc="Per-model token rate limits (HTTP 429 on breach). Each row compares one model's own usage against its own quota. Only models with real traffic are shown.">
-          <p style={{ marginTop: 0 }}>
-            <span className={`badge ${quota.throttles?.throttled ? 'critical' : 'info'}`}>
-              {quota.throttles?.throttled ? `⚠ ${quota.throttles.throttledCount} throttled` : '✓ No throttling'}
-            </span>{' '}
-            <span className="muted">client errors (24h): {quota.throttles?.clientErrors ?? 0}</span>
-          </p>
+               desc="Account-wide per-model token rate limits (HTTP 429 on breach), from CloudWatch. Counts ALL account traffic — not just this tenant's — so Used here exceeds the tenant-scoped KPIs above.">
+          <div style={{ marginTop: 0, marginBottom: 12 }}>
+            <div>
+              <span className={`badge ${quota.throttles?.throttled ? 'critical' : 'info'}`}>
+                {quota.throttles?.throttled ? `⚠ ${quota.throttles.throttledCount} requests throttled (HTTP 429)` : '✓ No throttling — zero HTTP 429s in 24h'}
+              </span>
+            </div>
+            <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>
+              Unrelated: {quota.throttles?.clientErrors ?? 0} other client errors (4xx — auth/validation, not throttling) in the same window.
+            </div>
+          </div>
           {quota.headroom.length === 0 ? (
             <p className="muted">No per-model token quotas matched to active models yet.</p>
           ) : (

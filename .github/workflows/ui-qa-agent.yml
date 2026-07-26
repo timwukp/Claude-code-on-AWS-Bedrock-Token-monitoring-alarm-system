@@ -38,12 +38,14 @@ env:
   # Absolute fuse only — the loop's real exits are goal-driven: green when the QA report has
   # no blocking findings, red early when two consecutive rounds make zero progress (nothing
   # FIXED and the blocking set not shrinking — the signature of a bug this loop cannot fix).
-  MAX_FIX_ROUNDS: '10'
+  MAX_FIX_ROUNDS: '15'
 
 jobs:
   qa:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    # Must cover: deploy (~3-8m) + QA invoke (harness allows 60m) + structured pass + bugfix
+    # (up to 30m). Sized for fable-5-class models that use their full thinking budget.
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
         with:

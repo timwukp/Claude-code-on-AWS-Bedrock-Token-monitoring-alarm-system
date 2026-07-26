@@ -18,8 +18,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const res = await ddb.send(
       new QueryCommand({
         TableName: TABLE,
-        KeyConditionExpression: 'pk = :pk',
-        ExpressionAttributeValues: { ':pk': `TENANT#${tenantId}#ANOMALY` },
+        KeyConditionExpression: 'pk = :pk AND begins_with(sk, :skPrefix)',
+        ExpressionAttributeValues: { ':pk': `TENANT#${tenantId}`, ':skPrefix': 'ANOMALY#' },
         ScanIndexForward: false, // newest first
         Limit: 100,
       }),

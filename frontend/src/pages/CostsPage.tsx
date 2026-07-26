@@ -7,22 +7,28 @@ import { fmtUsd, fmtTokens } from '../lib/format';
 export function CostsPage() {
   const [data, setData] = useState<{ byModel: any[]; totalEstimatedUsd: number; totalCacheSavingsUsd?: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Hooks must run unconditionally — keep this above the early returns (React #310).
+  const [sortDesc, setSortDesc] = useState<boolean | null>(null);
 
   useEffect(() => { api.costs().then(setData).catch((e) => setError(String(e))); }, []);
 
   if (error) return <div className="empty"><div className="big">⚠️</div>Failed to load costs: {error}</div>;
   if (!data) return <div className="empty"><span className="spinner" /></div>;
+  if (data.byModel.length === 0) return <div className="empty"><div className="big">⚠️</div>No cost data returned — the costs API reported an empty rollup. Check the costs aggregation backend.</div>;
 
   const totalCacheRead = data.byModel.reduce((s, m) => s + Number(m.cacheReadTokens ?? 0), 0);
+  const totalEstimatedUsd = Number(data.totalEstimatedUsd ?? data.byModel.reduce((s, m) => s + Number(m.estimatedUsd ?? 0), 0));
   const savings = Number(data.totalCacheSavingsUsd ?? 0);
-  const beforeCaching = data.totalEstimatedUsd + savings;
+  const beforeCaching = totalEstimatedUsd + savings;
   const savedPct = beforeCaching > 0 ? Math.round((savings / beforeCaching) * 100) : 0;
   const shortModel = (id: string) => id.split('/').pop() ?? id;
+  const rows = sortDesc == null ? data.byModel
+    : [...data.byModel].sort((a, b) => (Number(b.estimatedUsd ?? 0) - Number(a.estimatedUsd ?? 0)) * (sortDesc ? 1 : -1));
 
   return (
     <>
       <div className="kpi-grid">
-        <Kpi label="Estimated spend" value={fmtUsd(data.totalEstimatedUsd)} accent="var(--primary)" foot="current window" />
+        <Kpi label="Estimated spend" value={fmtUsd(totalEstimatedUsd)} accent="var(--primary)" foot="all-time rollup · token-based estimate" />
         <Kpi label="Saved by prompt caching" value={fmtUsd(savings)} accent="var(--accent-green)"
              foot={`${savedPct}% lower than without caching`} />
         <Kpi label="Models used" value={String(data.byModel.length)} accent="var(--accent-blue)" />
@@ -38,11 +44,15 @@ export function CostsPage() {
               <th className="num">Output tokens</th>
               <th className="num">Cache-read</th>
               <th className="num">Cache savings</th>
-              <th className="num">Est. USD</th>
+              <th className="num" style={{ cursor: 'pointer', userSelect: 'none' }}
+                  title="Click to sort"
+                  onClick={() => setSortDesc((d) => (d == null ? true : !d))}>
+                Est. USD {sortDesc == null ? '' : sortDesc ? '↓' : '↑'}
+              </th>
             </tr>
           </thead>
           <tbody>
-            {data.byModel.map((m, i) => (
+            {rows.map((m, i) => (
               <tr key={i}>
                 <td><span className="mono">{shortModel(String(m.modelId))}</span></td>
                 <td className="num">{Number(m.inputTokens ?? 0).toLocaleString()}</td>

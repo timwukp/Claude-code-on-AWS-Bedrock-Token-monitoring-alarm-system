@@ -34,8 +34,10 @@ export function LoginGate({ children }: { children: ReactNode }) {
       <div style={{ maxWidth: 320, margin: '80px auto', fontFamily: 'system-ui' }}>
         <h2>Token Usage Monitoring</h2>
         <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <input placeholder="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <input placeholder="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <input placeholder="email" type="email" name="email" id="email" autoComplete="username"
+                 value={email} onChange={(e) => setEmail(e.target.value)} />
+          <input placeholder="password" type="password" name="password" id="password" autoComplete="current-password"
+                 value={password} onChange={(e) => setPassword(e.target.value)} />
           <button type="submit">Sign in</button>
           {error && <p style={{ color: 'crimson' }}>{error}</p>}
         </form>

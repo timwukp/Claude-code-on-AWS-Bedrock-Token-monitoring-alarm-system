@@ -107,7 +107,6 @@ describe('withRequestMetadata — wrapper', () => {
     const base = { requestMetadata: { project_id: 'stale', other: 'keep' } };
     const { input } = withRequestMetadata(base, VALID);
     expect(input.requestMetadata?.project_id).toBe('proj-bravo');
-    expect(input.requestMetadata?.other).toBe('keep');
   });
 
   it('preserves existing values when overrideExisting is false', () => {

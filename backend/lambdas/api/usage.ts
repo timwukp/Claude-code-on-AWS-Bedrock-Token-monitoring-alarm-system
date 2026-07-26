@@ -22,23 +22,39 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const to = toParam ? toParam : new Date().toISOString();
 
     // Aggregates are keyed pk=TENANT#<id>#USAGE, sk=<iso-bucket>.
-    const res = await ddb.send(
-      new QueryCommand({
-        TableName: TABLE,
-        KeyConditionExpression: 'pk = :pk AND sk BETWEEN :from AND :to',
-        ExpressionAttributeValues: { ':pk': `TENANT#${tenantId}#USAGE`, ':from': from, ':to': to },
-      }),
-    );
+    // A single Query returns at most 1 MB of items; follow LastEvaluatedKey so
+    // the time series (and any KPI sums derived from it) is not silently truncated.
+    const items: Record<string, any>[] = [];
+    let lastEvaluatedKey: Record<string, any> | undefined;
+    do {
+      const res = await ddb.send(
+        new QueryCommand({
+          TableName: TABLE,
+          KeyConditionExpression: 'pk = :pk AND sk BETWEEN :from AND :to',
+          ExpressionAttributeValues: { ':pk': `TENANT#${tenantId}#USAGE`, ':from': from, ':to': to },
+          ExclusiveStartKey: lastEvaluatedKey,
+        }),
+      );
+      items.push(...(res.Items ?? []));
+      lastEvaluatedKey = res.LastEvaluatedKey;
+    } while (lastEvaluatedKey);
 
     return ok({
       tenantId,
       from,
       to,
-      points: (res.Items ?? []).map((i) => ({
+      points: items.map((i) => ({
         timestamp: i.sk,
-        inputTokens: i.inputTokens ?? 0,
+        // Quota accounting counts cache read/write tokens as input tokens; include
+        // them so usage KPIs reconcile with the per-model quota table (F-007).
+        inputTokens: (i.inputTokens ?? 0) + (i.cacheReadTokens ?? 0) + (i.cacheWriteTokens ?? 0),
         outputTokens: i.outputTokens ?? 0,
         invocations: i.invocations ?? 0,
+        throttleErrors: i.throttleErrors ?? 0,
+        // Expose non-throttle 4xx counts as their own field so the banner
+        // renders them as a separate templated segment instead of appending
+        // raw text to the throttling message (F-103 / prior N-003 run-on).
+        clientErrors: i.clientErrors ?? 0,
       })),
     });
   } catch (err) {

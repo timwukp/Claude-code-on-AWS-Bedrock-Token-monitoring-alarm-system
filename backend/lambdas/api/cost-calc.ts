@@ -12,6 +12,11 @@ export interface ModelRate {
 }
 
 export const RATE_CARD: ModelRate[] = [
+  // Bedrock on-demand global-CRI pricing (aws.amazon.com/bedrock/pricing, us-east-1).
+  // One rate per model family: us./geo cross-region runs ~10% higher, but the guard tests
+  // pin family rates and a single card keeps estimates simple; treat as lower-bound estimate.
+  { key: 'fable-5', inPerToken: 0.00001, outPerToken: 0.00005, cacheReadPerToken: 0.000001 },
+  { key: 'mythos', inPerToken: 0.00001, outPerToken: 0.00005, cacheReadPerToken: 0.000001 },
   { key: 'opus-4-8', inPerToken: 0.000005, outPerToken: 0.000025, cacheReadPerToken: 0.0000005 },
   { key: 'opus', inPerToken: 0.000005, outPerToken: 0.000025, cacheReadPerToken: 0.0000005 },
   { key: 'sonnet', inPerToken: 0.000003, outPerToken: 0.000015, cacheReadPerToken: 0.0000003 },
@@ -77,9 +82,30 @@ export interface CostSummary {
   totalCacheSavingsUsd: number;
 }
 
-/** Aggregate per-model costs + totals (including total prompt-cache savings). */
+/** The same model can be metered under a bare id and a full inference-profile ARN
+ * (arn:...:inference-profile/<id>). Strip the ARN prefix so both merge into one row. */
+export function normalizeModelId(id: string): string {
+  return id.replace(/^arn:[^/]+\/(?=.)/, '');
+}
+
+/**
+ * Aggregate per-model costs + totals (including total prompt-cache savings).
+ * Duplicate rows for the same (normalized) model are merged, and rows with zero usage
+ * across all token kinds are dropped — they'd only inflate the "Models used" KPI.
+ */
 export function summarizeCosts(items: TokenCounts[], card: ModelRate[] = RATE_CARD): CostSummary {
-  const byModel = items.map((i) => computeModelCost(i, card));
+  const merged = new Map<string, TokenCounts>();
+  for (const raw of items) {
+    const id = normalizeModelId(raw.modelId);
+    const acc = merged.get(id) ?? { modelId: id, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 };
+    acc.inputTokens = (acc.inputTokens ?? 0) + (raw.inputTokens ?? 0);
+    acc.outputTokens = (acc.outputTokens ?? 0) + (raw.outputTokens ?? 0);
+    acc.cacheReadTokens = (acc.cacheReadTokens ?? 0) + (raw.cacheReadTokens ?? 0);
+    merged.set(id, acc);
+  }
+  const byModel = Array.from(merged.values())
+    .filter((i) => (i.inputTokens ?? 0) + (i.outputTokens ?? 0) + (i.cacheReadTokens ?? 0) > 0)
+    .map((i) => computeModelCost(i, card));
   return {
     byModel,
     totalEstimatedUsd: round6(byModel.reduce((s, m) => s + m.estimatedUsd, 0)),

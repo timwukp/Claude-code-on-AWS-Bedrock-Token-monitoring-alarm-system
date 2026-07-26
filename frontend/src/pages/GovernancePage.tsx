@@ -28,13 +28,20 @@ export function GovernancePage() {
     <>
       <div className="kpi-grid">
         <Kpi label="Monthly budget" value={b?.limitUsd ? fmtUsd(b.limitUsd) : '—'} accent="var(--primary)" />
-        <Kpi label="Actual spend" value={b?.actualUsd != null ? fmtUsd(b.actualUsd) : '—'}
-             accent="var(--accent-blue)" foot={b?.actualPct != null ? `${b.actualPct}% of budget` : undefined} />
-        <Kpi label="Forecasted spend" value={b?.forecastedUsd != null ? fmtUsd(b.forecastedUsd) : '—'}
-             accent="var(--accent-amber)" foot={b?.forecastedPct != null ? `${b.forecastedPct}% of budget` : undefined} />
+        <Kpi label="Actual spend (AWS billed)" value={b?.actualUsd != null ? fmtUsd(b.actualUsd) : '—'}
+             accent="var(--accent-blue)"
+             foot={b?.actualPct != null ? `${b.actualPct}% of budget · from AWS Budgets` : 'from AWS Budgets'} />
+        <Kpi label="Forecasted (AWS billed)" value={b?.forecastedUsd != null ? fmtUsd(b.forecastedUsd) : '—'}
+             accent="var(--accent-amber)"
+             foot={b?.forecastedPct != null ? `${b.forecastedPct}% of budget · from AWS Budgets` : 'from AWS Budgets'} />
         <Kpi label="Enforcement mode" value={enforceMode ? 'Enforce' : 'Notify-only'}
              accent={enforceMode ? 'var(--danger)' : 'var(--accent-green)'} />
       </div>
+
+      <p className="muted" style={{ fontSize: 12, marginTop: -6 }}>
+        These figures come from <strong>AWS Budgets</strong> (real billed spend — $0 on accounts
+        without direct billing). The Cost page shows a <strong>token-based estimate</strong> computed from usage logs; the two use different data sources and will not match.
+      </p>
 
       <Panel title="Cost guardrails" desc="Spend caps and automated containment posture">
         <table className="data">

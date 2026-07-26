@@ -32,12 +32,21 @@ SEARCH_DIRS = ["backend/lambdas", "frontend/src"]
 
 
 def stream_text(resp) -> str:
+    """Collect streamed text; on a dropped/errored stream return what arrived so far.
+
+    A stream error mid-fix (read timeout, runtimeClientError like max-token stops) must not
+    crash the whole stage — that would discard patches already applied for earlier findings.
+    The partial text often still contains a complete ```diff block worth applying."""
     out = []
-    for event in resp["stream"]:
-        if "contentBlockDelta" in event:
-            delta = event["contentBlockDelta"].get("delta", {})
-            if "text" in delta:
-                out.append(delta["text"])
+    try:
+        for event in resp["stream"]:
+            if "contentBlockDelta" in event:
+                delta = event["contentBlockDelta"].get("delta", {})
+                if "text" in delta:
+                    out.append(delta["text"])
+    except Exception as e:
+        print(f"⚠️  stream interrupted ({type(e).__name__}): {e} — salvaging partial output",
+              file=sys.stderr)
     return "".join(out)
 
 
@@ -132,12 +141,17 @@ Here is the source that most likely contains the bug ({rel}):
 
 Root-cause it and output a MINIMAL unified diff that fixes it. The diff MUST apply against {rel}
 (use `--- a/{rel}` / `+++ b/{rel}` headers). Output analysis, then the diff in a ```diff block."""
-        resp = client.invoke_harness(
-            harnessArn=args.harness_arn,
-            runtimeSessionId=f"bugfix-ci-{secrets.token_hex(16)}",
-            messages=[{"role": "user", "content": [{"text": prompt}]}],
-        )
-        text = stream_text(resp)
+        try:
+            resp = client.invoke_harness(
+                harnessArn=args.harness_arn,
+                runtimeSessionId=f"bugfix-ci-{secrets.token_hex(16)}",
+                messages=[{"role": "user", "content": [{"text": prompt}]}],
+            )
+            text = stream_text(resp)
+        except Exception as e:
+            summaries.append(f"- **{finding.get('id')}** — invoke failed ({type(e).__name__}); skipped.")
+            print(f"⚠️  invoke failed for {finding.get('id')}: {e}", file=sys.stderr)
+            continue
         diff = extract_diff(text)
         if diff and apply_patch(diff, args.repo_root):
             applied += 1

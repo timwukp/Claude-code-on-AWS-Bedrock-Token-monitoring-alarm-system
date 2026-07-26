@@ -11,32 +11,44 @@ export function ProjectsPage() {
   const [rows, setRows] = useState<any[]>([]);
   const [source, setSource] = useState<'fast' | 'full'>('fast');
   const [servedFrom, setServedFrom] = useState<string>('');
+  const [apiTotalTokens, setApiTotalTokens] = useState<number | null>(null);
+  const [apiTotalUsd, setApiTotalUsd] = useState<number | null>(null);
+  const [apiTotalCost, setApiTotalCost]     = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
+    setError(null);
     api.projects(source)
-      .then((r) => { setRows(r.projects ?? []); setServedFrom(r.source ?? (source === 'fast' ? 'dynamodb' : 'athena')); })
+      .then((r) => {
+        setRows(r.projects ?? []);
+        setServedFrom(r.source ?? (source === 'fast' ? 'dynamodb' : 'athena'));
+        setApiTotalTokens(r.totalTokens != null ? Number(r.totalTokens) : null);
+        setApiTotalUsd(r.totalEstimatedUsd != null ? Number(r.totalEstimatedUsd) : null);
+      })
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
-  }, [source]);
+  }, [source, refreshKey]);
 
-  if (loading) return <div className="empty"><span className="spinner" /></div>;
-  if (error) return <div className="empty"><div className="big">⚠️</div>Failed to load: {error}</div>;
+  // Keep the page frame (toggle stays clickable) while a source loads; only the table area spins.
+  const bodyLoading = loading;
 
-  const totalTokens = rows.reduce((s, r) => s + Number(r.tokens ?? 0), 0);
-  const totalCost = rows.reduce((s, r) => s + Number(r.estimatedUsd ?? 0), 0);
+  const totalTokens = rows.reduce((s, r) => s + (Number(r.tokens) || 0), 0);
+  const totalCost   = rows.reduce((s, r) => s + (Number(r.estimatedUsd) || 0), 0);
 
   return (
     <>
       <div className="kpi-grid">
         <Kpi label="Projects tracked" value={String(rows.length)} accent="var(--primary)" />
-        <Kpi label="Total tokens" value={fmtTokens(totalTokens)} accent="var(--accent-blue)" />
-        <Kpi label="Total est. cost" value={fmtUsd(totalCost)} accent="var(--accent-green)" />
+        <Kpi label="Total tokens" value={fmtTokens(apiTotalTokens ?? totalTokens)} accent="var(--accent-blue)" />
+        <Kpi label="Total est. cost" value={fmtUsd(apiTotalUsd ?? totalCost)} accent="var(--accent-green)"
+             foot={apiTotalUsd != null ? 'per-model rates — same math as the Cost page' : 'uniform reference rates'} />
       </div>
 
-      <Panel title="Usage by project" desc="Attributed via requestMetadata tags + project mapping (CSV)">
+      <Panel title="Usage by project"
+             desc="Attributed via requestMetadata tags + project mapping (CSV). Fast = pre-aggregated DynamoDB rollups. Full = Athena scan over raw invocation logs joined to the name mapping (untagged traffic COALESCEs into 'untagged'). The two pipelines ingest at different times, so totals can differ slightly.">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
           <div style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
             {(['fast', 'full'] as const).map((s) => (
@@ -52,7 +64,14 @@ export function ProjectsPage() {
           </div>
           {servedFrom && <span className="muted" style={{ fontSize: 12 }}>served from: <strong>{servedFrom}</strong></span>}
         </div>
-        {rows.length === 0 ? (
+        {bodyLoading ? (
+          <div className="empty"><span className="spinner" /> <span className="muted">loading {source === 'fast' ? 'DynamoDB rollups' : 'Athena scan (may take ~10s)'}…</span></div>
+        ) : error ? (
+          <div className="empty"><div className="big">⚠️</div>Failed to load: {error}{' '}
+            <button onClick={() => { setError(null); setRefreshKey((k) => k + 1); }}
+                    style={{ marginLeft: 10 }}>Retry</button>
+          </div>
+        ) : rows.length === 0 ? (
           <div className="empty">
             <div className="big">🗂️</div>
             No project-tagged usage yet.<br />
