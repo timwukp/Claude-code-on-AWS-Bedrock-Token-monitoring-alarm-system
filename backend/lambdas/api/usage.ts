@@ -51,6 +51,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         outputTokens: i.outputTokens ?? 0,
         invocations: i.invocations ?? 0,
         throttleErrors: i.throttleErrors ?? 0,
+        // Expose non-throttle 4xx counts as their own field so the banner
+        // renders them as a separate templated segment instead of appending
+        // raw text to the throttling message (F-103 / prior N-003 run-on).
+        clientErrors: i.clientErrors ?? 0,
       })),
     });
   } catch (err) {

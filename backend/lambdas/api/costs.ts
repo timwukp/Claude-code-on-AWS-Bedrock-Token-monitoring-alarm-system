@@ -31,7 +31,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Normalization, duplicate-merging (bare id vs inference-profile ARN), and zero-usage
     // filtering all live in summarizeCosts — keep raw rows here.
     const items: TokenCounts[] = (res.Items ?? []).map((i) => ({
-      modelId: String(i.modelId ?? ''),
+      modelId: String(i.modelId ?? i.sk ?? ''),
       inputTokens: Number(i.inputTokens ?? 0),
       outputTokens: Number(i.outputTokens ?? 0),
       cacheReadTokens: Number(i.cacheReadTokens ?? 0),
