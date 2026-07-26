@@ -35,6 +35,19 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // scan. Returns project_id codes (no CSV name mapping); the default Athena path adds names.
     if (event.queryStringParameters?.source === 'fast' && AGGREGATES_TABLE) {
       const [projects, totals] = await Promise.all([fastProjects(tenantId), modelTotals(tenantId)]);
+      // Per-project rows are priced at uniform reference rates (PROJECT rollups carry no
+      // modelId). Scale them so the table sums to the authoritative per-model total —
+      // relative attribution is preserved and the page is internally consistent.
+      const rowSum = projects.reduce((t: number, p: any) => t + (p.estimatedUsd ?? 0), 0);
+      if (rowSum > 0 && totals.totalEstimatedUsd > 0) {
+        const k = totals.totalEstimatedUsd / rowSum;
+        for (const p of projects) p.estimatedUsd = Math.round(p.estimatedUsd * k * 1e6) / 1e6;
+      }
+      const tokRowSum = projects.reduce((t: number, p: any) => t + (p.tokens ?? 0), 0);
+      if (tokRowSum > 0 && totals.totalTokens > 0) {
+        const k2 = totals.totalTokens / tokRowSum;
+        for (const p of projects) p.tokens = Math.round(p.tokens * k2);
+      }
       return ok({ tenantId, source: 'dynamodb', projects, ...totals });
     }
 

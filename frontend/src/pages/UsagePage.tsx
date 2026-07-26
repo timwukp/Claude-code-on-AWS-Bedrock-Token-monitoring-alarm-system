@@ -67,14 +67,16 @@ export function UsagePage() {
       {quota && (
         <Panel title="Bedrock token-quota headroom"
                desc="Account-wide per-model token rate limits (HTTP 429 on breach), from CloudWatch. Counts ALL account traffic — not just this tenant's — so Used here exceeds the tenant-scoped KPIs above.">
-          <p style={{ marginTop: 0 }}>
-            <span className={`badge ${quota.throttles?.throttled ? 'critical' : 'info'}`}>
-              {quota.throttles?.throttled ? `⚠ ${quota.throttles.throttledCount} throttled (429s)` : '✓ No throttling (0 × 429)'}
-            </span>
-            <span className="muted" style={{ marginLeft: 10, paddingLeft: 10, borderLeft: '1px solid var(--border, #ccc)' }}>
-              other 4xx client errors (24h): {quota.throttles?.clientErrors ?? 0}
-            </span>
-          </p>
+          <div style={{ marginTop: 0, marginBottom: 12 }}>
+            <div>
+              <span className={`badge ${quota.throttles?.throttled ? 'critical' : 'info'}`}>
+                {quota.throttles?.throttled ? `⚠ ${quota.throttles.throttledCount} requests throttled (HTTP 429)` : '✓ No throttling — zero HTTP 429s in 24h'}
+              </span>
+            </div>
+            <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>
+              Unrelated: {quota.throttles?.clientErrors ?? 0} other client errors (4xx — auth/validation, not throttling) in the same window.
+            </div>
+          </div>
           {quota.headroom.length === 0 ? (
             <p className="muted">No per-model token quotas matched to active models yet.</p>
           ) : (

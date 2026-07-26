@@ -7,6 +7,7 @@ import { fmtUsd, fmtTokens } from '../lib/format';
 export function CostsPage() {
   const [data, setData] = useState<{ byModel: any[]; totalEstimatedUsd: number; totalCacheSavingsUsd?: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Hooks must run unconditionally — keep this above the early returns (React #310).
   const [sortDesc, setSortDesc] = useState<boolean | null>(null);
 
   useEffect(() => { api.costs().then(setData).catch((e) => setError(String(e))); }, []);
@@ -16,7 +17,7 @@ export function CostsPage() {
   if (data.byModel.length === 0) return <div className="empty"><div className="big">⚠️</div>No cost data returned — the costs API reported an empty rollup. Check the costs aggregation backend.</div>;
 
   const totalCacheRead = data.byModel.reduce((s, m) => s + Number(m.cacheReadTokens ?? 0), 0);
-  const totalEstimatedUsd = data.byModel.reduce((s, m) => s + Number(m.estimatedUsd ?? 0), 0);
+  const totalEstimatedUsd = Number(data.totalEstimatedUsd ?? data.byModel.reduce((s, m) => s + Number(m.estimatedUsd ?? 0), 0));
   const savings = Number(data.totalCacheSavingsUsd ?? 0);
   const beforeCaching = totalEstimatedUsd + savings;
   const savedPct = beforeCaching > 0 ? Math.round((savings / beforeCaching) * 100) : 0;
