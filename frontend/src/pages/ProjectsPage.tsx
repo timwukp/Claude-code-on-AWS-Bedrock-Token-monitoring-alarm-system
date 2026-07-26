@@ -32,7 +32,8 @@ export function ProjectsPage() {
       .finally(() => setLoading(false));
   }, [source, refreshKey]);
 
-  if (loading) return <div className="empty"><span className="spinner" /></div>;
+  // Keep the page frame (toggle stays clickable) while a source loads; only the table area spins.
+  const bodyLoading = loading;
 
   const totalTokens = rows.reduce((s, r) => s + (Number(r.tokens) || 0), 0);
   const totalCost   = rows.reduce((s, r) => s + (Number(r.estimatedUsd) || 0), 0);
@@ -63,7 +64,9 @@ export function ProjectsPage() {
           </div>
           {servedFrom && <span className="muted" style={{ fontSize: 12 }}>served from: <strong>{servedFrom}</strong></span>}
         </div>
-        {error ? (
+        {bodyLoading ? (
+          <div className="empty"><span className="spinner" /> <span className="muted">loading {source === 'fast' ? 'DynamoDB rollups' : 'Athena scan (may take ~10s)'}…</span></div>
+        ) : error ? (
           <div className="empty"><div className="big">⚠️</div>Failed to load: {error}{' '}
             <button onClick={() => { setError(null); setRefreshKey((k) => k + 1); }}
                     style={{ marginLeft: 10 }}>Retry</button>

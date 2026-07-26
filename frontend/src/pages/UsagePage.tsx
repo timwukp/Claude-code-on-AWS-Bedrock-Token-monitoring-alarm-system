@@ -4,7 +4,7 @@ import {
 } from 'recharts';
 import { api, UsagePoint } from '../api/client';
 import { Kpi, Panel } from '../components/Layout';
-import { fmtTokens } from '../lib/format';
+import { fmtTokens, fmtAxisTokens } from '../lib/format';
 
 /** Token usage over time + KPI summary + Bedrock quota headroom, for the signed-in tenant. */
 export function UsagePage() {
@@ -54,7 +54,7 @@ export function UsagePage() {
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
             <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} />
-            <YAxis tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={false} tickFormatter={fmtTokens} width={48} />
+            <YAxis tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={false} tickFormatter={fmtAxisTokens} width={48} />
             <Tooltip contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 13 }} />
             <Legend iconType="circle" wrapperStyle={{ fontSize: 13, paddingTop: 8 }} />
             <Area type="monotone" dataKey="inputTokens" name="Input tokens" stroke="#2563eb" strokeWidth={2} fill="url(#gIn)" />

@@ -20,6 +20,9 @@ export function CostsPage() {
   const beforeCaching = totalEstimatedUsd + savings;
   const savedPct = beforeCaching > 0 ? Math.round((savings / beforeCaching) * 100) : 0;
   const shortModel = (id: string) => id.split('/').pop() ?? id;
+  const [sortDesc, setSortDesc] = useState<boolean | null>(null);
+  const rows = sortDesc == null ? data.byModel
+    : [...data.byModel].sort((a, b) => (Number(b.estimatedUsd ?? 0) - Number(a.estimatedUsd ?? 0)) * (sortDesc ? 1 : -1));
 
   return (
     <>
@@ -40,11 +43,15 @@ export function CostsPage() {
               <th className="num">Output tokens</th>
               <th className="num">Cache-read</th>
               <th className="num">Cache savings</th>
-              <th className="num">Est. USD</th>
+              <th className="num" style={{ cursor: 'pointer', userSelect: 'none' }}
+                  title="Click to sort"
+                  onClick={() => setSortDesc((d) => (d == null ? true : !d))}>
+                Est. USD {sortDesc == null ? '' : sortDesc ? '↓' : '↑'}
+              </th>
             </tr>
           </thead>
           <tbody>
-            {data.byModel.map((m, i) => (
+            {rows.map((m, i) => (
               <tr key={i}>
                 <td><span className="mono">{shortModel(String(m.modelId))}</span></td>
                 <td className="num">{Number(m.inputTokens ?? 0).toLocaleString()}</td>
