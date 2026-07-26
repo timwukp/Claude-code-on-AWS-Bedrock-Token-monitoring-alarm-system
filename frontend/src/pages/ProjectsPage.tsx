@@ -18,6 +18,7 @@ export function ProjectsPage() {
 
   useEffect(() => {
     setLoading(true);
+    setError(null);
     api.projects(source)
       .then((r) => {
         setRows(r.projects ?? []);
@@ -29,7 +30,6 @@ export function ProjectsPage() {
   }, [source]);
 
   if (loading) return <div className="empty"><span className="spinner" /></div>;
-  if (error) return <div className="empty"><div className="big">⚠️</div>Failed to load: {error}</div>;
 
   const totalTokens = rows.reduce((s, r) => s + (Number(r.tokens) || 0), 0);
   const totalCost   = rows.reduce((s, r) => s + (Number(r.estimatedUsd) || 0), 0);
@@ -60,7 +60,9 @@ export function ProjectsPage() {
           </div>
           {servedFrom && <span className="muted" style={{ fontSize: 12 }}>served from: <strong>{servedFrom}</strong></span>}
         </div>
-        {rows.length === 0 ? (
+        {error ? (
+          <div className="empty"><div className="big">⚠️</div>Failed to load: {error}</div>
+        ) : rows.length === 0 ? (
           <div className="empty">
             <div className="big">🗂️</div>
             No project-tagged usage yet.<br />

@@ -45,7 +45,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       to,
       points: items.map((i) => ({
         timestamp: i.sk,
-        inputTokens: i.inputTokens ?? 0,
+        // Quota accounting counts cache read/write tokens as input tokens; include
+        // them so usage KPIs reconcile with the per-model quota table (F-007).
+        inputTokens: (i.inputTokens ?? 0) + (i.cacheReadTokens ?? 0) + (i.cacheWriteTokens ?? 0),
         outputTokens: i.outputTokens ?? 0,
         invocations: i.invocations ?? 0,
         throttleErrors: i.throttleErrors ?? 0,
