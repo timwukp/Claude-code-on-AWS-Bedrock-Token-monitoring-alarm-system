@@ -230,6 +230,34 @@ Two items remain intentionally pending real-AWS exercise (off-by-default, risk-m
 Budget Action **freeze** (needs a throwaway test IAM role) and the Fargate ETL **Parquet run**
 (needs the Etl stack deployed). Both are marked 🟡 in the roadmap.
 
+## Agent-driven QA: the PR #30 convergence case
+
+This repo is also the live target of an **AgentCore-powered QA↔Bug-Fix loop**
+([`.github/workflows/ui-qa-agent.yml`](./.github/workflows/ui-qa-agent.yml)): on every PR, a
+UI-testing agent deploys the branch, explores the live dashboard in a real browser, and files
+findings; a second Bug-Fix agent patches what is fixable and pushes an auto-fix commit, which
+re-triggers the loop — until the QA agent reports zero blocking findings (goal-driven exit),
+two consecutive rounds make no progress (stall breaker → human hand-off), or an absolute
+round fuse blows.
+
+[PR #30](https://github.com/timwukp/Claude-code-on-AWS-Bedrock-Token-monitoring-alarm-system/pull/30)
+is the first full convergence, and every round is preserved as a PR comment with a per-finding
+reconciliation table (`FIXED` / `STILL_FAILING`):
+
+- **Trajectory:** 9 → 5 → 4 → 1 → **0** blocking findings, across 10 auto-fix rounds plus one
+  human-review pass for data-layer issues the agent correctly refused to guess at (real pricing
+  rates, dedup policy) — it pinned those as failing tests instead.
+- **Real bugs found and fixed by the loop** (exploratory, not seeded): missing model pricing
+  rows rendering $0.00, duplicate rows from ARN-vs-bare-id model keys, a mathematically
+  impossible "774% lower" cache-savings claim, negative input-token displays, cross-page cost
+  totals disagreeing by 30%+, a page-crashing React hook regression, and misleading
+  status-badge copy.
+- **Final lesson (fixed in `ci-agent/qa_agent.py`):** the loop's last two "failures" were the
+  CI parser, not the app — an empty `findings: []` array (a valid green report) was treated as
+  a missing report, and a salvage fallback fabricated a phantom finding from the transcript's
+  own description of an already-fixed bug. An agent pipeline's report parser must treat
+  "explicitly nothing found" and "no report" as different states.
+
 ## Validation gates
 
 CI (GitHub Actions and GitLab CI) runs, and any change must pass:
