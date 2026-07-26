@@ -66,7 +66,7 @@ export function UsagePage() {
 
       {quota && (
         <Panel title="Bedrock token-quota headroom"
-               desc="Per-model token rate limits (HTTP 429 on breach). Each row compares one model's own usage against its own quota. Only models with real traffic are shown.">
+               desc="Account-wide per-model token rate limits (HTTP 429 on breach), from CloudWatch. Counts ALL account traffic — not just this tenant's — so Used here exceeds the tenant-scoped KPIs above.">
           <p style={{ marginTop: 0 }}>
             <span className={`badge ${quota.throttles?.throttled ? 'critical' : 'info'}`}>
               {quota.throttles?.throttled ? `⚠ ${quota.throttles.throttledCount} throttled (429s)` : '✓ No throttling (0 × 429)'}

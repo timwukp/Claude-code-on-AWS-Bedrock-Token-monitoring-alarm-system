@@ -5,6 +5,7 @@ import {
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { ok, serverError } from '../shared/response';
+import { summarizeCosts, TokenCounts } from './cost-calc';
 import { getTenantId } from '../shared/tenant';
 
 const athena = new AthenaClient({});
@@ -33,7 +34,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Fast path (#7): ?source=fast reads pre-aggregated PROJECT rollups from DynamoDB — no Athena
     // scan. Returns project_id codes (no CSV name mapping); the default Athena path adds names.
     if (event.queryStringParameters?.source === 'fast' && AGGREGATES_TABLE) {
-      return ok({ tenantId, source: 'dynamodb', projects: await fastProjects(tenantId) });
+      const [projects, totals] = await Promise.all([fastProjects(tenantId), modelTotals(tenantId)]);
+      return ok({ tenantId, source: 'dynamodb', projects, ...totals });
     }
 
     const sql = `
@@ -104,6 +106,26 @@ function sanitize(v: string): string {
  * (sk = <projectId>#<modelId>), sums across models per project, applies the rate card, and unions
  * the distinct user sets. No Athena scan — single-digit-ms reads.
  */
+/** Page-level totals from the SAME #MODEL rollups and rate card the Cost page uses, so the
+ * two pages agree numerically. Per-project rows keep uniform reference rates (attribution
+ * only — PROJECT rollups don't record modelId). */
+async function modelTotals(tenantId: string): Promise<{ totalTokens: number; totalEstimatedUsd: number }> {
+  const res = await ddb.send(new QueryCommand({
+    TableName: AGGREGATES_TABLE,
+    KeyConditionExpression: 'pk = :pk',
+    ExpressionAttributeValues: { ':pk': `TENANT#${tenantId}#MODEL` },
+  }));
+  const items: TokenCounts[] = (res.Items ?? []).map((i: any) => ({
+    modelId: String(i.modelId ?? ''),
+    inputTokens: Number(i.inputTokens ?? 0),
+    outputTokens: Number(i.outputTokens ?? 0),
+    cacheReadTokens: Number(i.cacheReadTokens ?? 0),
+  }));
+  const s = summarizeCosts(items);
+  const totalTokens = s.byModel.reduce((t, m) => t + m.inputTokens + m.outputTokens, 0);
+  return { totalTokens, totalEstimatedUsd: s.totalEstimatedUsd };
+}
+
 async function fastProjects(tenantId: string): Promise<any[]> {
   const res = await ddb.send(new QueryCommand({
     TableName: AGGREGATES_TABLE,

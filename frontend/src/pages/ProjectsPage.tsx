@@ -12,8 +12,10 @@ export function ProjectsPage() {
   const [source, setSource] = useState<'fast' | 'full'>('fast');
   const [servedFrom, setServedFrom] = useState<string>('');
   const [apiTotalTokens, setApiTotalTokens] = useState<number | null>(null);
+  const [apiTotalUsd, setApiTotalUsd] = useState<number | null>(null);
   const [apiTotalCost, setApiTotalCost]     = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -24,10 +26,11 @@ export function ProjectsPage() {
         setRows(r.projects ?? []);
         setServedFrom(r.source ?? (source === 'fast' ? 'dynamodb' : 'athena'));
         setApiTotalTokens(r.totalTokens != null ? Number(r.totalTokens) : null);
+        setApiTotalUsd(r.totalEstimatedUsd != null ? Number(r.totalEstimatedUsd) : null);
       })
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
-  }, [source]);
+  }, [source, refreshKey]);
 
   if (loading) return <div className="empty"><span className="spinner" /></div>;
 
@@ -39,8 +42,8 @@ export function ProjectsPage() {
       <div className="kpi-grid">
         <Kpi label="Projects tracked" value={String(rows.length)} accent="var(--primary)" />
         <Kpi label="Total tokens" value={fmtTokens(apiTotalTokens ?? totalTokens)} accent="var(--accent-blue)" />
-        <Kpi label="Total est. cost" value={fmtUsd(totalCost)} accent="var(--accent-green)"
-             foot="uniform reference rates — see Cost page for per-model pricing" />
+        <Kpi label="Total est. cost" value={fmtUsd(apiTotalUsd ?? totalCost)} accent="var(--accent-green)"
+             foot={apiTotalUsd != null ? 'per-model rates — same math as the Cost page' : 'uniform reference rates'} />
       </div>
 
       <Panel title="Usage by project"
@@ -61,7 +64,10 @@ export function ProjectsPage() {
           {servedFrom && <span className="muted" style={{ fontSize: 12 }}>served from: <strong>{servedFrom}</strong></span>}
         </div>
         {error ? (
-          <div className="empty"><div className="big">⚠️</div>Failed to load: {error}</div>
+          <div className="empty"><div className="big">⚠️</div>Failed to load: {error}{' '}
+            <button onClick={() => { setError(null); setRefreshKey((k) => k + 1); }}
+                    style={{ marginLeft: 10 }}>Retry</button>
+          </div>
         ) : rows.length === 0 ? (
           <div className="empty">
             <div className="big">🗂️</div>

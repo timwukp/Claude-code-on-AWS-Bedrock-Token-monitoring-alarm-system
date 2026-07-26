@@ -36,7 +36,7 @@ export const api = {
   // source 'fast' reads pre-aggregated rollups from DynamoDB (quick, project_id codes);
   // 'full' runs the Athena join for human-readable project names + cost centers.
   projects: (source: 'fast' | 'full' = 'fast') =>
-    request<{ projects: any[]; source?: string; totalTokens?: number | string }>(`v1/projects${source === 'fast' ? '?source=fast' : ''}`),
+    request<{ projects: any[]; source?: string; totalTokens?: number | string; totalEstimatedUsd?: number }>(`v1/projects${source === 'fast' ? '?source=fast' : ''}`),
   quotas: () => request<{ throttles: { throttledCount: number; clientErrors: number; throttled: boolean }; headroom: any[] }>('v1/quotas'),
   governance: () => request<{ budget: any; enforcement: any }>('v1/governance'),
   startQuery: (template: string, days: number) =>
