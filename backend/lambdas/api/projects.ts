@@ -93,7 +93,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const res = await athena.send(new GetQueryResultsCommand({ QueryExecutionId: id, MaxResults: 101 }));
     const rows = res.ResultSet?.Rows ?? [];
-    const projects = rows.slice(1).map((r) => {
+    const athenaProjects = rows.slice(1).map((r) => {
       const c = r.Data ?? [];
       return {
         projectName: c[0]?.VarCharValue ?? 'untagged',
@@ -103,7 +103,23 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         estimatedUsd: Math.round(Number(c[4]?.VarCharValue ?? 0) * 1e6) / 1e6,
       };
     });
-    return ok({ tenantId, projects });
+    // Same treatment as the fast path: scale rows to the authoritative per-model totals so
+    // Fast, Full, and the Cost page all agree (Athena prices at flat reference rates and its
+    // log coverage window differs from the rollups).
+    const totals = AGGREGATES_TABLE ? await modelTotals(tenantId) : null;
+    if (totals) {
+      const rowSum = athenaProjects.reduce((t, p) => t + (p.estimatedUsd ?? 0), 0);
+      if (rowSum > 0 && totals.totalEstimatedUsd > 0) {
+        const k = totals.totalEstimatedUsd / rowSum;
+        for (const p of athenaProjects) p.estimatedUsd = Math.round(p.estimatedUsd * k * 1e6) / 1e6;
+      }
+      const tokSum = athenaProjects.reduce((t, p) => t + (p.tokens ?? 0), 0);
+      if (tokSum > 0 && totals.totalTokens > 0) {
+        const k2 = totals.totalTokens / tokSum;
+        for (const p of athenaProjects) p.tokens = Math.round(p.tokens * k2);
+      }
+    }
+    return ok({ tenantId, projects: athenaProjects, ...(totals ?? {}) });
   } catch (err) {
     console.error(err);
     return serverError();

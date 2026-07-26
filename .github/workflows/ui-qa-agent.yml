@@ -38,7 +38,7 @@ env:
   # Absolute fuse only — the loop's real exits are goal-driven: green when the QA report has
   # no blocking findings, red early when two consecutive rounds make zero progress (nothing
   # FIXED and the blocking set not shrinking — the signature of a bug this loop cannot fix).
-  MAX_FIX_ROUNDS: '10'
+  MAX_FIX_ROUNDS: '15'
 
 jobs:
   qa:
