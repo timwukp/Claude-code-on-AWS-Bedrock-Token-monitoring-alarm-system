@@ -44,7 +44,7 @@ export function ProjectsPage() {
       </div>
 
       <Panel title="Usage by project"
-             desc="Attributed via requestMetadata tags + project mapping (CSV). Fast = all-time DynamoDB rollups (includes 'untagged'). Full = Athena scan over invocation logs joined to the name mapping — covers only logged, tagged traffic, so totals differ from Fast.">
+             desc="Attributed via requestMetadata tags + project mapping (CSV). Fast = pre-aggregated DynamoDB rollups. Full = Athena scan over raw invocation logs joined to the name mapping (untagged traffic COALESCEs into 'untagged'). The two pipelines ingest at different times, so totals can differ slightly.">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
           <div style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
             {(['fast', 'full'] as const).map((s) => (
