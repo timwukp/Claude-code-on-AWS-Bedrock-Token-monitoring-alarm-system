@@ -40,13 +40,6 @@ keeping Fargate to a single, well-bounded ETL task.
 - **Least-privilege IAM** per Lambda (scoped to the exact tables/buckets/queries it needs).
 - **Multi-tenant isolation** enforced by `tenantId` JWT claim + Athena workgroup / S3 prefix
   scoping; no cross-tenant data access path.
-- **ABAC isolation (SEC05 — reduce blast radius)**: every resource in this app is tagged
-  `system=token-monitor` via `cdk.Tags.of(app).add('system', 'token-monitor')` in `bin/infra.ts`.
-  All IAM execution roles carry a **Permission Boundary** (`TokenMonitorPermissionBoundary`)
-  applied by a CDK Aspect at synthesis time. The boundary denies `lambda:UpdateFunction*` and
-  `iam:*RolePolicy` on any resource whose `system` tag differs — preventing cross-system
-  contamination even when sibling systems share the same AWS account. The Aspect covers
-  auto-generated roles (Lambda service roles, Fargate task roles) automatically.
 
 **Detective controls**
 - **AWS CloudTrail** records Bedrock `InvokeModel` / `Converse` as management events (on by
