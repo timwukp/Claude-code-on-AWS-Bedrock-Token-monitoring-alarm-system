@@ -6,17 +6,6 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
-### Added — Security hardening (ABAC + Permission Boundary)
-- **ABAC system tag** — `cdk.Tags.of(app).add('system', 'token-monitor')` applied at App level
-  in `infra/bin/infra.ts` so every synthesised resource inherits the isolation tag.
-- **PermissionBoundaryAspect** (`infra/lib/aspects/permission-boundary.ts`) — CDK Aspect that
-  walks all `iam.Role` nodes at synthesis time and stamps `TokenMonitorPermissionBoundary` on
-  each one, including auto-generated Lambda service roles and Fargate task roles. Implements
-  SEC05 (reduce blast radius) from the AWS Well-Architected Security pillar. The boundary policy
-  (pre-created in AWS, referenced by ARN) denies `lambda:UpdateFunction*` and `iam:*RolePolicy`
-  on resources tagged with a different `system` value — blocking cross-system contamination when
-  multiple systems coexist in the same account.
-
 ### Added — Web UI completion
 - **By-Project fast/full toggle** — the By-Project page now defaults to the DynamoDB pre-aggregated
   rollups (`?source=fast`) and offers a Full (Athena + project names) view; shows the data source.
