@@ -10,7 +10,6 @@ import { ApiStack } from '../lib/stacks/api-stack';
 import { AutomationStack } from '../lib/stacks/automation-stack';
 import { EtlStack } from '../lib/stacks/etl-stack';
 import { FrontendStack } from '../lib/stacks/frontend-stack';
-import { PermissionBoundaryAspect } from '../lib/aspects/permission-boundary';
 
 const app = new cdk.App();
 
@@ -41,16 +40,3 @@ new FrontendStack(app, `${prefix}-Frontend`, { env, cfg, api: api.restApi, userP
 
 cdk.Tags.of(app).add('project', 'token-usage-monitoring');
 cdk.Tags.of(app).add('environment', cfg.env);
-// ABAC isolation tag (Security pillar): all resources in this app belong to the
-// token-monitor system. IAM roles have a matching Permission Boundary that denies
-// lambda:Update*/iam:*RolePolicy on any resource whose tag differs — preventing
-// cross-system contamination even when multiple systems share the same AWS account.
-cdk.Tags.of(app).add('system', 'token-monitor');
-
-// Permission Boundary Aspect: applied at App level so every iam.Role in this app
-// (including auto-generated service roles) gets the boundary as a hard ceiling.
-// The managed policy is pre-created in AWS; CDK references it by ARN without owning
-// the resource lifecycle — safe to apply to CI/CD-managed and manually-created roles alike.
-cdk.Aspects.of(app).add(
-  new PermissionBoundaryAspect(`arn:aws:iam::${cfg.account}:policy/TokenMonitorPermissionBoundary`),
-);
