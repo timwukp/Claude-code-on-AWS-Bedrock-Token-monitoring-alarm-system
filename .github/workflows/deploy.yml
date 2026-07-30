@@ -31,3 +31,7 @@ jobs:
           npx cdk deploy --all --require-approval never --context env=${{ github.event.inputs.env }}
       - name: Build & publish frontend
         run: ./scripts/deploy-frontend.sh ${{ github.event.inputs.env }}
+      - name: Validate admin Lambda config
+        run: |
+          chmod +x ./scripts/validate-admin-config.sh
+          ./scripts/validate-admin-config.sh
