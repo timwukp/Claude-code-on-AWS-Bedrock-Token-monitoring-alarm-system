@@ -6,6 +6,23 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Added — DORA metrics dashboard
+- **DORA page** (`/dora`) — per-repo Deployment Frequency, Lead Time for Changes, Change Failure
+  Rate and Time to Restore, each split into **All / AI-assisted / Human-only** PRs plus an
+  "AI participation" KPI, so teams can see whether working with AI coding assistants (Claude Code,
+  Kiro, Amazon Q, Copilot) changes their delivery performance. Weekly deploy + lead-time charts,
+  recent-PR table with assistant/revert/hotfix badges, cross-repo overview table, 7/30/90-day window.
+- **Admin-managed repo list** — new Cognito `admin` group; members can add / remove / "sync now"
+  target repos from the page. `GET|POST /v1/dora/repos`, `DELETE /v1/dora/repos/{owner}/{name}`,
+  `POST …/sync`, `GET /v1/dora/metrics`, `GET /v1/dora/overview` (six routes, one Lambda).
+- **Collector** — new `Tums-<env>-Dora` stack: scheduled Lambda (every 6 h, configurable) pulls
+  merged PRs (+ commits for first-commit time and `Co-Authored-By` trailers) and bug/incident issues
+  from GitHub into the new `tums-dora` table; incremental via per-repo watermarks, 180-day backfill,
+  rate-limit aware. GitHub PAT lives in Secrets Manager (`token-monitor-demo/github-token`, created
+  with a placeholder). Seed repos come from the `dora` config block on first run only.
+- **Definitions** ported from `timwukp/dora-metrics-platform`: deployment = PR merged to the default
+  branch (none of the tracked repos use the Deployments API); tiers follow the DORA bands.
+
 ### Added — Web UI completion
 - **By-Project fast/full toggle** — the By-Project page now defaults to the DynamoDB pre-aggregated
   rollups (`?source=fast`) and offers a Full (Athena + project names) view; shows the data source.

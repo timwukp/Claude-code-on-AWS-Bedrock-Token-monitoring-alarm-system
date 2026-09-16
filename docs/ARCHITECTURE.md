@@ -93,6 +93,9 @@ REST API with a Cognito authorizer. Routes (illustrative):
 | `POST /v1/queries` | start an Athena forensic query | Athena (async) |
 | `GET /v1/queries/{id}` | poll query status/results | Athena |
 | `GET /v1/tenants` | tenant list & config (admin) | DynamoDB |
+| `GET /v1/dora/repos` · `POST /v1/dora/repos` (admin) | tracked-repo registry for DORA metrics | DynamoDB `tums-dora` |
+| `DELETE /v1/dora/repos/{owner}/{name}` · `POST …/sync` (admin) | remove a repo / trigger a collector run | DynamoDB + async Lambda invoke |
+| `GET /v1/dora/metrics?repo=&window=` · `GET /v1/dora/overview` | 4 DORA metrics (All / AI-assisted / Human) + weekly timeline; per-repo comparison | computed on read from `tums-dora` |
 
 **Multi-tenancy**: every request is scoped by a `tenantId` claim in the JWT. Aggregates and
 Athena queries are filtered by tenant; tenant isolation is enforced in the API layer and in
@@ -119,6 +122,12 @@ IAM/Athena workgroup boundaries. See `docs/MULTI_TENANCY.md` (skeleton) for the 
   event paths stay serverless. This is the "hybrid" model: Lambda for API/events, Fargate for
   batch.
 
+- **DORA collector** (`DoraStack`): an EventBridge **rate(6h) → Lambda** pulls merged PRs (with
+  their commits, for first-commit time and `Co-Authored-By` AI trailers) and bug/incident issues
+  from the GitHub REST API for each admin-registered repo into the `tums-dora` table, incrementally
+  via per-repo watermarks. It reads a fine-grained PAT from Secrets Manager and stops early when
+  the GitHub rate limit runs low (resuming next run). Metrics are computed on read by the API.
+
 ### 3.5 Data plane (Bedrock logging → S3 → Athena)
 
 - **Bedrock Model Invocation Logging** delivers newline-delimited JSON to a **KMS-encrypted S3
@@ -141,10 +150,11 @@ so blast radius is small and environments are reproducible:
 | `NetworkStack` | VPC, subnets, endpoints (only what Fargate/ETL needs; serverless paths avoid VPC where possible) |
 | `DataStack` | S3 (raw + curated, KMS), Glue database/tables, Athena workgroup, DynamoDB tables |
 | `LoggingStack` | Bedrock model-invocation-logging config, CloudTrail trail, log-destination roles |
-| `AuthStack` | Cognito user pool, app client, identity/JWT config |
+| `AuthStack` | Cognito user pool, app client, identity/JWT config, `admin` group |
 | `ApiStack` | API Gateway, API Lambdas, authorizer, per-route IAM |
 | `AutomationStack` | EventBridge rules, anomaly-response Lambda, SNS topics, Cost Anomaly Detection monitor/subscription, Budgets |
 | `EtlStack` | Step Functions, ECS Fargate task definition, scheduled aggregator Lambda |
+| `DoraStack` | GitHub-token secret (Secrets Manager), scheduled DORA collector Lambda; no VPC/Docker so it deploys independently of `EtlStack` |
 | `FrontendStack` | S3 site bucket, CloudFront + OAC, WAF, (optional) custom domain via ACM |
 
 Config is environment-driven (`infra/lib/config`) so the same code deploys `dev` / `staging` /

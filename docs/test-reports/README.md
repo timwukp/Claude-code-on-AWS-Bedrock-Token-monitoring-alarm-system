@@ -14,6 +14,8 @@ results. One report per feature (mapped to a GitHub issue / PR).
 | Fargate ETL implementation | #8 | #14 | [feature-08](./feature-08-fargate-etl.md) | PASS |
 | CORS lockdown + custom domain + mapping-upload UX | #9 | #17 | [feature-09](./feature-09-cors-domain.md) | PASS |
 | Web UI completion (By-Project toggle + Governance page) | — | #18 | [feature-10](./feature-10-web-ui-completion.md) | PASS |
+| Quota panel accuracy | — | #24 | [feature-11](./feature-11-quota-panel-accuracy.md) | PASS |
+| DORA metrics dashboard (human + AI-assisted delivery) | — | TBD | [feature-12](./feature-12-dora-metrics.md) | PASS |
 
 Each report records: scope, unit-test results, build/synth gates, real-AWS validation evidence,
 any defect found+fixed during validation, and a verdict. Reports are written before opening the

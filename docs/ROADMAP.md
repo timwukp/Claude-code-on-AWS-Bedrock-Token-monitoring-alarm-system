@@ -49,6 +49,12 @@ Ordered by impact on a cost-governance rollout.
 | 8 | **Fargate ETL path deploy + validate** | 🟡 | ETL job logic implemented in `backend/analysis/etl.py` (S3 list/gunzip/parse → flatten verified schema → partitioned Parquet to `usage/dt=YYYY-MM-DD/`), with a pure offline-testable `parse_log_lines` and stdlib unit tests (`test_etl.py`, 8 passing). Implemented, pending real-AWS deploy/validation of the Fargate stack against a live bucket. |
 | 9 | **Restrict CORS / custom domain / mapping-upload UX** | ✅ | Done — `api.allowedOrigins` config locks CORS to configured origin(s) (preflight + Lambda response header), default `*` for demo; optional custom domain (ACM) on the CloudFront distribution; `scripts/upload-project-mapping.sh` refreshes the mapping CSV. Validated against the real account. See [`test-reports/feature-09`](./test-reports/feature-09-cors-domain.md). |
 
+### Tier 4 — engineering effectiveness (human + AI)
+
+| # | Gap | Status | Notes |
+|---|---|---|---|
+| 10 | **DORA metrics per repo (human + AI-assisted delivery)** | ✅ | Done — `/dora` page + `GET /v1/dora/*`; a scheduled collector pulls merged PRs / incident issues from GitHub for an admin-managed repo list into `tums-dora`; metrics computed on read with All / AI-assisted / Human-only cohorts and DORA tiers. Cognito `admin` group gates repo management. See [`test-reports/feature-12`](./test-reports/feature-12-dora-metrics.md). |
+
 ## Planned validation (by design — not defects)
 
 Two items are **implemented, unit-tested, and deploy-validated**, but their final *live exercise*

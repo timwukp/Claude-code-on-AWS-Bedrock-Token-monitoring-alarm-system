@@ -14,7 +14,7 @@ deployable into any AWS account. See `README.md` and `docs/ARCHITECTURE.md`.
 | Path | What |
 |---|---|
 | `infra/` | AWS CDK v2 app (TypeScript). Stacks in `infra/lib/stacks`. Entry: `infra/bin/infra.ts`. |
-| `backend/` | Lambda handlers (`lambdas/api`, `lambdas/ingestion`, `lambdas/anomaly-response`), shared libs, Fargate ETL (`analysis/`). |
+| `backend/` | Lambda handlers (`lambdas/api`, `lambdas/ingestion`, `lambdas/anomaly-response`, `lambdas/dora` = GitHub collector + DORA math), shared libs, Fargate ETL (`analysis/`). |
 | `frontend/` | React + Vite SPA (the dashboard). |
 | `docs/` | Architecture, Well-Architected review, monitoring approach, attribution, ADRs. |
 | `scripts/` | Deploy/setup helpers. |
