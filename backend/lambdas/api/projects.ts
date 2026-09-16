@@ -73,9 +73,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }));
     const id = start.QueryExecutionId!;
 
-    // Poll up to ~25s.
+    // Poll up to ~12s — must finish within the Lambda's 15s timeout, otherwise the
+    // runtime kills the invocation mid-poll and the browser sees status 0 (F-002).
     let state: string | undefined;
-    for (let i = 0; i < 25; i++) {
+    for (let i = 0; i < 12; i++) {
       const ex = await athena.send(new GetQueryExecutionCommand({ QueryExecutionId: id }));
       state = ex.QueryExecution?.Status?.State;
       if (state === 'SUCCEEDED') break;
