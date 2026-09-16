@@ -9,6 +9,7 @@ import { AuthStack } from '../lib/stacks/auth-stack';
 import { ApiStack } from '../lib/stacks/api-stack';
 import { AutomationStack } from '../lib/stacks/automation-stack';
 import { EtlStack } from '../lib/stacks/etl-stack';
+import { DoraStack } from '../lib/stacks/dora-stack';
 import { FrontendStack } from '../lib/stacks/frontend-stack';
 
 const app = new cdk.App();
@@ -24,9 +25,13 @@ const data = new DataStack(app, `${prefix}-Data`, { env, cfg });
 const logging = new LoggingStack(app, `${prefix}-Logging`, { env, cfg, rawLogBucket: data.rawLogBucket });
 const auth = new AuthStack(app, `${prefix}-Auth`, { env, cfg });
 
+// DORA collector + GitHub token secret (independent of the Bedrock-log ETL path).
+const dora = new DoraStack(app, `${prefix}-Dora`, { env, cfg, tables: data.tables });
+
 const api = new ApiStack(app, `${prefix}-Api`, {
   env, cfg, userPool: auth.userPool, tables: data.tables, athena: data.athena,
   rawLogBucket: data.rawLogBucket, curatedBucket: data.curatedBucket, dataKey: data.dataKey,
+  dora: { collectorFn: dora.collectorFn, githubSecret: dora.githubSecret },
 });
 
 new AutomationStack(app, `${prefix}-Automation`, { env, cfg, tables: data.tables });

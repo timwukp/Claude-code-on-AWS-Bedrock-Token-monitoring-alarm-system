@@ -40,6 +40,15 @@ export class AuthStack extends cdk.Stack {
       },
     });
 
+    // Members of this group may manage DORA target repos (POST/DELETE /v1/dora/repos…). The API
+    // checks the `cognito:groups` claim server-side; the UI merely hides the admin controls.
+    // Add a user: aws cognito-idp admin-add-user-to-group --user-pool-id <id> --username <email> --group-name admin
+    new cognito.CfnUserPoolGroup(this, 'AdminGroup', {
+      userPoolId: this.userPool.userPoolId,
+      groupName: 'admin',
+      description: 'Dashboard administrators (manage DORA target repos)',
+    });
+
     new cdk.CfnOutput(this, 'UserPoolId', { value: this.userPool.userPoolId });
     new cdk.CfnOutput(this, 'UserPoolClientId', { value: this.userPoolClient.userPoolClientId });
   }

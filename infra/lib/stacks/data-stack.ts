@@ -16,6 +16,7 @@ export interface DataTables {
   readonly aggregates: dynamodb.Table; // pre-rolled KPIs for fast dashboard reads
   readonly anomalies: dynamodb.Table; // mirror of anomaly/alert events
   readonly tenants: dynamodb.Table; // tenant registry & config
+  readonly dora: dynamodb.Table; // DORA: tracked-repo registry + merged PRs + incident issues
 }
 
 /**
@@ -105,6 +106,7 @@ export class DataStack extends cdk.Stack {
       aggregates: table('Aggregates', 'tums-aggregates'),
       anomalies: table('Anomalies', 'tums-anomalies'),
       tenants: table('Tenants', 'tums-tenants'),
+      dora: table('Dora', 'tums-dora'),
     };
   }
 }

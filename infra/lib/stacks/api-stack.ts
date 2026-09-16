@@ -6,6 +6,7 @@ import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as kms from 'aws-cdk-lib/aws-kms';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 import { EnvConfig } from '../config';
 import { DataTables } from './data-stack';
@@ -19,6 +20,8 @@ interface Props extends cdk.StackProps {
   rawLogBucket: s3.Bucket;
   curatedBucket: s3.Bucket;
   dataKey: kms.Key;
+  /** From the Dora stack: the collector the API invokes on demand + the GitHub token secret. */
+  dora: { collectorFn: lambda.IFunction; githubSecret: secretsmanager.ISecret };
 }
 
 /**
@@ -31,7 +34,7 @@ export class ApiStack extends cdk.Stack {
 
   constructor(scope: Construct, id: string, props: Props) {
     super(scope, id, props);
-    const { cfg, userPool, tables, athena, rawLogBucket, curatedBucket, dataKey } = props;
+    const { cfg, userPool, tables, athena, rawLogBucket, curatedBucket, dataKey, dora } = props;
 
     // CORS: restrict to configured origins in production; fall back to "*" for demo.
     const allowedOrigins = cfg.api?.allowedOrigins?.length ? cfg.api.allowedOrigins : undefined;
@@ -40,6 +43,7 @@ export class ApiStack extends cdk.Stack {
       AGGREGATES_TABLE: tables.aggregates.tableName,
       ANOMALIES_TABLE: tables.anomalies.tableName,
       TENANTS_TABLE: tables.tenants.tableName,
+      DORA_TABLE: tables.dora.tableName,
       ATHENA_WORKGROUP: athena.workgroupName,
       GLUE_DATABASE: `token_monitoring_${cfg.env}`,
       // The Lambda response's Access-Control-Allow-Origin must match the preflight. A single
@@ -92,6 +96,30 @@ export class ApiStack extends cdk.Stack {
       actions: ['budgets:ViewBudget', 'budgets:DescribeBudget'],
       resources: [`arn:aws:budgets::${cfg.account}:budget/bedrock-monthly-${cfg.env}`],
     }));
+
+    // DORA metrics: registry (admin-managed repos) + on-read metric computation. Needs the
+    // table, permission to kick the collector asynchronously, and the GitHub token (to validate
+    // a repo exists when an admin adds it).
+    const doraFn = new NodejsFunction(this, 'DoraFn', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: lambdaEntry('api', 'dora.ts'),
+      projectRoot: BACKEND_ROOT,
+      depsLockFilePath: BACKEND_LOCK,
+      handler: 'handler',
+      memorySize: 512,
+      timeout: cdk.Duration.seconds(20),
+      tracing: lambda.Tracing.ACTIVE,
+      environment: {
+        ...commonEnv,
+        DORA_COLLECTOR_FUNCTION_NAME: dora.collectorFn.functionName,
+        GITHUB_TOKEN_SECRET_NAME: dora.githubSecret.secretName,
+        DORA_BACKFILL_DAYS: String(cfg.dora?.backfillDays ?? 180),
+      },
+      bundling: { minify: true, sourceMap: true },
+    });
+    tables.dora.grantReadWriteData(doraFn);
+    dora.collectorFn.grantInvoke(doraFn);
+    dora.githubSecret.grantRead(doraFn);
 
     // Least-privilege grants.
     tables.aggregates.grantReadData(usageFn);
@@ -160,6 +188,19 @@ export class ApiStack extends cdk.Stack {
     const queries = v1.addResource('queries');
     queries.addMethod('POST', new apigw.LambdaIntegration(queriesFn), opts);
     queries.addResource('{id}').addMethod('GET', new apigw.LambdaIntegration(queriesFn), opts);
+
+    // DORA metrics (#12). Reads for any signed-in user; repo management requires the Cognito
+    // `admin` group (enforced inside the Lambda via the cognito:groups claim).
+    const doraInt = new apigw.LambdaIntegration(doraFn);
+    const doraRes = v1.addResource('dora');
+    const doraRepos = doraRes.addResource('repos');
+    doraRepos.addMethod('GET', doraInt, opts);
+    doraRepos.addMethod('POST', doraInt, opts);
+    const doraRepo = doraRepos.addResource('{owner}').addResource('{name}');
+    doraRepo.addMethod('DELETE', doraInt, opts);
+    doraRepo.addResource('sync').addMethod('POST', doraInt, opts);
+    doraRes.addResource('metrics').addMethod('GET', doraInt, opts);
+    doraRes.addResource('overview').addMethod('GET', doraInt, opts);
 
     new cdk.CfnOutput(this, 'ApiUrl', { value: this.restApi.url });
   }

@@ -18,5 +18,17 @@
     "alertEmails": ["finops@example.com"]
   },
 
-  "enableAutoContainment": false
+  "enableAutoContainment": false,
+  "dora": {
+    "seedRepos": [
+      "timwukp/agent-skills-best-practice",
+      "timwukp/kiro-banking-best-practices",
+      "timwukp/dora-metrics-platform",
+      "timwukp/Java-framework-upgrade-workshop",
+      "timwukp/Kiro-SDLC-Scrum-best-practics"
+    ],
+    "githubTokenSecretName": "token-monitor-demo/github-token",
+    "scheduleHours": 6,
+    "backfillDays": 180
+  }
 }
