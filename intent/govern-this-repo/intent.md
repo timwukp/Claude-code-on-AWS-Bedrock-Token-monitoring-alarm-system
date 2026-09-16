@@ -3,7 +3,8 @@
 - **Slug:** govern-this-repo
 - **Author:** Claude (AI agent)
 - **Date:** 2026-09-22
-- **Status:** draft
+- **Accepted-by:** Tim WU
+- **Status:** accepted
 
 ## Problem
 
