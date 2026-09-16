@@ -2,7 +2,10 @@ import { APIGatewayProxyResult } from 'aws-lambda';
 
 /** Standard JSON response helpers with permissive CORS (tighten origin in production). */
 export const ok = (body: unknown): APIGatewayProxyResult => json(200, body);
+export const created = (body: unknown): APIGatewayProxyResult => json(201, body);
+export const accepted = (body: unknown): APIGatewayProxyResult => json(202, body);
 export const badRequest = (message: string): APIGatewayProxyResult => json(400, { error: message });
+export const forbidden = (message = 'Forbidden'): APIGatewayProxyResult => json(403, { error: message });
 export const notFound = (message = 'Not found'): APIGatewayProxyResult => json(404, { error: message });
 export const serverError = (message = 'Internal error'): APIGatewayProxyResult => json(500, { error: message });
 

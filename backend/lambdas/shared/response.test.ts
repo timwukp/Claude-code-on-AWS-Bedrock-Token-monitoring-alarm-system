@@ -20,9 +20,13 @@ describe('response CORS origin', () => {
   });
 
   it('sets the right status codes for the helpers', () => {
-    const { ok, badRequest, notFound, serverError } = load();
+    const { ok, created, accepted, badRequest, forbidden, notFound, serverError } = load();
     expect(ok({}).statusCode).toBe(200);
+    expect(created({}).statusCode).toBe(201);
+    expect(accepted({}).statusCode).toBe(202);
     expect(badRequest('x').statusCode).toBe(400);
+    expect(forbidden().statusCode).toBe(403);
+    expect(JSON.parse(forbidden().body)).toEqual({ error: 'Forbidden' });
     expect(notFound().statusCode).toBe(404);
     expect(serverError().statusCode).toBe(500);
   });
