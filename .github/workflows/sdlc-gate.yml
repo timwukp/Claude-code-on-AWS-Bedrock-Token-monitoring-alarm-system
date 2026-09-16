@@ -1,0 +1,238 @@
+name: SDLC Gate
+
+# Merge-time backstop for the AI-Native SDLC artifact chain. Unlike the local
+# PreToolUse hook (one session, fails OPEN), this runs for every PR regardless of
+# who or what produced the change, and fails CLOSED.
+#
+# Make it binding: Settings -> Branches -> branch protection rule for your default
+# branch -> "Require status checks to pass" -> select "sdlc-gate". Without that the
+# check is only advisory and a red X can still be merged.
+
+on:
+  pull_request:
+    # Deliberately UNFILTERED, and do not add `branches:` or `paths:` back.
+    #
+    # The comment above tells you to make `sdlc-gate` a REQUIRED status check. A
+    # required check only applies to pull requests, so any trigger condition a PR does
+    # not match leaves that PR waiting for a status that can never arrive -- not
+    # failed, BLOCKED, with nothing to re-run and no way forward but closing and
+    # reopening it. `branches: [main, master]` did exactly that to a stacked PR in this
+    # skill's own repository: opened onto a feature branch, auto-retargeted to main when
+    # the branch underneath merged, then permanently blocked on a check that had never
+    # been triggered.
+    #
+    # A `paths:` filter here fails the same way for a PR that touches only excluded
+    # files. Both filters look reasonable and both are fatal once the check is required.
+    #
+    # The cost of leaving it unfiltered is real and accepted: the gate runs on every
+    # pull request, including ones that change no source. That is cheap. A permanently
+    # unmergeable pull request is not.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sdlc-gate:
+    name: sdlc-gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the PR head
+        uses: actions/checkout@v4
+        with:
+          # Need the base commit too, to diff against it.
+          fetch-depth: 0
+
+      # The gate is stdlib-only on purpose: no install step, nothing to pin.
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: List files changed in this PR
+        run: |
+          set -euo pipefail
+          base="origin/${{ github.base_ref }}"
+          git fetch --no-tags --depth=0 origin "${{ github.base_ref }}" || true
+          # Three-dot diff = changes introduced by this branch, excluding whatever
+          # landed on the base since it was cut.
+          git diff --name-only "$base"...HEAD > changed-files.txt || \
+            git diff --name-only HEAD~1..HEAD > changed-files.txt
+          echo "--- changed files ---"
+          cat changed-files.txt
+          # The base this branch was cut from. Passed to the gate so an approval
+          # recorded as `Accepted-for: <base-sha>` can be checked against the state
+          # of the tree it was actually granted for. merge-base, not the base tip:
+          # the base moves after the branch is cut, and the approval was granted
+          # against the fork point, not against whatever main looks like at merge.
+          echo "base_sha=$(git merge-base "$base" HEAD || echo)" >> "$GITHUB_ENV"
+
+      - name: Validate the SDLC artifact chain
+        run: |
+          python3 .sdlc/scripts/sdlc_ci_gate.py \
+            --repo . \
+            --changed-files-from changed-files.txt \
+            --base-sha "${base_sha:-}"
+
+      - name: Run SDLC evals
+        # Every eval under evals/ must pass. This is where the "write the eval
+        # first, watch it fail, then implement" discipline becomes enforceable:
+        # a merge cannot happen with a red eval.
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          found=0
+          for f in evals/check_*.py; do
+            found=1
+            echo "== $f"
+            python3 "$f"
+          done
+          if [ "$found" = "0" ]; then
+            echo "no evals/check_*.py found — nothing to run"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # OPTIONAL: Stage 5 of the playbook — "AI in the PR review loop".
+  # Runs REVIEW.md's passes over the diff with Kiro CLI in headless mode.
+  #
+  # Deliberately a SEPARATE job and NOT a required check:
+  #   - it needs a KIRO_API_KEY secret (Pro/Pro+/Pro Max/Power only), and a repo
+  #     without one must not see every PR fail, so the step self-skips instead
+  #   - review findings inform a human; they do not approve or block. The agent
+  #     that wrote the code must not be the thing that passes it.
+  # Add it to branch protection ONLY if you accept an LLM in the merge path.
+  # ---------------------------------------------------------------------------
+  sdlc-review:
+    name: sdlc-review (advisory)
+    runs-on: ubuntu-latest
+    needs: sdlc-gate
+    # "Advisory" must be structurally true, not just a promise in a comment. Without this,
+    # any unexpected step failure inside this job marks the run failed -- and a maintainer
+    # who later adds this to branch protection, or who simply reads a red X, is misled about
+    # whether the change is mergeable.
+    continue-on-error: true
+    permissions:
+      contents: read
+      # NOTE: on a pull request from a FORK, GitHub grants the workflow a READ-ONLY token
+      # regardless of what is requested here. pull-requests: write therefore has no effect
+      # on fork PRs, and the comment step must tolerate a 403 rather than fail.
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Skip when no API key is configured
+        id: guard
+        env:
+          KIRO_API_KEY: ${{ secrets.KIRO_API_KEY }}
+        run: |
+          if [ -z "${KIRO_API_KEY:-}" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No KIRO_API_KEY secret — skipping the agentic review pass."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Kiro CLI
+        if: steps.guard.outputs.run == 'true'
+        run: |
+          curl -fsSL https://cli.kiro.dev/install | bash
+          # The installer drops the binary in ~/.local/bin, which is NOT on PATH
+          # in a fresh runner. Without this line every later step fails with
+          # "kiro-cli: command not found".
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Verify Kiro CLI
+        if: steps.guard.outputs.run == 'true'
+        env:
+          KIRO_API_KEY: ${{ secrets.KIRO_API_KEY }}
+        run: kiro-cli --version
+
+      - name: Get PR diff
+        if: steps.guard.outputs.run == 'true'
+        run: |
+          git diff "origin/${{ github.base_ref }}...HEAD" > /tmp/pr-diff.txt
+          echo "Diff size: $(wc -l < /tmp/pr-diff.txt) lines"
+
+      - name: Build the review prompt with the diff fenced as untrusted data
+        if: steps.guard.outputs.run == 'true'
+        run: |
+          # SECURITY: the diff is attacker-controlled -- anyone who can open a PR writes
+          # it -- and it is about to reach a model that is also receiving instructions.
+          # Do NOT interpolate it into the prompt directly. build_review_prompt.py wraps
+          # it in a per-run random delimiter, brackets it with trusted instructions before
+          # AND after, and strips zero-width / bidi-override codepoints that would hide
+          # injected text from a human reading the same diff.
+          #
+          # This MITIGATES prompt injection; it does not solve it. The real containment is
+          # --trust-tools=read,grep below, this job not being a required check, and a human
+          # merging. See references/threat-model.md.
+          cat intent/*/spec.md intent/*/plan.md > /tmp/specs.txt 2>/dev/null || true
+          python3 .sdlc/scripts/build_review_prompt.py \
+            --diff /tmp/pr-diff.txt \
+            --review REVIEW.md \
+            --specs /tmp/specs.txt \
+            --max-bytes 40000 \
+            > /tmp/review-prompt.txt
+          echo "Prompt built: $(wc -c < /tmp/review-prompt.txt) bytes"
+
+      - name: Review against REVIEW.md and the committed spec/plan
+        if: steps.guard.outputs.run == 'true'
+        env:
+          KIRO_API_KEY: ${{ secrets.KIRO_API_KEY }}
+        run: |
+          # --trust-tools=read,grep is least privilege: the reviewer reads, never writes,
+          # never runs a shell. '|| true' keeps this advisory -- a review problem must not
+          # fail the build, and must never be able to approve one either.
+          #
+          # Do NOT switch this job to pull_request_target. That hands a write-scoped token
+          # to a workflow processing an untrusted fork's diff and turns every injection
+          # finding in the threat model into repository compromise.
+          kiro-cli chat --no-interactive --trust-tools=read,grep \
+            "$(cat /tmp/review-prompt.txt)" \
+            > /tmp/sdlc-review.md 2>&1 || true
+          cat /tmp/sdlc-review.md
+
+      - name: Post the review as a PR comment
+        if: steps.guard.outputs.run == 'true' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let review = 'Review not available.';
+            try { review = fs.readFileSync('/tmp/sdlc-review.md', 'utf8'); } catch (e) {}
+            const body = [
+              '## 🤖 AI-Native SDLC review (advisory)',
+              '',
+              review,
+              '',
+              '---',
+              '_Findings inform the human approver; they do not approve or block._',
+              '_Passes are defined in `REVIEW.md`. Powered by Kiro CLI headless mode._',
+            ].join('\n');
+            // MUST NOT throw. On a pull request from a FORK, GitHub downgrades the
+            // workflow token to READ-ONLY regardless of the `permissions:` block above, so
+            // this POST returns 403. Unguarded, that fails the step -- and an "advisory"
+            // job that can fail the build is not advisory. Today the guard above also
+            // happens to skip on forks (no secret), but relying on that is accidental
+            // safety, not designed safety.
+            try {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            } catch (e) {
+              // Surfaced as a warning, never swallowed: a bare `catch {}` would hide a real
+              // permissions misconfiguration from the maintainer. Expected on fork PRs
+              // (read-only token); investigate if it happens on a same-repo branch.
+              core.warning(
+                'Could not post the review comment (expected on a fork PR: the token is ' +
+                'read-only). The review is still in the job log. Error: ' + e.message
+              );
+              core.summary.addHeading('AI-Native SDLC review (advisory)', 2);
+              core.summary.addRaw(review);
+              await core.summary.write();
+            }
