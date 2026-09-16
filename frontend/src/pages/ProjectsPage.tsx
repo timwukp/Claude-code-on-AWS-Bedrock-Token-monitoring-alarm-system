@@ -42,9 +42,9 @@ export function ProjectsPage() {
     <>
       <div className="kpi-grid">
         <Kpi label="Projects tracked" value={String(rows.length)} accent="var(--primary)" />
-        <Kpi label="Total tokens" value={fmtTokens(apiTotalTokens ?? totalTokens)} accent="var(--accent-blue)" />
-        <Kpi label="Total est. cost" value={fmtUsd(apiTotalUsd ?? totalCost)} accent="var(--accent-green)"
-             foot={apiTotalUsd != null ? 'per-model rates — same math as the Cost page' : 'uniform reference rates'} />
+        <Kpi label="Total tokens" value={fmtTokens(totalTokens)} accent="var(--accent-blue)" />
+        <Kpi label="Total est. cost" value={fmtUsd(totalCost)} accent="var(--accent-green)"
+             foot="per-model rates — same math as the Cost page" />
       </div>
 
       <Panel title="Usage by project"
