@@ -34,4 +34,15 @@ export async function getUserEmail(): Promise<string | null> {
   }
 }
 
+/** Whether the signed-in user belongs to the Cognito `admin` group (id-token `cognito:groups`). */
+export async function isAdminUser(): Promise<boolean> {
+  try {
+    const session = await fetchAuthSession();
+    const payload = session.tokens?.idToken?.payload as Record<string, unknown> | undefined;
+    const groups = payload?.['cognito:groups'];
+    const list = Array.isArray(groups) ? groups.map(String) : typeof groups === 'string' ? groups.split(',') : [];
+    return list.map((g) => g.trim()).includes('admin');
+  } catch { return false; }
+}
+
 export { signIn, signOut, getCurrentUser };
