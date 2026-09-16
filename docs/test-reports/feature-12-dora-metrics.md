@@ -6,7 +6,7 @@
 | **Branch / PR** | `feat/dora-metrics` |
 | **Date** | 2026-09-16 |
 | **Environment** | `dev` (us-east-1) — live stacks + live API + live CloudFront site |
-| **Result** | **PASS** (data collection starts once the operator pastes the GitHub PAT — see "Operator steps") |
+| **Result** | **PASS** — including real-data validation after the operator set the PAT |
 
 ## Scope
 
@@ -75,17 +75,36 @@ CloudFront (`E109P5BP3CW3XT`, invalidated).
 | `window=12` → **400** (`must be one of 7, 30, 90`); no auth → **401** | ✅ |
 | Live site serves new bundle; `/dora` route returns the SPA (200) | ✅ |
 
+## Real-data validation (2026-09-16, after the operator set the PAT)
+
+Full backfill (180 days, 6 repos) completed in one collector run: all repos `ok`, no rate
+limiting. Collected counts match a direct GitHub survey exactly (53 / 25+1 incident / 14+6 /
+1 / 24 / 2 — the workshop repo's second PR predates the backfill window).
+
+90-day window spot checks (all consistent with known repo history):
+
+| Repo | PRs | AI % | Deploy freq | Lead time | CFR | MTTR |
+|---|---|---|---|---|---|---|
+| agent-skills-best-practice | 38 | 34.2 (10 Claude Code, 3 Kiro) | 0.42/d **High** | 1.6 h **Elite** | 0% **Elite** | Unknown |
+| the monitoring repo itself | 10 | 100 (Claude Code) | 0.11/d **Medium** | 0.3 h **Elite** | 30% **Low** | 0.3 h **Elite** |
+| kiro-banking-best-practices | 1 | 100 | 0.01/d **Low** | 0.4 h **Elite** | 0% **Elite** | Unknown |
+| dora-metrics-platform, workshop, kiro-sdlc | 0 in window | — | Unknown tiers render cleanly | | | |
+
+Cross-checks: the monitoring repo's CFR = 2 reverts (the ABAC reverts, PRs #35/#36) + 1 incident
+issue over 10 merges — exactly right; its MTTR comes from that one closed incident. AI/Human
+cohort splits, per-assistant counts, recent-PR attribution (e.g. #68 claude-code, #67 kiro) and
+the weekly timeline all line up. Window filtering verified: dora-metrics-platform has 14 PRs in
+the 180-day store but 0 in the 90-day window (last push 2026-06-02).
+
 ## Operator steps (one-time, after merge)
 
-1. Paste a **fine-grained, read-only (public repos)** PAT:
-   `aws secretsmanager put-secret-value --secret-id token-monitor-demo/github-token --secret-string <PAT>`
-2. Admins: `aws cognito-idp admin-add-user-to-group --user-pool-id <UserPoolId> --username <email> --group-name admin`
-   (already done for `demo@tokenmonitor.local` in dev; sign out/in to refresh the token).
-3. Click **Sync now** on `/dora` (or wait ≤ 6 h for the schedule).
+All done in dev (PAT set via console 2026-09-16; demo user in the `admin` group). For a fresh
+environment: put a fine-grained read-only (public repos) PAT into the
+`token-monitor-demo/github-token` secret, add admins to the Cognito `admin` group, then Sync now.
 
 ## Verdict
 
 **PASS.** All gates green; every API path and UI state validated against the real dev
-environment. The "no data yet" path (placeholder token) is exercised end-to-end and renders
-instructional, non-alarming states. First real data collection intentionally awaits the
-operator-supplied PAT (secret values are never committed or set by automation).
+environment, first with the placeholder token (instructional "not configured" states) and then
+with real data after the operator supplied the PAT: full 6-repo backfill, counts matching a
+direct GitHub survey, correct AI/Human splits, tiers, CFR components and window filtering.
