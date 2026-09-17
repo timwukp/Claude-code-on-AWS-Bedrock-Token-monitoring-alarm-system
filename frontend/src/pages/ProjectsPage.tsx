@@ -45,6 +45,7 @@ export function ProjectsPage() {
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [elapsedSec, setElapsedSec] = useState(0);
 
   // Project registry (#13): names/cost centers/repo links; admins manage projects here.
   const [registry, setRegistry] = useState<RegistryProject[] | null>(null);
@@ -84,7 +85,12 @@ export function ProjectsPage() {
             usd: r.totalEstimatedUsd != null ? Number(r.totalEstimatedUsd) : null,
           })).catch(() => ({ tokens: null, usd: null })),
         ]);
-        const deadline = Date.now() + 120_000; // scans measured at 20-70s on real data (N-002)
+        // Athena latency is genuinely variable (measured 18s to several minutes under queue
+        // contention). Polling for up to 10 minutes with a visible elapsed timer is honest;
+        // failing at an arbitrary 2-minute mark while the query is still RUNNING was not (F-601).
+        const started = Date.now();
+        const deadline = started + 600_000;
+        setElapsedSec(0);
         for (;;) {
           if (cancelled) return;
           const res = await api.pollQuery(id);
@@ -104,7 +110,8 @@ export function ProjectsPage() {
           if (res.state === 'FAILED' || res.state === 'CANCELLED') {
             throw new Error('Athena query failed — most often the project_mapping table has not been created yet (see docs/ATTRIBUTION.md)');
           }
-          if (Date.now() > deadline) throw new Error('Athena query still running after 2 minutes — use Retry in a moment');
+          if (Date.now() > deadline) throw new Error('Athena query still running after 10 minutes — the workgroup may be saturated; use Retry later');
+          setElapsedSec(Math.round((Date.now() - started) / 1000));
           await new Promise((r) => setTimeout(r, 2500));
         }
       })().catch((e) => {
@@ -188,7 +195,7 @@ export function ProjectsPage() {
           {servedFrom && <span className="muted" style={{ fontSize: 12 }}>served from: <strong>{servedFrom}</strong></span>}
         </div>
         {bodyLoading ? (
-          <div className="empty"><span className="spinner" /> <span className="muted">loading {source === 'fast' ? 'DynamoDB rollups' : 'Athena scan — usually under a minute, occasionally up to two (running async)'}…</span></div>
+          <div className="empty"><span className="spinner" /> <span className="muted">{source === 'fast' ? 'loading DynamoDB rollups…' : `Athena scan running asynchronously — ${elapsedSec}s elapsed. Typically 20-60s; under queue contention it can take several minutes. You can switch to Fast meanwhile.`}</span></div>
         ) : error ? (
           <div className="empty"><div className="big">⚠️</div>Failed to load: {error}{' '}
             <button onClick={() => { setError(null); setRefreshKey((k) => k + 1); }}
