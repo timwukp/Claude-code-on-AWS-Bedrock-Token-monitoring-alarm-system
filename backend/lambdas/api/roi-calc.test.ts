@@ -18,9 +18,17 @@ const assume = (o: Partial<RoiAssumptions> = {}): RoiAssumptions => ({
   ...o, jCurve: { ...ROI_DEFAULTS.jCurve, ...(o.jCurve ?? {}) },
 });
 
+/**
+ * Every case below except the staffing guard describes a project whose OWN teamSize and loaded
+ * cost are configured — that is the only state in which a per-project composite ROI is computed.
+ */
+const roi = (
+  a: RoiWindowAggregates, b: RoiAssumptions,
+) => computeRoi(a, b, { perProjectStaffing: true });
+
 describe('computeRoi', () => {
   it('(1) annualizes spend and value terms but NOT training/J-curve', () => {
-    const r = computeRoi(agg(), assume({ trainingCostPerUser: 500, jCurve: { include: true, dropPct: 15, months: 3 } }));
+    const r = roi(agg(), assume({ trainingCostPerUser: 500, jCurve: { include: true, dropPct: 15, months: 3 } }));
     expect(r.annualizationFactor).toBeCloseTo(365 / 90, 2);
     expect(r.investment.aiSpend.valueUsd).toBe(Math.round(900 * (365 / 90))); // 3650
     expect(r.investment.training.valueUsd).toBe(2000); // one-time
@@ -28,7 +36,7 @@ describe('computeRoi', () => {
   });
 
   it('(2) renders negative ROI honestly (payback null when value ≤ 0)', () => {
-    const r = computeRoi(agg(), assume({ netTimeSavedPct: -20 }));
+    const r = roi(agg(), assume({ netTimeSavedPct: -20 }));
     expect(r.value.timeSaved.valueUsd).toBe(Math.round(4 * 208_000 * -0.2));
     expect(r.roiPct).toBeLessThan(0);
     expect(r.paybackMonths).toBeNull();
@@ -36,21 +44,21 @@ describe('computeRoi', () => {
 
   it('(3) stability regression reduces value (signed cost line)', () => {
     const base = { deploymentsPerYear: 120, cfrPct: 5, mttrHours: 2 };
-    const good = computeRoi(agg({ cfrPct: 5 }), assume({ baseline: base }));
-    const worse = computeRoi(agg({ cfrPct: 10 }), assume({ baseline: base }));
+    const good = roi(agg({ cfrPct: 5 }), assume({ baseline: base }));
+    const worse = roi(agg({ cfrPct: 10 }), assume({ baseline: base }));
     expect(worse.value.stabilityDelta.valueUsd).toBeLessThan(good.value.stabilityDelta.valueUsd);
     expect(worse.value.stabilityDelta.valueUsd).toBeLessThan(0);
     expect(worse.value.totalUsd).toBeLessThan(good.value.totalUsd);
   });
 
   it('(4) clamps netTimeSavedPct at the −100 floor with a note', () => {
-    const r = computeRoi(agg(), assume({ netTimeSavedPct: -250 }));
+    const r = roi(agg(), assume({ netTimeSavedPct: -250 }));
     expect(r.value.timeSaved.formulaInputs.netTimeSavedPct).toBe(-100);
     expect(r.notes.join(' ')).toMatch(/floor/);
   });
 
   it('(5) clamps revenueImpactPerFeature to [0.0001, 0.01]', () => {
-    const r = computeRoi(agg(), assume({
+    const r = roi(agg(), assume({
       revenueBase: 10_000_000, revenueImpactPerFeature: 0.5,
       baseline: { deploymentsPerYear: 60, cfrPct: 5, mttrHours: 2 },
     }));
@@ -58,33 +66,75 @@ describe('computeRoi', () => {
   });
 
   it('(6) zero-delivery window: unit economics null, throughput refused, break-even still computed', () => {
-    const r = computeRoi(agg({ mergedPrs: 0, deployments: 0, cfrPct: null, mttrHours: null, weeklyMergedPrs: [] }), assume());
+    const r = roi(agg({ mergedPrs: 0, deployments: 0, cfrPct: null, mttrHours: null, weeklyMergedPrs: [] }), assume());
     expect(r.unitEconomics.usdPerMergedPr).toBeNull();
     expect(r.unitEconomics.usdPerDeployment).toBeNull();
     expect(r.breakEven.hoursPerMonth).not.toBeNull();
   });
 
+  it('(6b) nothing shipped → the ROI headline is refused, not reported from assumptions alone', () => {
+    // Regression: with real spend and default assumptions this used to report a confident
+    // positive ROI for projects that shipped nothing in the window, because the time-saved term
+    // is assumption-only. Components and break-even must survive; the composite must not.
+    const r = roi(agg({ mergedPrs: 0, deployments: 0, cfrPct: null, mttrHours: null, weeklyMergedPrs: [] }), assume());
+    expect(r.roiPct).toBeNull();
+    expect(r.paybackMonths).toBeNull();
+    expect(r.refusals.join(' ')).toMatch(/nothing shipped in this window/);
+    expect(r.value.timeSaved.valueUsd).toBeGreaterThan(0); // the component is still disclosed
+    expect(r.investment.aiSpend.valueUsd).toBeGreaterThan(0);
+    expect(r.breakEven.hoursPerMonth).not.toBeNull();
+  });
+
+  it('(6c) one deployment is enough to make the composite computable again', () => {
+    const r = roi(agg({ mergedPrs: 0, deployments: 1, weeklyMergedPrs: [] }), assume());
+    expect(r.roiPct).not.toBeNull();
+    expect(r.refusals.join(' ')).not.toMatch(/nothing shipped/);
+  });
+
+  it('(6d) without the project’s own staffing the composite is refused, break-even survives', () => {
+    // Regression: teamSize/loadedCostPerYear fell back to a shared default, so every project
+    // claimed the same team's annual saving and the portfolio total was a multiple of a
+    // placeholder. Break-even is a threshold, not a value claim, so it still computes.
+    const r = computeRoi(agg(), assume());
+    expect(r.roiPct).toBeNull();
+    expect(r.paybackMonths).toBeNull();
+    expect(r.refusals.join(' ')).toMatch(/no staffing of its own configured/);
+    expect(r.breakEven.hoursPerMonth).not.toBeNull();
+    expect(computeRoi(agg(), assume(), { perProjectStaffing: true }).roiPct).not.toBeNull();
+  });
+
+  it('(6e) immaterial spend is refused instead of producing a four-digit percentage', () => {
+    // hourly = 100 → the floor is 12 engineer-hours a year = $1,200 of annualized investment.
+    const tiny = roi(agg({ spendUsd: 1, mergedPrs: 1 }), assume());
+    expect(tiny.roiPct).toBeNull();
+    expect(tiny.refusals.join(' ')).toMatch(/division noise/);
+    expect(tiny.investment.aiSpend.valueUsd).toBeGreaterThan(0); // still disclosed
+    // Just above the floor it computes again.
+    const ok = roi(agg({ spendUsd: 1_000, mergedPrs: 1 }), assume());
+    expect(ok.roiPct).not.toBeNull();
+  });
+
   it('(7) zero investment → roiPct null, no division blow-up', () => {
-    const r = computeRoi(agg({ spendUsd: 0 }), assume({ trainingCostPerUser: 0 }));
+    const r = roi(agg({ spendUsd: 0 }), assume({ trainingCostPerUser: 0 }));
     expect(r.roiPct).toBeNull();
     expect(r.refusals.join(' ')).toMatch(/investment is zero/);
   });
 
   it('(8) missing baseline → stability AND throughput refused with explicit notes', () => {
-    const r = computeRoi(agg(), assume({ revenueBase: 1_000_000 }));
+    const r = roi(agg(), assume({ revenueBase: 1_000_000 }));
     expect(r.value.stabilityDelta.valueUsd).toBe(0);
     expect(r.refusals.some((x) => x.includes('Stability delta'))).toBe(true);
     expect(r.refusals.some((x) => x.includes('baseline'))).toBe(true);
   });
 
   it('(9) jCurve.include=false excludes it from investment', () => {
-    const r = computeRoi(agg(), assume());
+    const r = roi(agg(), assume());
     expect(r.investment.jCurve.valueUsd).toBe(0);
   });
 
   it('(10) break-even arithmetic matches a hand fixture', () => {
     // 900 over 90d → monthly 900/90×30.44 = 304.4; hourly 208000/2080 = 100 → 3.044 h/mo
-    const r = computeRoi(agg(), assume());
+    const r = roi(agg(), assume());
     expect(r.breakEven.hoursPerMonth).toBeCloseTo(3.0, 1);
     // capacity: 4 × 173.33 = 693.3 h/mo → 3.044/693.3 ≈ 0.4%
     expect(r.breakEven.pctOfCapacity).toBeCloseTo(0.4, 1);
@@ -92,7 +142,7 @@ describe('computeRoi', () => {
   });
 
   it('(11) revenueBase=0 → throughput 0 with a refusal string', () => {
-    const r = computeRoi(agg(), assume({ baseline: { deploymentsPerYear: 60, cfrPct: 5, mttrHours: 2 } }));
+    const r = roi(agg(), assume({ baseline: { deploymentsPerYear: 60, cfrPct: 5, mttrHours: 2 } }));
     expect(r.value.throughput.valueUsd).toBe(0);
     expect(r.refusals.some((x) => x.includes('revenue base'))).toBe(true);
   });

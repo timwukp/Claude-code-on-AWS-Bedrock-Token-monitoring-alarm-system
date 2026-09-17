@@ -160,7 +160,17 @@ export function baselineFromHalves(
   return { deploymentsPerYear: (first / halfDays) * 365, cfrPct: cfrFirstHalfPct, mttrHours: mttrFirstHalfHours };
 }
 
-export function computeRoi(agg: RoiWindowAggregates, a: RoiAssumptions): RoiResult {
+/**
+ * Was this project's own staffing configured? The value side is dominated by
+ * teamSize × loadedCostPerYear, which is a property of THIS project's team. Falling back to a
+ * code or org default silently claims one team's annual saving once per project, so the
+ * portfolio total becomes a multiple of a placeholder. Without it the composite is refused.
+ */
+export interface RoiComputeOptions {
+  readonly perProjectStaffing?: boolean;
+}
+
+export function computeRoi(agg: RoiWindowAggregates, a: RoiAssumptions, opts: RoiComputeOptions = {}): RoiResult {
   const refusals: string[] = [];
   const notes: string[] = [];
   const k = 365 / agg.windowDays;
@@ -245,9 +255,45 @@ export function computeRoi(agg: RoiWindowAggregates, a: RoiAssumptions): RoiResu
 
   const valueTotal = timeSaved.valueUsd + throughput.valueUsd + stabilityDelta.valueUsd;
   const investmentTotal = aiSpend.valueUsd + training.valueUsd + jCurve.valueUsd;
-  const roiPct = investmentTotal > 0 ? round1(((valueTotal - investmentTotal) / investmentTotal) * 100) : null;
-  if (roiPct === null) refusals.push('ROI not computed: total investment is zero.');
-  const paybackMonths = investmentTotal > 0 && valueTotal > 0 ? round1((investmentTotal / valueTotal) * 12) : null;
+
+  // A window with NO shipped output cannot evidence a return, however plausible the
+  // assumptions are. Spend is measured; every surviving value term is then pure assumption with
+  // nothing in the telemetry anchoring it, so a composite ROI would read as a finding when it is
+  // only arithmetic on defaults. Refuse the headline, keep the components and the break-even
+  // view (which needs no delivery data) so the spend is still accountable.
+  const noShippedOutput = agg.mergedPrs === 0 && agg.deployments === 0;
+
+  // A ratio whose denominator approaches zero produces headline percentages in the thousands
+  // from a few dollars of spend. The floor is stated in the model's own units rather than as a
+  // magic constant: if a whole year of assistant spend is worth less than one engineer-hour per
+  // month, it is not a spending decision a percentage return can describe.
+  const annualInvestmentFloor = (a.loadedCostPerYear / HOURS_PER_YEAR) * 12;
+  const immaterialSpend = investmentTotal > 0 && investmentTotal < annualInvestmentFloor;
+
+  const computable = investmentTotal > 0 && !noShippedOutput && !immaterialSpend
+    && opts.perProjectStaffing === true;
+  const roiPct = computable ? round1(((valueTotal - investmentTotal) / investmentTotal) * 100) : null;
+  if (investmentTotal <= 0) refusals.push('ROI not computed: total investment is zero.');
+  else if (noShippedOutput) {
+    refusals.push(
+      'ROI not computed: nothing shipped in this window (no merged PRs, no deployments), so no '
+      + 'delivery evidence supports a return — only the measured spend and the break-even '
+      + 'threshold below are shown.',
+    );
+  } else if (immaterialSpend) {
+    refusals.push(
+      'ROI not computed: annualized investment is smaller than one engineer-hour per month, so a '
+      + 'percentage return would be division noise rather than a finding.',
+    );
+  } else if (opts.perProjectStaffing !== true) {
+    refusals.push(
+      'ROI not computed: this project has no staffing of its own configured (teamSize and loaded '
+      + 'cost per year). The value side scales with the team that actually worked here, so '
+      + 'borrowing a shared default would claim one team\'s saving once per project. Break-even '
+      + 'below needs no such assumption.',
+    );
+  }
+  const paybackMonths = computable && valueTotal > 0 ? round1((investmentTotal / valueTotal) * 12) : null;
 
   // ---- Break-even (the skeptic-proof lead view: two inputs, no revenue guess) ---------------
   const monthlySpend = (agg.spendUsd / agg.windowDays) * 30.44;

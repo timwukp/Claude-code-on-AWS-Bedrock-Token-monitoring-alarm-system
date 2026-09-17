@@ -50,6 +50,12 @@ const METHODOLOGY = {
     'Survey- or perception-based time savings (METR: devs believed +20% while measured −19%).',
     'A single cross-project productivity multiplier (DORA 2025: AI amplifies existing strengths/weaknesses).',
     'Causal AI-vs-human deltas from observational PR cohorts — run a holdout for causal claims.',
+    'A composite ROI for a window that shipped nothing — with no merged PRs and no deployments '
+      + 'the value side is assumption-only, so only the measured spend and break-even are shown.',
+    'A composite ROI for a project with no staffing of its own configured — borrowing a shared '
+      + 'teamSize would claim one team\'s saving once per project. Set it in the drawer below.',
+    'A percentage return on spend smaller than one engineer-hour per month — the ratio would be '
+      + 'division noise, so the measured spend is shown without one.',
   ],
   annualization: 'Rate-like terms scale by 365/window; one-time costs (training, J-curve) do not.',
 };
@@ -160,7 +166,10 @@ async function projects(event: APIGatewayProxyEvent): Promise<APIGatewayProxyRes
       weeklyMergedPrs: weeklyPrs(prs.filter((x) => x.mergedAt >= fromIso)),
     };
     const { assumptions, source } = mergeAssumptions(p, orgDefaults);
-    const roi = computeRoi(agg, assumptions);
+    // Per-project ROI needs the team that actually worked on THIS project; a shared default
+    // would claim one team's saving once per project (see computeRoi's staffing guard).
+    const perProjectStaffing = p.roi?.teamSize != null && p.roi?.loadedCostPerYear != null;
+    const roi = computeRoi(agg, assumptions, { perProjectStaffing });
     if (repos.length === 0) roi.refusals.push('No DORA-tracked repos linked — delivery-side terms are unavailable.');
     const bands = referenceBands(agg.weeklySpendUsd, agg.weeklyMergedPrs);
     const killFast = killFastFlag(agg.weeklySpendUsd, agg.weeklyMergedPrs);
