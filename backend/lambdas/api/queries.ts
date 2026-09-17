@@ -62,10 +62,10 @@ const TEMPLATES: Record<string, (tenantId: string, days: number) => string> = {
       COALESCE(m.project_name, l.requestMetadata['project_id'], 'untagged') AS project,
       COALESCE(m.cost_center, '—') AS cost_center,
       COUNT(DISTINCT l.requestMetadata['user_id']) AS users,
-      SUM(l.input.inputTokenCount + l.output.outputTokenCount) AS tokens,
-      SUM(l.input.inputTokenCount) * (${rateCase('inPerToken')})
-        + SUM(l.output.outputTokenCount) * (${rateCase('outPerToken')})
-        + SUM(COALESCE(l.input.cacheReadInputTokenCount, 0)) * (${rateCase('cacheReadPerToken')}) AS est_usd
+      COALESCE(SUM(COALESCE(l.input.inputTokenCount, 0) + COALESCE(l.output.outputTokenCount, 0)), 0) AS tokens,
+      COALESCE(SUM(COALESCE(l.input.inputTokenCount, 0)), 0) * (${rateCase('inPerToken')})
+        + COALESCE(SUM(COALESCE(l.output.outputTokenCount, 0)), 0) * (${rateCase('outPerToken')})
+        + COALESCE(SUM(COALESCE(l.input.cacheReadInputTokenCount, 0)), 0) * (${rateCase('cacheReadPerToken')}) AS est_usd
     FROM bedrock_invocation_logs l
     LEFT JOIN project_mapping m
       ON l.requestMetadata['project_id'] = m.project_id
