@@ -147,8 +147,8 @@ export function ProjectsPage() {
   // Keep the page frame (toggle stays clickable) while a source loads; only the table area spins.
   const bodyLoading = loading;
 
-  const totalTokens = rows.reduce((s, r) => s + (Number(r.tokens) || 0), 0);
-  const totalCost   = rows.reduce((s, r) => s + (Number(r.estimatedUsd) || 0), 0);
+  const totalTokens = apiTotalTokens ?? rows.reduce((s, r) => s + (Number(r.tokens) || 0), 0);
+  const totalCost   = apiTotalUsd ?? rows.reduce((s, r) => s + (Number(r.estimatedUsd) || 0), 0);
 
   return (
     <>
