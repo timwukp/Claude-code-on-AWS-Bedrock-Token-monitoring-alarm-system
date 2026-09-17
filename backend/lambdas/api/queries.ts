@@ -6,6 +6,7 @@ import {
   GetQueryResultsCommand,
 } from '@aws-sdk/client-athena';
 import { ok, badRequest, serverError } from '../shared/response';
+import { RATE_CARD } from './cost-calc';
 import { getTenantId } from '../shared/tenant';
 
 const athena = new AthenaClient({});
@@ -42,26 +43,36 @@ const tenantFilter = (tenantId: string) => {
   return `(COALESCE(requestMetadata['tenant'], identity.arn) = '${t}')`;
 };
 
+/**
+ * SQL CASE reproducing RATE_CARD's first-substring-match semantics (cost-calc.matchRate) so
+ * Athena and the Fast path price identically; unknown models fall through to 0.
+ */
+function rateCase(field: 'inPerToken' | 'outPerToken' | 'cacheReadPerToken'): string {
+  const whens = RATE_CARD.map((r) => `WHEN l.modelId LIKE '%${r.key.replace(/'/g, "''")}%' THEN ${r[field]}`).join(' ');
+  return `CASE ${whens} ELSE 0 END`;
+}
+
 const TEMPLATES: Record<string, (tenantId: string, days: number) => string> = {
-  // By-project attribution with the CSV name mapping — the same query the sync
-  // GET /v1/projects runs, exposed async because the scan takes 15-30s on real data,
-  // longer than any sane synchronous API timeout (F-002). All-time, like the sync path.
+  // By-project attribution with the CSV name mapping, exposed async because the scan takes
+  // 15-30s on real data (F-002). Prices PER MODEL with the same rate card the Fast path and the
+  // Cost page use (QA F-402: a flat reference rate + proportional scaling mis-priced projects
+  // with a cheaper model mix). Rows are (project, model); the client sums per project.
   byProject: (tenantId) => `
     SELECT
       COALESCE(m.project_name, l.requestMetadata['project_id'], 'untagged') AS project,
       COALESCE(m.cost_center, '—') AS cost_center,
       COUNT(DISTINCT l.requestMetadata['user_id']) AS users,
       SUM(l.input.inputTokenCount + l.output.outputTokenCount) AS tokens,
-      SUM(l.input.inputTokenCount) * 0.000005
-        + SUM(l.output.outputTokenCount) * 0.000025
-        + SUM(COALESCE(l.input.cacheReadInputTokenCount, 0)) * 0.0000005 AS est_usd
+      SUM(l.input.inputTokenCount) * (${rateCase('inPerToken')})
+        + SUM(l.output.outputTokenCount) * (${rateCase('outPerToken')})
+        + SUM(COALESCE(l.input.cacheReadInputTokenCount, 0)) * (${rateCase('cacheReadPerToken')}) AS est_usd
     FROM bedrock_invocation_logs l
     LEFT JOIN project_mapping m
       ON l.requestMetadata['project_id'] = m.project_id
     WHERE (COALESCE(l.requestMetadata['tenant'], l.identity.arn) = '${sanitizeTenant(tenantId)}')
-    GROUP BY 1, 2
+    GROUP BY 1, 2, l.modelId
     ORDER BY tokens DESC
-    LIMIT 100`,
+    LIMIT 500`,
 
   topModels: (tenantId, days) => `
     SELECT modelId,

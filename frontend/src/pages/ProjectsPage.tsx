@@ -7,17 +7,18 @@ import { fmtTokens, fmtUsd } from '../lib/format';
  * Usage attributed to projects/users. Attribution comes from Bedrock requestMetadata tags
  * (user_id, project_id) joined to a customer-supplied project mapping. See docs/ATTRIBUTION.md.
  */
-/** Scale flat-rate Athena rows so their sums match the per-model-rate totals (N-001). */
-function scaleToTotals(rows: any[], totals: { tokens: number | null; usd: number | null }): any[] {
-  const usdSum = rows.reduce((t, r) => t + (r.estimatedUsd ?? 0), 0);
-  const tokSum = rows.reduce((t, r) => t + (r.tokens ?? 0), 0);
-  const kUsd = totals.usd != null && usdSum > 0 ? totals.usd / usdSum : 1;
-  const kTok = totals.tokens != null && tokSum > 0 ? totals.tokens / tokSum : 1;
-  return rows.map((r) => ({
-    ...r,
-    tokens: Math.round((r.tokens ?? 0) * kTok),
-    estimatedUsd: Math.round((r.estimatedUsd ?? 0) * kUsd * 1e6) / 1e6,
-  }));
+/** Athena returns one row per (project, model); merge them per project (sum tokens/USD, max users). */
+function mergeProjectRows(rows: any[]): any[] {
+  const m = new Map<string, any>();
+  for (const r of rows) {
+    const key = `${r.projectName}|${r.costCenter}`;
+    const e = m.get(key) ?? { ...r, tokens: 0, estimatedUsd: 0, users: 0 };
+    e.tokens += r.tokens ?? 0;
+    e.estimatedUsd = Math.round((e.estimatedUsd + (r.estimatedUsd ?? 0)) * 1e6) / 1e6;
+    e.users = Math.max(e.users, r.users ?? 0);
+    m.set(key, e);
+  }
+  return [...m.values()].sort((a, b) => b.tokens - a.tokens);
 }
 
 /** Athena result rows → table rows (row 0 is the header). */
@@ -89,8 +90,11 @@ export function ProjectsPage() {
           const res = await api.pollQuery(id);
           if (res.state === 'SUCCEEDED') {
             if (cancelled) return;
-            setRows(scaleToTotals(mapAthenaProjectRows(res.rows ?? []), fastTotals));
-            setServedFrom('athena (async)');
+            // Rows arrive per (project, model) priced with the shared rate card — merge per
+            // project. No proportional scaling: both pipelines now use identical pricing, so any
+            // residual difference is real (ingest-window drift) and is shown, not hidden (F-402).
+            setRows(mergeProjectRows(mapAthenaProjectRows(res.rows ?? [])));
+            setServedFrom('athena (async, per-model pricing)');
             setApiTotalTokens(fastTotals.tokens);
             setApiTotalUsd(fastTotals.usd);
             setLoading(false);
@@ -147,8 +151,12 @@ export function ProjectsPage() {
   // Keep the page frame (toggle stays clickable) while a source loads; only the table area spins.
   const bodyLoading = loading;
 
-  const totalTokens = apiTotalTokens ?? rows.reduce((s, r) => s + (Number(r.tokens) || 0), 0);
-  const totalCost   = apiTotalUsd ?? rows.reduce((s, r) => s + (Number(r.estimatedUsd) || 0), 0);
+  // KPIs prefer the authoritative per-model rollup totals (same numbers as the Cost page);
+  // the rows' own sums are kept separately so any residual is disclosed, not hidden (F-401).
+  const rowsTokens = rows.reduce((s, r) => s + (Number(r.tokens) || 0), 0);
+  const rowsCost   = rows.reduce((s, r) => s + (Number(r.estimatedUsd) || 0), 0);
+  const totalTokens = apiTotalTokens ?? rowsTokens;
+  const totalCost   = apiTotalUsd ?? rowsCost;
 
   return (
     <>
@@ -156,7 +164,9 @@ export function ProjectsPage() {
         <Kpi label="Projects tracked" value={String(rows.length)} accent="var(--primary)" />
         <Kpi label="Total tokens" value={fmtTokens(totalTokens)} accent="var(--accent-blue)" />
         <Kpi label="Total est. cost" value={fmtUsd(totalCost)} accent="var(--accent-green)"
-             foot="per-model rates — same math as the Cost page" />
+             foot={apiTotalUsd != null && Math.abs(apiTotalUsd - rowsCost) > 0.5
+               ? `rows sum ${fmtUsd(rowsCost)} vs model rollups ${fmtUsd(apiTotalUsd)} — residual ${fmtUsd(Math.abs(apiTotalUsd - rowsCost))} is pre-project-tracking history`
+               : 'per-model rates — same rate card as the Cost page; rows reconcile to the model rollups'} />
       </div>
 
       <Panel title="Usage by project"
