@@ -4,10 +4,10 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, UpdateCommand, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { gunzipSync } from 'zlib';
 import {
-  parseLogFile, aggregate, aggregateByProject, aggregateByProjectDay,
-  AttributionMaps, InvocationRecord, UsageAggregate, ProjectAggregate, ProjectDayAggregate,
+  parseLogFile, aggregate, aggregateByProject, aggregateByProjectDay, detectRunaways,
+  AttributionMaps, InvocationRecord, RunawayHit, UsageAggregate, ProjectAggregate, ProjectDayAggregate,
 } from './parse';
-import { normalizeModelId } from '../api/cost-calc';
+import { computeModelCost, normalizeModelId } from '../api/cost-calc';
 import {
   PROFILE_PK, ProfileCacheItem, loadAttributionMaps, listProfiles, putProfile,
 } from '../shared/project-registry';
@@ -52,11 +52,15 @@ export const handler = async (): Promise<{ filesProcessed: number; aggregatesWri
   // so this run's records are attributed correctly instead of waiting for the next run.
   if (maps) await resolveUnseenProfiles(batches, maps);
 
+  const runaways: RunawayHit[] = [];
   for (const records of batches) {
     mergeInto(allAggregates, aggregate(records, maps ?? undefined));
     mergeProjects(allProjects, aggregateByProject(records, maps ?? undefined));
     mergeProjectDays(allProjectDays, aggregateByProjectDay(records, maps ?? undefined));
+    // Runaway-spend guard (#14): flag single requests above the absolute threshold.
+    runaways.push(...detectRunaways(records, maps ?? undefined, RUNAWAY_THRESHOLD_USD, priceRecordUsd));
   }
+  await writeRunawayAnomalies(runaways);
 
   let written = 0;
   for (const agg of allAggregates.values()) {
@@ -283,6 +287,45 @@ async function upsertProjectDayRollup(d: ProjectDayAggregate) {
       ':i': d.inputTokens, ':o': d.outputTokens, ':cr': d.cacheReadTokens, ':n': d.invocations,
     },
   }));
+}
+
+const RUNAWAY_THRESHOLD_USD = Number(process.env.RUNAWAY_REQUEST_USD ?? '50') || 0;
+const ANOMALIES_TABLE = process.env.ANOMALIES_TABLE;
+
+function priceRecordUsd(modelId: string, input: number, output: number, cacheRead: number): number {
+  return computeModelCost({
+    modelId: normalizeModelId(modelId), inputTokens: input, outputTokens: output, cacheReadTokens: cacheRead,
+  }).estimatedUsd;
+}
+
+/**
+ * Surface runaway requests on the existing Anomalies feed (#14). NOTE the key shape follows the
+ * READER (api/anomalies.ts: pk=TENANT#<t>, begins_with(sk,'ANOMALY#')) — the anomaly-response
+ * writer uses pk=TENANT#<t>#ANOMALY, which that reader can never return (pre-existing mismatch,
+ * documented in the feature-14 test report). Deterministic sk (requestId) → idempotent re-puts.
+ */
+async function writeRunawayAnomalies(hits: RunawayHit[]): Promise<void> {
+  if (!ANOMALIES_TABLE || hits.length === 0) return;
+  for (const h of hits) {
+    try {
+      await ddb.send(new PutCommand({
+        TableName: ANOMALIES_TABLE,
+        Item: {
+          pk: `TENANT#${h.tenant}`,
+          sk: `ANOMALY#${h.timestamp}#ai-spend-runaway#${h.requestId}`,
+          severity: 'WARNING',
+          type: 'ai-spend-runaway',
+          message: `Single request ${h.requestId} cost ~$${h.estimatedUsd.toFixed(2)} (model ${h.modelId}, project ${h.projectId}) — exceeds the $${RUNAWAY_THRESHOLD_USD} per-request threshold. Justified long task or runaway loop? Review the session.`,
+          detectedAt: h.timestamp,
+          projectId: h.projectId,
+          estimatedUsd: h.estimatedUsd,
+        },
+      }));
+    } catch (err) {
+      console.warn('aggregator: could not write runaway anomaly', h.requestId, (err as Error).message);
+    }
+  }
+  console.log(`aggregator: flagged ${hits.length} runaway request(s) above $${RUNAWAY_THRESHOLD_USD}`);
 }
 
 async function getWatermark(): Promise<number> {

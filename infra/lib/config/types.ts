@@ -105,5 +105,10 @@ export interface EnvConfig {
      * deliberate step, like enableAutoContainment).
      */
     readonly enforcementPolicy?: boolean;
+    /**
+     * Runaway-spend guard (#14): flag any single request whose estimated cost exceeds this,
+     * onto the Anomalies feed (a signal, never a gate). Default: 50. Set 0 to disable.
+     */
+    readonly runawayRequestUsd?: number;
   };
 }

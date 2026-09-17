@@ -46,6 +46,8 @@ export class EtlStack extends cdk.Stack {
       environment: {
         AGGREGATES_TABLE: tables.aggregates.tableName,
         TENANTS_TABLE: tables.tenants.tableName, // project registry: attribution maps + AIP cache (#13)
+        ANOMALIES_TABLE: tables.anomalies.tableName, // runaway-spend signals (#14)
+        RUNAWAY_REQUEST_USD: String(cfg.projects?.runawayRequestUsd ?? 50),
         RAW_LOG_BUCKET: rawLogBucket.bucketName,
         LOG_PREFIX: 'model-logs/AWSLogs/',
       },
@@ -54,6 +56,8 @@ export class EtlStack extends cdk.Stack {
     tables.aggregates.grantReadWriteData(aggregatorFn);
     // Project attribution (#13): read maps + write resolved-profile cache items.
     tables.tenants.grantReadWriteData(aggregatorFn);
+    // Runaway-spend guard (#14): write anomaly items to the feed.
+    tables.anomalies.grantWriteData(aggregatorFn);
     // Resolve application-inference-profile ARNs seen in logs → owning project (tag) + model.
     aggregatorFn.addToRolePolicy(new iam.PolicyStatement({
       actions: ['bedrock:GetInferenceProfile', 'bedrock:ListTagsForResource'],
