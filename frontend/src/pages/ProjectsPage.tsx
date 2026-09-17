@@ -160,7 +160,7 @@ export function ProjectsPage() {
       </div>
 
       <Panel title="Usage by project"
-             desc="Attributed via requestMetadata tags + project mapping (CSV). Fast = pre-aggregated DynamoDB rollups. Full = Athena scan over raw invocation logs joined to the name mapping (untagged traffic COALESCEs into 'untagged'). The two pipelines ingest at different times, so totals can differ slightly.">
+             desc="Attribution precedence per call: application inference profile tag → requestMetadata.project_id → identity hint → untagged. Fast = managed DynamoDB rollups (carries the full attribution, including the one-time historical treatment of pre-profile usage). Full = async Athena scan over the immutable raw logs — it reports what was true at call time, so pre-profile history stays 'untagged' there by design.">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
           <div style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
             {(['fast', 'full'] as const).map((s) => (
@@ -216,7 +216,7 @@ export function ProjectsPage() {
       </Panel>
 
       {isAdmin && registry && (
-        <Panel title="Manage projects" desc="Admin group only — a project names a cost bucket and links it to GitHub repos (DORA) and caller identities (log attribution)">
+        <Panel title="Manage projects" desc="Admin group only — a project is the join key of the platform: it names a cost bucket (cost center + inference-profile tag), links GitHub repos (DORA metrics), and optionally claims caller identities (attribution fallback for single-project principals)">
           <div className="inline-form" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
             <input value={form.id} onChange={(e) => setForm({ ...form, id: e.target.value })} placeholder="id (slug, e.g. token-monitoring)" style={{ minWidth: 200 }} disabled={adminBusy} aria-label="Project id" />
             <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Display name" style={{ minWidth: 200 }} disabled={adminBusy} aria-label="Project name" />
@@ -250,7 +250,9 @@ export function ProjectsPage() {
           <p className="muted" style={{ fontSize: 12, marginTop: 10 }}>
             Attribution precedence per call: application inference profile tag → requestMetadata.project_id →
             identity hint → untagged. Profiles are created by the infrastructure (Tums-*-Projects stack) and
-            resolved automatically; identity hints retro-attribute traffic that predates the profiles.
+            resolved automatically. Identity hints cover principals dedicated to one project; usage that
+            predates the profiles was attributed once, offline, by commit-time correlation — method and audit
+            artifact in docs/ATTRIBUTION.md.
           </p>
         </Panel>
       )}
