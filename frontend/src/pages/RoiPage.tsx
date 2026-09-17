@@ -22,8 +22,12 @@ const VERDICT_BADGE: Record<string, { cls: string; text: string }> = {
   unknown: { cls: 'neutral', text: 'needs labor-cost input' },
 };
 
-function bandText(b: Bands | null, fmt: (n: number) => string): string {
-  return b ? `${fmt(b.p25)} – ${fmt(b.p50)} – ${fmt(b.p90)}` : '—';
+/** Bands need >=4 weeks of the project's own history (see referenceBands). When they are refused,
+ *  say so — a bare em-dash reads as "zero" or "broken", which is the one thing this page must not
+ *  do with a missing input. `weeks` is omitted where the caller already prints the reason. */
+function bandText(b: Bands | null, fmt: (n: number) => string, weeks?: number): string {
+  if (b) return `${fmt(b.p25)} – ${fmt(b.p50)} – ${fmt(b.p90)}`;
+  return weeks == null ? '—' : `needs 4+ weeks of history (has ${weeks})`;
 }
 
 export function RoiPage() {
@@ -192,13 +196,20 @@ export function RoiPage() {
             <p className="muted" style={{ fontSize: 12 }}>
               Unit economics (operational, not ROI): {r.unitEconomics.usdPerMergedPr != null ? `${fmtUsd(r.unitEconomics.usdPerMergedPr)}/merged PR` : 'no merged PRs'}
               {r.unitEconomics.usdPerDeployment != null ? ` · ${fmtUsd(r.unitEconomics.usdPerDeployment)}/deployment` : ''}
-              {' '}· weekly $ band {bandText(p.bands.weeklyUsd, fmtUsdK)} ({p.bands.weeks} wks)
+              {' '}· weekly $ band {p.bands.weeklyUsd
+                ? `${bandText(p.bands.weeklyUsd, fmtUsdK)} (${p.bands.weeks} wks)`
+                : bandText(null, fmtUsdK, p.bands.weeks)}
             </p>
-            <button className="btn-sm" onClick={() => { setOpenDrawer(drawerOpen ? null : p.projectId); setDrawerForm({}); }}>
+            {/* aria-expanded/aria-controls are not decoration here: the drawer is a conditionally
+                rendered div, so without them neither a screen reader nor an automated UI checker
+                can tell an open drawer from a broken button. */}
+            <button className="btn-sm" aria-expanded={drawerOpen} aria-controls={`roi-assumptions-${p.projectId}`}
+                    onClick={() => { setOpenDrawer(drawerOpen ? null : p.projectId); setDrawerForm({}); }}>
               {drawerOpen ? 'Close assumptions' : 'Assumptions…'}
             </button>
             {drawerOpen && (
-              <div style={{ marginTop: 10 }}>
+              <div id={`roi-assumptions-${p.projectId}`} role="region" aria-label={`${p.name} ROI assumptions`}
+                   style={{ marginTop: 10 }}>
                 <table className="data">
                   <thead><tr><th>Assumption</th><th className="num">Effective value</th>{isAdmin && <th>Override</th>}</tr></thead>
                   <tbody>
