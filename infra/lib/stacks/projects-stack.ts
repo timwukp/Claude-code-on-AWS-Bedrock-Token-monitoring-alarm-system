@@ -28,21 +28,28 @@ export class ProjectsStack extends cdk.Stack {
     for (const project of seeds) {
       for (const crisId of project.models ?? []) {
         // "us.anthropic.claude-sonnet-4-6" -> short suffix "sonnet-4-6" for readable names/ids.
-        const short = crisId.split('.').pop()!.replace(/^claude-/, '');
+        // Dated ids carry a ":<version>" suffix (e.g. haiku-4-5-20251001-v1:0) — sanitize for
+        // the profile-name charset.
+        const short = crisId.split('.').pop()!.replace(/^claude-/, '').replace(/[^A-Za-z0-9-]/g, '-');
         const cfnId = `Aip-${project.id}-${short}`.replace(/[^A-Za-z0-9-]/g, '');
-        new bedrock.CfnApplicationInferenceProfile(this, cfnId, {
+        const profile = new bedrock.CfnApplicationInferenceProfile(this, cfnId, {
           inferenceProfileName: `tums-${cfg.env}-${project.id}-${short}`,
-          description: `Project "${project.name}" — ${crisId} (cost attribution via tag project=${project.id})`,
+          // CFN restricts Description to ^([0-9a-zA-Z:.][ _-]?)+$ — plain words only.
+          description: `Project ${project.id} cost attribution ${crisId}`,
           modelSource: {
             copyFrom: `arn:aws:bedrock:${cfg.region}:${cfg.account}:inference-profile/${crisId}`,
           },
           tags: [
-            { key: 'project', value: project.id },
+            // Key is deliberately NOT 'project': the app-wide cdk.Tags aspect stamps
+            // project=token-usage-monitoring on every resource (billing tag) and overrides a
+            // same-key resource tag — observed live. 'tums-project' is the attribution key;
+            // activate IT as the cost-allocation tag.
+            { key: 'tums-project', value: project.id },
             ...(project.costCenter ? [{ key: 'cost_center', value: project.costCenter }] : []),
           ],
         });
         new cdk.CfnOutput(this, `AipArn-${project.id}-${short}`.replace(/[^A-Za-z0-9-]/g, ''), {
-          value: cdk.Fn.getAtt(cfnId, 'InferenceProfileArn').toString(),
+          value: profile.attrInferenceProfileArn,
           description: `AIP for ${project.id} / ${crisId} — use as ANTHROPIC_MODEL in .claude/settings.json`,
         });
       }
@@ -63,7 +70,7 @@ export class ProjectsStack extends cdk.Stack {
             sid: 'OnlyProjectTaggedProfiles',
             actions: ['bedrock:InvokeModel', 'bedrock:InvokeModelWithResponseStream'],
             resources: [`arn:aws:bedrock:${cfg.region}:${cfg.account}:application-inference-profile/*`],
-            conditions: { StringEquals: { 'aws:ResourceTag/project': projectIds } },
+            conditions: { StringEquals: { 'aws:ResourceTag/tums-project': projectIds } },
           }),
           new iam.PolicyStatement({
             sid: 'FoundationModelsOnlyViaProfiles',

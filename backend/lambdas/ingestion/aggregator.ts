@@ -122,7 +122,7 @@ async function resolveUnseenProfiles(batches: InvocationRecord[][], maps: Attrib
         bedrock.send(new GetInferenceProfileCommand({ inferenceProfileIdentifier: arn })),
         bedrock.send(new ListTagsForResourceCommand({ resourceARN: arn })),
       ]);
-      const projectId = tags.tags?.find((t) => t.key === 'project')?.value ?? 'untagged';
+      const projectId = tags.tags?.find((t) => t.key === 'tums-project')?.value ?? 'untagged';
       const wrapped = prof.models?.[0]?.modelArn ?? '';
       const item: ProfileCacheItem = {
         pk: PROFILE_PK, sk: arn, type: 'profile', arn,
