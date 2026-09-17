@@ -1,0 +1,10 @@
+{
+  "//": "Project cost attribution (#13): copy over .claude/settings.json (KEEPING the hooks block below — it is the repo's SDLC write-time gate) and fill the ARNs from the Tums-<env>-Projects stack outputs (AipArn-*). Every Claude Code session in the clone then routes through the project's tagged inference profiles: zero per-call effort, and invocation logs + Cost Explorer attribute the usage to project=token-monitoring. In a private enterprise repo, commit the filled file; in this public repo the real values stay local because ARNs embed the AWS account id (put the env block in .claude/settings.local.json instead).",
+  "env": {
+    "CLAUDE_CODE_USE_BEDROCK": "1",
+    "AWS_REGION": "us-east-1",
+    "ANTHROPIC_MODEL": "arn:aws:bedrock:us-east-1:<ACCOUNT_ID>:application-inference-profile/<FABLE_AIP_ID>",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "arn:aws:bedrock:us-east-1:<ACCOUNT_ID>:application-inference-profile/<HAIKU_AIP_ID>"
+  },
+  "hooks": { "//": "merge with the existing PreToolUse sdlc hook from .claude/settings.json — do not drop it" }
+}

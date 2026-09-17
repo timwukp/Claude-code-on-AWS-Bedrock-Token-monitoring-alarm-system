@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** ad1c63ccad84fb8dad0d3d99f6112d1e22f9df97
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the merge-base after updating this branch with main (which by then carried the gate installation). Chain written
 retroactively — the change predates the gate's installation; see intent.md.
