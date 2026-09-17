@@ -3,15 +3,10 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { ok, serverError } from '../shared/response';
 import { getTenantId } from '../shared/tenant';
-import { summarizeCosts, normalizeModelId, TokenCounts, MODEL_RATES } from './cost-calc';
+import { summarizeCosts, normalizeModelId, TokenCounts } from './cost-calc';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = process.env.AGGREGATES_TABLE!;
-
-// F-201: rate card had no entry for gpt-5.6-sol, so its usage silently priced to $0.00.
-// Rates are USD per 1M tokens; cache reads bill at 0.1× the input rate (see cache-savings
-// logic in cost-calc.ts). Keyed by normalized id (region prefix stripped).
-MODEL_RATES['openai.gpt-5.6-sol'] = { input: 1.25, output: 10.0, cacheRead: 0.125 };
 
 /**
  * GET /v1/costs — estimated spend per model for the tenant, derived from token aggregates and a

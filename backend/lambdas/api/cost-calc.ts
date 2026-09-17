@@ -21,6 +21,11 @@ export const RATE_CARD: ModelRate[] = [
   { key: 'opus', inPerToken: 0.000005, outPerToken: 0.000025, cacheReadPerToken: 0.0000005 },
   { key: 'sonnet', inPerToken: 0.000003, outPerToken: 0.000015, cacheReadPerToken: 0.0000003 },
   { key: 'haiku', inPerToken: 0.000001, outPerToken: 0.000005, cacheReadPerToken: 0.0000001 },
+  // OpenAI models served on Bedrock (QA finding: gpt-5.6-sol usage priced to $0.00). Rates
+  // follow the published GPT-5-family on-demand pricing ($1.25/M in, $10/M out, 0.1× cache
+  // reads); confirm against aws.amazon.com/bedrock/pricing when adding successors.
+  { key: 'gpt-5.6-sol', inPerToken: 0.00000125, outPerToken: 0.00001, cacheReadPerToken: 0.000000125 },
+  { key: 'gpt-5', inPerToken: 0.00000125, outPerToken: 0.00001, cacheReadPerToken: 0.000000125 },
 ];
 
 const ZERO_RATE: ModelRate = { key: '', inPerToken: 0, outPerToken: 0, cacheReadPerToken: 0 };
