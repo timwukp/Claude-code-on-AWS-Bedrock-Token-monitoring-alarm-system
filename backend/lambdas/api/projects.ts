@@ -20,6 +20,11 @@ const AGGREGATES_TABLE = process.env.AGGREGATES_TABLE;
 // here — this is a uniform-rate approximation and will NOT match the Cost page total.
 const IN = 0.000005, OUT = 0.000025, CACHE = 0.0000005;
 
+// F-601: remember the in-flight Athena query per tenant (module scope survives warm
+// invocations) so a Retry resumes polling the SAME query instead of starting a new
+// full scan from scratch — restarting doubled the total wait to ~8-9 minutes.
+const inflightQueryByTenant = new Map<string, string>();
+
 /**
  * GET /v1/projects — usage attributed to projects, by joining Bedrock requestMetadata
  * (project_id / user_id) to a customer-supplied project mapping table (project_mapping),
@@ -59,10 +64,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       ORDER BY tokens DESC
       LIMIT 100`;
 
-    const start = await athena.send(new StartQueryExecutionCommand({
-      QueryString: sql, WorkGroup: WORKGROUP, QueryExecutionContext: { Database: DATABASE },
-    }));
-    const id = start.QueryExecutionId!;
+    let id = inflightQueryByTenant.get(tenantId);
+    if (!id) {
+      const start = await athena.send(new StartQueryExecutionCommand({
+        QueryString: sql, WorkGroup: WORKGROUP, QueryExecutionContext: { Database: DATABASE },
+      }));
+      id = start.QueryExecutionId!;
+      inflightQueryByTenant.set(tenantId, id);
+    }
 
     // Poll against a wall-clock deadline — iteration counting undercounts because each
     // loop also pays Athena API latency; must finish within the Lambda timeout (28s for this
@@ -73,8 +82,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     while (true) {
       const ex = await athena.send(new GetQueryExecutionCommand({ QueryExecutionId: id }));
       state = ex.QueryExecution?.Status?.State;
-      if (state === 'SUCCEEDED') break;
+      if (state === 'SUCCEEDED') { inflightQueryByTenant.delete(tenantId); break; }
       if (state === 'FAILED' || state === 'CANCELLED') {
+        inflightQueryByTenant.delete(tenantId);
         // Most common cause in a fresh deployment: project_mapping table not created yet.
         return ok({ projects: [], note: ex.QueryExecution?.Status?.StateChangeReason ?? state });
       }
