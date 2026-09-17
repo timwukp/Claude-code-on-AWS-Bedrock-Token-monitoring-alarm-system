@@ -55,6 +55,10 @@ implies; the magnitude depends on a given workload's cache-hit ratio.
 - **DORA metrics** per GitHub repo — deployment frequency, lead time, change failure rate, time to
   restore — each split into All / AI-assisted / Human-only PRs, to measure how teams working with
   AI coding assistants actually deliver; admins manage the tracked-repo list in the UI
+- **AI-coding ROI** per project — is the spend worth it? Break-even engineer-hours lead the page
+  (two inputs, no revenue guesses), then a component breakdown over measured spend and delivery
+  metrics, the −19%…+56% experimental bracket instead of an assumed multiplier, an explicit list
+  of what the page refuses to compute, and a reference-class budget estimator for a new project
 - Cognito sign-in; per-tenant isolation on every request
 
 ### Behind the scenes
@@ -72,7 +76,11 @@ implies; the magnitude depends on a given workload's cache-hit ratio.
   from GitHub (PAT in Secrets Manager) into DynamoDB; metrics computed on read
 - **Project cost attribution** — tagged application inference profiles per project (zero client
   effort, IAM-enforceable); Delivery × Cost per project on the DORA page ($/deployment)
-- **API** — 17 REST endpoints behind a Cognito authorizer, least-privilege IAM per function
+- **ROI model** — a read-only Lambda joining per-project spend rollups, per-repo DORA metrics and
+  customer-owned labor assumptions; every term is disclosed and refusable (see
+  [`docs/ROI_METHODOLOGY.md`](docs/ROI_METHODOLOGY.md)). A configurable per-request dollar
+  threshold flags runaway agent loops onto the Anomalies feed
+- **API** — 22 REST endpoints behind a Cognito authorizer, least-privilege IAM per function
 - **Forensics** — parameterized, tenant-scoped Athena query templates
 - **Integration** — a request-metadata tagging helper for project/user attribution
 - **Audit** — CloudTrail trail; CloudWatch metrics & alarms
