@@ -291,6 +291,8 @@ export function DoraPage() {
                     <p className="muted" style={{ fontSize: 12, marginTop: 10 }}>
                       Change failures in window: {m.changeFailureRate.all.reverts} revert PR(s), {m.changeFailureRate.all.hotfixes} hotfix PR(s),{' '}
                       {m.changeFailureRate.all.incidents} incident issue(s) (labelled bug/incident). Incidents cannot be attributed to a cohort, so they count only under All.
+                      Coding / Review / Total are each independent medians over the cohort's PRs, so the stage columns need not sum to the total
+                      (e.g. half the PRs spend their time coding, the other half in review → both stage medians can be near zero while the total median is hours).
                     </p>
                   </Panel>
 

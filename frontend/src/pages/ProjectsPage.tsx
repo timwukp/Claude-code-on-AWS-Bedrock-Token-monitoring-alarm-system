@@ -7,6 +7,19 @@ import { fmtTokens, fmtUsd } from '../lib/format';
  * Usage attributed to projects/users. Attribution comes from Bedrock requestMetadata tags
  * (user_id, project_id) joined to a customer-supplied project mapping. See docs/ATTRIBUTION.md.
  */
+/** Scale flat-rate Athena rows so their sums match the per-model-rate totals (N-001). */
+function scaleToTotals(rows: any[], totals: { tokens: number | null; usd: number | null }): any[] {
+  const usdSum = rows.reduce((t, r) => t + (r.estimatedUsd ?? 0), 0);
+  const tokSum = rows.reduce((t, r) => t + (r.tokens ?? 0), 0);
+  const kUsd = totals.usd != null && usdSum > 0 ? totals.usd / usdSum : 1;
+  const kTok = totals.tokens != null && tokSum > 0 ? totals.tokens / tokSum : 1;
+  return rows.map((r) => ({
+    ...r,
+    tokens: Math.round((r.tokens ?? 0) * kTok),
+    estimatedUsd: Math.round((r.estimatedUsd ?? 0) * kUsd * 1e6) / 1e6,
+  }));
+}
+
 /** Athena result rows → table rows (row 0 is the header). */
 function mapAthenaProjectRows(rows: any[]): any[] {
   return rows.slice(1).map((r) => {
@@ -52,24 +65,34 @@ export function ProjectsPage() {
       // 15-30s on real data, longer than any sane synchronous API timeout; the old sync path
       // hit the Lambda timeout mid-poll and the browser surfaced status 0 / "Failed to fetch".
       (async () => {
-        const { id } = await api.startQuery('byProject', 90);
-        const deadline = Date.now() + 75_000;
+        // Kick the scan and, in parallel, fetch the authoritative per-model totals the Fast
+        // path uses — Athena rows are priced at flat reference rates, so they are scaled to
+        // these totals exactly like the old sync path did; Fast and Full then agree on Est.
+        // USD by construction (QA finding N-001).
+        const [{ id }, fastTotals] = await Promise.all([
+          api.startQuery('byProject', 90),
+          api.projects('fast').then((r) => ({
+            tokens: r.totalTokens != null ? Number(r.totalTokens) : null,
+            usd: r.totalEstimatedUsd != null ? Number(r.totalEstimatedUsd) : null,
+          })).catch(() => ({ tokens: null, usd: null })),
+        ]);
+        const deadline = Date.now() + 120_000; // scans measured at 20-70s on real data (N-002)
         for (;;) {
           if (cancelled) return;
           const res = await api.pollQuery(id);
           if (res.state === 'SUCCEEDED') {
             if (cancelled) return;
-            setRows(mapAthenaProjectRows(res.rows ?? []));
+            setRows(scaleToTotals(mapAthenaProjectRows(res.rows ?? []), fastTotals));
             setServedFrom('athena (async)');
-            setApiTotalTokens(null);
-            setApiTotalUsd(null);
+            setApiTotalTokens(fastTotals.tokens);
+            setApiTotalUsd(fastTotals.usd);
             setLoading(false);
             return;
           }
           if (res.state === 'FAILED' || res.state === 'CANCELLED') {
             throw new Error('Athena query failed — most often the project_mapping table has not been created yet (see docs/ATTRIBUTION.md)');
           }
-          if (Date.now() > deadline) throw new Error('Athena query still running after 75s — use Retry in a moment');
+          if (Date.now() > deadline) throw new Error('Athena query still running after 2 minutes — use Retry in a moment');
           await new Promise((r) => setTimeout(r, 2500));
         }
       })().catch((e) => {
@@ -112,7 +135,7 @@ export function ProjectsPage() {
           {servedFrom && <span className="muted" style={{ fontSize: 12 }}>served from: <strong>{servedFrom}</strong></span>}
         </div>
         {bodyLoading ? (
-          <div className="empty"><span className="spinner" /> <span className="muted">loading {source === 'fast' ? 'DynamoDB rollups' : 'Athena scan (typically 15-30s — running async)'}…</span></div>
+          <div className="empty"><span className="spinner" /> <span className="muted">loading {source === 'fast' ? 'DynamoDB rollups' : 'Athena scan — usually under a minute, occasionally up to two (running async)'}…</span></div>
         ) : error ? (
           <div className="empty"><div className="big">⚠️</div>Failed to load: {error}{' '}
             <button onClick={() => { setError(null); setRefreshKey((k) => k + 1); }}
