@@ -90,18 +90,12 @@ export function ProjectsPage() {
           const res = await api.pollQuery(id);
           if (res.state === 'SUCCEEDED') {
             if (cancelled) return;
-            // Rows arrive per (project, model) priced at flat reference rates — merge per
-            // project, then scale USD to the authoritative per-model rollup totals (same
-            // numbers as the Cost page). Tokens reconcile exactly across pipelines, so the
-            // USD residual is a pricing artifact, not missing history (F-501, restores N-001).
-            const merged = mergeProjectRows(mapAthenaProjectRows(res.rows ?? []));
-            const rowsUsd = merged.reduce((s, r) => s + (r.estimatedUsd || 0), 0);
-            if (fastTotals.usd != null && rowsUsd > 0) {
-              const k = fastTotals.usd / rowsUsd;
-              for (const r of merged) r.estimatedUsd = Math.round(r.estimatedUsd * k * 1e6) / 1e6;
-            }
-            setRows(merged);
-            setServedFrom('athena (async, scaled to model rollups)');
+            // Rows arrive per (project, model) priced with the SAME rate card as the rollups;
+            // the SQL resolves application-inference-profile ARNs to their underlying model via
+            // the registry cache, so both pipelines price identically (F-501 root cause). No
+            // proportional scaling — any residual is real and is disclosed in the KPI footer.
+            setRows(mergeProjectRows(mapAthenaProjectRows(res.rows ?? [])));
+            setServedFrom('athena (async, per-model pricing)');
             setApiTotalTokens(fastTotals.tokens);
             setApiTotalUsd(fastTotals.usd);
             setLoading(false);

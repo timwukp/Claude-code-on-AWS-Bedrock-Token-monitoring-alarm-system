@@ -156,6 +156,23 @@ export class ApiStack extends cdk.Stack {
     });
     tables.tenants.grantReadWriteData(projectRegistryFn);
 
+    // AI-coding ROI (#14): read-only joins over registry + PROJDAY + DORA — least privilege.
+    const roiFn = new NodejsFunction(this, 'RoiFn', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: lambdaEntry('api', 'roi.ts'),
+      projectRoot: BACKEND_ROOT,
+      depsLockFilePath: BACKEND_LOCK,
+      handler: 'handler',
+      memorySize: 512,
+      timeout: cdk.Duration.seconds(20),
+      tracing: lambda.Tracing.ACTIVE,
+      environment: commonEnv,
+      bundling: { minify: true, sourceMap: true },
+    });
+    tables.tenants.grantReadData(roiFn);
+    tables.aggregates.grantReadData(roiFn);
+    tables.dora.grantReadData(roiFn);
+
     // Least-privilege grants.
     tables.aggregates.grantReadData(usageFn);
     tables.aggregates.grantReadData(costsFn);
@@ -189,6 +206,7 @@ export class ApiStack extends cdk.Stack {
     grantAthena(projectsFn);
     curatedBucket.grantRead(projectsFn); // project_mapping CSV lives in the curated bucket
     curatedBucket.grantRead(queriesFn); // byProject template joins the same mapping CSV (F-002)
+    tables.tenants.grantReadData(queriesFn); // byProject resolves AIP ARNs via the registry profile cache (F-501)
     tables.aggregates.grantReadData(projectsFn); // #7 fast path reads PROJECT rollups from DynamoDB
     tables.tenants.grantReadData(projectsFn); // #13 registry names/cost centers for fast-path rows
 
@@ -227,6 +245,15 @@ export class ApiStack extends cdk.Stack {
     registry.addMethod('GET', registryInt, opts);
     registry.addMethod('POST', registryInt, opts);
     registry.addResource('{id}').addMethod('DELETE', registryInt, opts);
+    const regDefaults = registry.addResource('defaults');
+    regDefaults.addMethod('GET', registryInt, opts);
+    regDefaults.addMethod('PUT', registryInt, opts);
+
+    // ROI (#14). Reads for any signed-in user.
+    const roiInt = new apigw.LambdaIntegration(roiFn);
+    const roiRes = v1.addResource('roi');
+    roiRes.addResource('projects').addMethod('GET', roiInt, opts);
+    roiRes.addResource('estimate').addMethod('GET', roiInt, opts);
     v1.addResource('quotas').addMethod('GET', new apigw.LambdaIntegration(quotasFn), opts);
     v1.addResource('governance').addMethod('GET', new apigw.LambdaIntegration(governanceFn), opts);
     const queries = v1.addResource('queries');

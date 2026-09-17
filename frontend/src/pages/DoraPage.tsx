@@ -152,10 +152,26 @@ export function DoraPage() {
   const tl = m?.timeline ?? [];
   const noData = !!m && m.sample.mergedPrs === 0;
 
-  const kpiFoot = (s: { all: MetricValue; ai: MetricValue; human: MetricValue }, kind: 'df' | 'lt' | 'cfr' | 'mttr') =>
-    s.all.n === 0
-      ? `Tier: Unknown · no ${kind === 'mttr' ? 'recovery events' : 'merged PRs'} in window`
-      : <>Tier: <strong>{s.all.tier}</strong> · AI {fmtMetric(s.ai, kind)} · Human {fmtMetric(s.human, kind)} · n={s.all.n}</>;
+  // Plain-language footers: say what the number means before naming the tier.
+  const perWeek = (perDay: number | null) => (perDay == null ? '—' : `${(perDay * 7).toFixed(1)} / week`);
+  const kpiFoot = (s: { all: MetricValue; ai: MetricValue; human: MetricValue }, kind: 'df' | 'lt' | 'cfr' | 'mttr') => {
+    if (s.all.n === 0) {
+      return kind === 'mttr'
+        ? 'Nothing to restore from — no hotfixes or incidents in this window'
+        : `No PRs merged to the default branch in the last ${windowDays} days`;
+    }
+    const tier = <>DORA tier: <strong>{s.all.tier}</strong></>;
+    switch (kind) {
+      case 'df':
+        return <>{s.all.n} merged PRs in {windowDays} days ≈ {perWeek(s.all.value)} · {tier} · AI-assisted {s.ai.n} · human-only {s.human.n}</>;
+      case 'lt':
+        return <>median from first commit to merge · AI-assisted {fmtHours(s.ai.value)} · human-only {fmtHours(s.human.value)} · {tier}</>;
+      case 'cfr':
+        return <>{Math.round(((s.all.value ?? 0) / 100) * s.all.n)} of {s.all.n} changes needed a revert, hotfix or caused an incident · {tier}</>;
+      default:
+        return <>median time from problem to fix, over {s.all.n} recovery event{s.all.n === 1 ? '' : 's'} · {tier}</>;
+    }
+  };
 
   return (
     <>
@@ -228,20 +244,26 @@ export function DoraPage() {
               ) : null}
 
               <div className="kpi-grid">
-                <Kpi label="Deployment frequency" value={perDay(m.deploymentFrequency.all.perDay)}
+                <Kpi label="How often do we ship?" value={m.deploymentFrequency.all.n === 0 ? '—' : perWeek(m.deploymentFrequency.all.perDay)}
                      accent={TIER_ACCENT[m.deploymentFrequency.all.tier]} foot={kpiFoot(m.deploymentFrequency, 'df')} />
-                <Kpi label="Lead time for changes" value={fmtHours(m.leadTime.all.value)}
+                <Kpi label="How fast does a change reach main?" value={fmtHours(m.leadTime.all.value)}
                      accent={TIER_ACCENT[m.leadTime.all.tier]} foot={kpiFoot(m.leadTime, 'lt')} />
-                <Kpi label="Change failure rate" value={fmtPct(m.changeFailureRate.all.value)}
+                <Kpi label="How often does a change break things?" value={fmtPct(m.changeFailureRate.all.value)}
                      accent={TIER_ACCENT[m.changeFailureRate.all.tier]} foot={kpiFoot(m.changeFailureRate, 'cfr')} />
-                <Kpi label="Time to restore" value={fmtHours(m.mttr.all.value)}
+                <Kpi label="How quickly do we recover?" value={fmtHours(m.mttr.all.value)}
                      accent={TIER_ACCENT[m.mttr.all.tier]} foot={kpiFoot(m.mttr, 'mttr')} />
-                <Kpi label="AI participation" value={fmtPct(m.aiParticipationPct)} accent="var(--primary)"
+                <Kpi label="How much did AI help write it?" value={fmtPct(m.aiParticipationPct)} accent="var(--primary)"
                      foot={m.sample.mergedPrs === 0 ? 'no merged PRs in window'
-                       : (Object.entries(m.byAssistant) as [Exclude<AssistedBy, null>, number][])
-                           .filter(([, n]) => n > 0).map(([k, n]) => `${ASSISTANT_LABEL[k]} ${n}`).join(' · ') || 'no AI-assisted PRs detected'} />
+                       : <>{Object.values(m.byAssistant).reduce((a, b) => a + b, 0)} of {m.sample.mergedPrs} PRs had an AI assistant
+                         {(Object.entries(m.byAssistant) as [Exclude<AssistedBy, null>, number][]).filter(([, n]) => n > 0).length
+                           ? <> ({(Object.entries(m.byAssistant) as [Exclude<AssistedBy, null>, number][]).filter(([, n]) => n > 0).map(([k, n]) => `${ASSISTANT_LABEL[k]} ${n}`).join(' · ')})</> : null}</>} />
               </div>
 
+              <p className="muted" style={{ fontSize: 12, marginTop: -12 }}>
+                These are the four DORA metrics (deployment frequency, lead time for changes, change failure rate, time to
+                restore) in plain words. A "deployment" here is a PR merged to the default branch. Tiers are the DORA
+                State of DevOps bands — Elite is best.
+              </p>
               {noData ? (
                 <div className="empty">
                   <div className="big">📭</div>

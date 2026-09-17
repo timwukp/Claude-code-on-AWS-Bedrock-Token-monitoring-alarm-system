@@ -41,13 +41,15 @@ branch is cut from it. Design approved in plan mode 2026-09-17 with four owner d
 
 ### Frontend
 18. `frontend/src/api/client.ts` — RegistryProject/DoraProjectRow types + 4 calls
-19. `frontend/src/pages/DoraPage.tsx` — "Projects — delivery × cost" panel
+19. `frontend/src/pages/DoraPage.tsx` — "Projects — delivery × cost" panel; KPI labels/footers rewritten in plain
+    language (owner review: "0.90/day" was not understandable — now "6.3 / week · 27 merged PRs in 30 days")
 20. `frontend/src/pages/ProjectsPage.tsx` — registry names + admin registry panel
 21. `frontend/src/main.tsx` — By-Project page subtitle names the real attribution mechanisms
     (inference profiles, request metadata, registry) instead of the retired CSV-only wording
 22. `backend/lambdas/api/queries.ts` — the async `byProject` Athena template prices per model
-    from RATE_CARD (single pricing source) so the Full view agrees with the Fast view and the
-    Cost page — QA finding F-402 raised against this feature's By-Project changes
+    from RATE_CARD (single pricing source) and resolves application-inference-profile ARNs via
+    the registry cache, so the Full view agrees with the Fast view and the Cost page — QA
+    findings F-402 / F-501 raised against this feature's By-Project changes
 
 Non-source riders: `infra/lib/config/ci.json`, `infra/lib/config/example.env.json`,
 `backend/package.json`, `backend/package-lock.json` (dep: @aws-sdk/client-bedrock),
