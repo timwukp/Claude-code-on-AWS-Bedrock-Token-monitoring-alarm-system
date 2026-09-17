@@ -236,3 +236,52 @@ export function aggregateByProjectDay(
   }
   return map;
 }
+
+/** One suspicious request flagged by the runaway guard (#14). */
+export interface RunawayHit {
+  requestId: string;
+  tenant: string;
+  projectId: string;
+  modelId: string;
+  estimatedUsd: number;
+  timestamp: string;
+}
+
+/**
+ * Runaway-spend guard (#14): flag single requests whose estimated cost exceeds an absolute
+ * threshold — real-world incidents show one agent request burning thousands of dollars in
+ * hours. Pure: the caller supplies the pricing function so this module stays AWS-free and the
+ * rate card stays in cost-calc. A signal for the anomalies feed, never a gate.
+ */
+export function detectRunaways(
+  records: readonly InvocationRecord[],
+  maps: AttributionMaps | undefined,
+  thresholdUsd: number,
+  priceUsd: (modelId: string, input: number, output: number, cacheRead: number) => number,
+): RunawayHit[] {
+  if (!(thresholdUsd > 0)) return [];
+  const hits: RunawayHit[] = [];
+  const seen = new Set<string>();
+  for (const r of records) {
+    if (seen.has(r.requestId)) continue;
+    seen.add(r.requestId);
+    const { projectId, effectiveModelId } = deriveProject(r, maps);
+    const usd = priceUsd(
+      effectiveModelId,
+      r.input?.inputTokenCount ?? 0,
+      r.output?.outputTokenCount ?? 0,
+      r.input?.cacheReadInputTokenCount ?? 0,
+    );
+    if (usd > thresholdUsd) {
+      hits.push({
+        requestId: r.requestId,
+        tenant: tenantOf(r),
+        projectId,
+        modelId: effectiveModelId,
+        estimatedUsd: Math.round(usd * 100) / 100,
+        timestamp: r.timestamp,
+      });
+    }
+  }
+  return hits;
+}

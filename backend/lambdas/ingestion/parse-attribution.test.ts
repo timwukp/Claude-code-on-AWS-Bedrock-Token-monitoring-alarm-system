@@ -76,3 +76,27 @@ describe('day bucketing', () => {
     expect([...m.values()].every((v) => v.modelId === 'us.anthropic.claude-sonnet-4-6')).toBe(true);
   });
 });
+
+describe('detectRunaways (#14)', () => {
+  const price = (modelId: string, i: number, o: number, c: number) =>
+    modelId.includes('sonnet') ? i * 3e-6 + o * 15e-6 + c * 3e-7 : 0;
+  it('flags only requests above the threshold, prices the AIP-resolved model, de-dups requestIds', () => {
+    const big = rec({ modelId: AIP, requestId: 'big', input: { inputTokenCount: 20_000_000 } }); // $60 via resolved sonnet
+    const small = rec({ requestId: 'small' }); // ~0.0006
+    const hits = deriveRunaways([big, small, big]);
+    expect(hits).toHaveLength(1);
+    expect(hits[0]).toMatchObject({ requestId: 'big', projectId: 'token-monitoring', modelId: 'us.anthropic.claude-sonnet-4-6' });
+    expect(hits[0].estimatedUsd).toBeCloseTo(60, 1);
+  });
+  it('threshold boundary is exclusive and non-positive thresholds disable the guard', () => {
+    const exactly = rec({ requestId: 'x', input: { inputTokenCount: 16_666_666 }, output: { outputTokenCount: 0 } }); // ×3e-6 = $49.999998
+    expect(deriveRunaways([exactly], 50)).toHaveLength(0);
+    expect(deriveRunaways([exactly], 49.99)).toHaveLength(1);
+    expect(deriveRunaways([exactly], 0)).toHaveLength(0);
+  });
+  function deriveRunaways(rs: InvocationRecord[], threshold = 50) {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { detectRunaways } = require('./parse');
+    return detectRunaways(rs, maps(), threshold, price);
+  }
+});
