@@ -79,6 +79,29 @@ plot at the base bubble size; and the break-even capacity share is annotated whe
 behind it is a shared default, since the hours figure needs only an org-level hourly rate but
 the capacity share does not.
 
+## Findings from the automated UI QA agent on the PR, and what they turned out to be
+
+The AgentCore UI QA agent drove the deployed branch through all seven pages: login PASS, 0 console
+errors, 0 failed network requests, and cross-page totals reconciling (Cost header $13,744.94 =
+By Project header, row sums within $0.02, Athena scan ~60 s with the rollup-lag banner explaining
+a $1.21 gap). It raised two findings on the new page.
+
+| ID | Verdict | Outcome |
+|---|---|---|
+| F-1002 (LOW) — the weekly `$` band renders an em-dash on most cards despite non-zero spend and a stated week count | **Correct** | Fixed. Refusing a band under four weeks is deliberate, but a bare em-dash reads as zero or as broken. It now says "needs 4+ weeks of history (has 2)". |
+| F-1001 (MEDIUM, blocking) — the "Assumptions…" buttons are unresponsive | **False positive, real underlying cause** | The agent's own screenshot `10-roi-assumptions-broken.png` shows the drawer fully open with all six rows, org-default badges, override inputs and Save button. The drawer works. |
+
+F-1001 is worth recording rather than dismissing, because the reason the agent got it wrong is a
+genuine defect. The drawer is a conditionally rendered `div` carrying no accessible state, so
+clicking a second card's button — which closes the first and opens the second, leaving total page
+text roughly unchanged — is indistinguishable from clicking a dead button. A screen reader hits
+exactly the same wall. The toggle now carries `aria-expanded` and `aria-controls`, and the drawer
+is a labelled region with the id the button references. The click logic was already correct and
+was left alone.
+
+The lesson is the same one this feature keeps producing: the failure was in what the page
+*disclosed about itself*, not in what it computed.
+
 ## Pre-existing quirk recorded, deliberately not fixed
 
 `backend/lambdas/anomaly-response/index.ts` writes items with `pk = TENANT#<tenant>#ANOMALY`,
