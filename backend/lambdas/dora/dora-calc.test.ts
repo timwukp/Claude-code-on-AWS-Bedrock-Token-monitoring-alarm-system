@@ -1,4 +1,4 @@
-import { computeDora, hoursBetween, isoWeek, median, percentile, tierFor } from './dora-calc';
+import { CFR_BANDS_2024, computeDora, deployFrequencyBand, hoursBetween, isoWeek, median, percentile, tierFor } from './dora-calc';
 import { IssueForMetrics, PrForMetrics } from './types';
 
 const NOW = new Date('2026-09-16T12:00:00.000Z');
@@ -62,20 +62,51 @@ describe('tierFor', () => {
     expect(tierFor('df', 0.01)).toBe('Low');
     expect(tierFor('df', null)).toBe('Unknown');
   });
-  it('lead time / CFR / MTTR boundaries (lower is better)', () => {
+  it('lead time / recovery-time boundaries (lower is better)', () => {
     expect(tierFor('lt', 24)).toBe('Elite');
     expect(tierFor('lt', 24.1)).toBe('High');
     expect(tierFor('lt', 168)).toBe('High');
     expect(tierFor('lt', 720)).toBe('Medium');
     expect(tierFor('lt', 721)).toBe('Low');
-    expect(tierFor('cfr', 5)).toBe('Elite');
-    expect(tierFor('cfr', 10)).toBe('High');
-    expect(tierFor('cfr', 15)).toBe('Medium');
-    expect(tierFor('cfr', 15.1)).toBe('Low');
     expect(tierFor('mttr', 1)).toBe('Elite');
     expect(tierFor('mttr', 24)).toBe('High');
     expect(tierFor('mttr', 168)).toBe('Medium');
     expect(tierFor('mttr', 169)).toBe('Low');
+  });
+  // The 2024 CFR values are non-monotonic (Elite 5, High 20, Medium 10, Low 40), so no threshold
+  // ordering can reproduce the tiers. Refusing beats inventing an ordering DORA does not publish.
+  it('refuses a tier for change failure rate at every value', () => {
+    for (const v of [0, 5, 10, 15, 20, 40, 100, null]) expect(tierFor('cfr', v)).toBe('Unknown');
+  });
+  it('publishes the four 2024 CFR reference values in report order, non-monotonic as printed', () => {
+    expect(CFR_BANDS_2024.map((b) => b.tier)).toEqual(['Elite', 'High', 'Medium', 'Low']);
+    expect(CFR_BANDS_2024.map((b) => b.pct)).toEqual([5, 20, 10, 40]);
+  });
+});
+
+describe('deployFrequencyBand', () => {
+  it('maps a rate onto DORA\'s six ordinal buckets', () => {
+    expect(deployFrequencyBand(3)).toBe('On demand (multiple deploys per day)');
+    expect(deployFrequencyBand(2)).toBe('On demand (multiple deploys per day)');
+    expect(deployFrequencyBand(1.5)).toBe('Between once per hour and once per day');
+    expect(deployFrequencyBand(0.5)).toBe('Between once per day and once per week');
+    expect(deployFrequencyBand(1 / 7)).toBe('Between once per day and once per week');
+    expect(deployFrequencyBand(0.1)).toBe('Between once per week and once per month');
+    expect(deployFrequencyBand(1 / 30)).toBe('Between once per week and once per month');
+    expect(deployFrequencyBand(0.02)).toBe('Between once per month and once every six months');
+    expect(deployFrequencyBand(0.001)).toBe('Less than once per six months');
+  });
+  // The source leaves 1.0/day on a seam; we assign it upward and say so, rather than letting the
+  // choice sit implicit in a comparison operator.
+  it('assigns exactly one per day to the hour-to-day bucket, and reserves the top for 2+/day', () => {
+    expect(deployFrequencyBand(1)).toBe('Between once per hour and once per day');
+    expect(deployFrequencyBand(0.999)).toBe('Between once per day and once per week');
+    expect(deployFrequencyBand(1.999)).toBe('Between once per hour and once per day');
+  });
+  it('has no band without a sample', () => {
+    expect(deployFrequencyBand(null)).toBeNull();
+    expect(deployFrequencyBand(0)).toBeNull();
+    expect(deployFrequencyBand(Number.NaN)).toBeNull();
   });
 });
 
@@ -121,9 +152,13 @@ describe('computeDora', () => {
   it('computes deployment frequency per day with tiers', () => {
     const prs = Array.from({ length: 30 }, (_, i) => pr({ mergedHoursAgo: i * 20 + 1 }));
     const m = computeDora(prs, [], { windowDays: 30, now: NOW });
-    expect(m.deploymentFrequency.all).toMatchObject({ deployments: 30, perDay: 1, tier: 'Elite' });
+    expect(m.deploymentFrequency.all).toMatchObject({
+      deployments: 30, perDay: 1, tier: 'Elite', band: 'Between once per hour and once per day',
+    });
     const weekly = computeDora([pr({ mergedHoursAgo: 5 })], [], { windowDays: 7, now: NOW });
-    expect(weekly.deploymentFrequency.all).toMatchObject({ perDay: 0.14, tier: 'High' });
+    expect(weekly.deploymentFrequency.all).toMatchObject({
+      perDay: 0.14, tier: 'High', band: 'Between once per day and once per week',
+    });
   });
 
   it('computes lead time median / p95 / mean and the coding vs review breakdown', () => {
@@ -153,11 +188,13 @@ describe('computeDora', () => {
       [issue(10, 2)],
       { windowDays: 30, now: NOW },
     );
-    expect(m.changeFailureRate.all).toMatchObject({ reverts: 1, hotfixes: 1, incidents: 1, failures: 3, value: 75, tier: 'Low' });
+    expect(m.changeFailureRate.all).toMatchObject({ reverts: 1, hotfixes: 1, incidents: 1, failures: 3, value: 75, tier: 'Unknown' });
     const capped = computeDora([pr({ mergedHoursAgo: 1, isRevert: true })], [issue(5, 1), issue(6, 1)], { windowDays: 30, now: NOW });
     expect(capped.changeFailureRate.all.value).toBe(100);
     const clean = computeDora([pr({ mergedHoursAgo: 1 }), pr({ mergedHoursAgo: 2 })], [], { windowDays: 30, now: NOW });
-    expect(clean.changeFailureRate.all).toMatchObject({ value: 0, tier: 'Elite' });
+    // 0% is the best possible rate and still gets no tier: the tier is a cluster over all five
+    // metrics, not a threshold on this one. The value is what the page shows.
+    expect(clean.changeFailureRate.all).toMatchObject({ value: 0, tier: 'Unknown' });
   });
 
   it('computes MTTR from hotfix PR durations and closed incident issues only', () => {

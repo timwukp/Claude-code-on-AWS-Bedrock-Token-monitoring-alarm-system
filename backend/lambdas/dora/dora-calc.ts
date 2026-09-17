@@ -7,6 +7,25 @@
  *  - Change Failure Rate   = (reverts + hotfixes + incidents) / merged PRs × 100, capped at 100
  *  - Time to Restore       = median(hotfix mergedAt − createdAt ∪ incident closedAt − createdAt)
  *
+ * How these relate to DORA's canonical definitions, so nothing here overclaims
+ * (`docs/research-dora-presentation.md` has the citations):
+ *
+ *  - DORA anchors all of its metrics on **production deployment**. Merge-to-default is a PROXY;
+ *    DORA's own reference implementation says a merge push event "is not its own distinct change"
+ *    and that deriving deployment metrics from it "artificially skews the metrics". Every surface
+ *    that shows deployment frequency must therefore label it as a proxy at the number itself.
+ *  - Lead time's START point matches DORA exactly (commit to version control). Only the END point
+ *    is a proxy: DORA stops at production, we stop at merge. So this is the first part of DORA's
+ *    window, not a different measure of the whole thing.
+ *  - `mttr` is **not** DORA's "failed deployment recovery time". That metric was renamed AND
+ *    redefined in 2023, narrowing scope to impairments caused by a change reaching production;
+ *    ours also counts bug/incident issues with no deployment linkage. Relabelling it without
+ *    narrowing the computation would be worse than the old name, so the field keeps its name and
+ *    the UI says what it actually measures.
+ *  - DORA has had FIVE metrics since 2024. Deployment rework rate (deployments that were unplanned
+ *    fixes) needs a signal we do not collect, so it is reported as a gap rather than omitted
+ *    silently.
+ *
  * Every metric is reported for three cohorts — all PRs, AI-assisted PRs, human-only PRs — so the
  * dashboard can answer "does AI participation change our delivery performance?". Incidents are
  * not attributable to a cohort, so they count only in `all`.
@@ -30,6 +49,14 @@ export interface DeploymentFrequency extends MetricValue {
   /** Same as value — merged PRs per day. */
   perDay: number | null;
   deployments: number;
+  /**
+   * The rate re-expressed as DORA's own ordinal band, verbatim from the Quick Check's
+   * `deployfreq` responses. DORA never states this metric as a rate — every one of its
+   * instruments uses these phrases — and "about once a week" is the form a non-expert reads
+   * correctly on the first pass. `null` when there is no sample.
+   * See `docs/research-dora-presentation.md` §1.3.
+   */
+  band: string | null;
 }
 export interface LeadTime extends MetricValue {
   p95: number | null;
@@ -73,21 +100,67 @@ export interface DoraMetrics {
 // ---------- tiers ----------
 
 type Threshold = readonly [number, Tier];
-/** [boundary, tier] in order; first match wins. */
-const TIERS: Record<MetricKey, { higherIsBetter: boolean; thresholds: readonly Threshold[] }> = {
+/**
+ * [boundary, tier] in order; first match wins. Boundaries are the 2024 report's bands (p. 13)
+ * converted to our units — deployment frequency from "on demand / per day / per week / per month"
+ * and the two duration metrics from hours.
+ *
+ * `cfr` is deliberately absent. The 2024 change-fail-rate values are NON-monotonic across the
+ * tiers — Elite 5%, **High 20%, Medium 10%**, Low 40% — because the clusters are discovered over
+ * the whole metric vector, not thresholded per metric. DORA discusses this itself as "one of the
+ * potential pitfalls of using these performance levels". A tier therefore cannot be derived from
+ * a change failure rate alone, so we do not invent one: `tierFor('cfr', …)` returns `Unknown` and
+ * the UI shows the measured percentage against `CFR_BANDS_2024` as reference values instead.
+ * See `docs/research-dora-presentation.md` §1.4.
+ */
+const TIERS: Record<Exclude<MetricKey, 'cfr'>, { higherIsBetter: boolean; thresholds: readonly Threshold[] }> = {
   df: { higherIsBetter: true, thresholds: [[1, 'Elite'], [1 / 7, 'High'], [1 / 30, 'Medium']] },
   lt: { higherIsBetter: false, thresholds: [[24, 'Elite'], [168, 'High'], [720, 'Medium']] },
-  cfr: { higherIsBetter: false, thresholds: [[5, 'Elite'], [10, 'High'], [15, 'Medium']] },
   mttr: { higherIsBetter: false, thresholds: [[1, 'Elite'], [24, 'High'], [168, 'Medium']] },
 };
 
+/** The four published 2024 change-fail-rate values, in report order. Reference marks, not bands. */
+export const CFR_BANDS_2024: readonly { readonly tier: Exclude<Tier, 'Unknown'>; readonly pct: number }[] = [
+  { tier: 'Elite', pct: 5 },
+  { tier: 'High', pct: 20 },
+  { tier: 'Medium', pct: 10 },
+  { tier: 'Low', pct: 40 },
+];
+
 export function tierFor(metric: MetricKey, value: number | null): Tier {
+  if (metric === 'cfr') return 'Unknown';
   if (value == null || !Number.isFinite(value)) return 'Unknown';
   const { higherIsBetter, thresholds } = TIERS[metric];
   for (const [boundary, tier] of thresholds) {
     if (higherIsBetter ? value >= boundary : value <= boundary) return tier;
   }
   return 'Low';
+}
+
+/**
+ * DORA's six ordinal deployment-frequency buckets, verbatim from the Quick Check's
+ * `metrics_question_responses.json`, highest first.
+ */
+const DEPLOY_FREQ_BANDS: readonly { readonly minPerDay: number; readonly label: string }[] = [
+  { minPerDay: 2, label: 'On demand (multiple deploys per day)' },
+  { minPerDay: 1, label: 'Between once per hour and once per day' },
+  { minPerDay: 1 / 7, label: 'Between once per day and once per week' },
+  { minPerDay: 1 / 30, label: 'Between once per week and once per month' },
+  { minPerDay: 1 / 182, label: 'Between once per month and once every six months' },
+];
+
+/**
+ * Map a measured per-day rate onto DORA's ordinal band.
+ *
+ * Boundary rule, stated because the source leaves it open: a rate of exactly 1.0/day sits on the
+ * seam between "between once per day and once per week" and "between once per hour and once per
+ * day". We assign it upward, so >=1/day is at least the hour-to-day band, and reserve the top
+ * band for >=2/day, which is what "multiple deploys per day" literally says.
+ */
+export function deployFrequencyBand(perDay: number | null): string | null {
+  if (perDay == null || !Number.isFinite(perDay) || perDay <= 0) return null;
+  for (const { minPerDay, label } of DEPLOY_FREQ_BANDS) if (perDay >= minPerDay) return label;
+  return 'Less than once per six months';
 }
 
 // ---------- stats ----------
@@ -149,7 +222,10 @@ const inCohort = (pr: PrForMetrics, cohort: Cohort) =>
 function deploymentFrequency(prs: PrForMetrics[], days: number): DeploymentFrequency {
   const n = prs.length;
   const perDay = n === 0 ? null : n / Math.max(days, 1);
-  return { value: round2(perDay), perDay: round2(perDay), deployments: n, n, tier: tierFor('df', perDay) };
+  return {
+    value: round2(perDay), perDay: round2(perDay), deployments: n, n,
+    tier: tierFor('df', perDay), band: deployFrequencyBand(perDay),
+  };
 }
 
 function leadTime(prs: PrForMetrics[]): LeadTime {
