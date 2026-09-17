@@ -19,7 +19,7 @@ import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { accepted, badRequest, created, forbidden, notFound, ok, serverError } from '../shared/response';
 import { getTenantId } from '../shared/tenant';
 import { isAdmin } from '../shared/admin';
-import { computeDora, DoraMetrics, MetricValue } from '../dora/dora-calc';
+import { CFR_BANDS_2024, computeDora, DoraMetrics, MetricValue } from '../dora/dora-calc';
 import { newRepoItem } from '../dora/collector';
 import { GhRepo, GithubHttpError, createGithubClient } from '../dora/github-client';
 import { loadGithubToken } from '../dora/secret';
@@ -68,22 +68,36 @@ export interface OverviewRow {
   lastSyncedAt: string | null;
   mergedPrs: number;
   aiParticipationPct: number | null;
-  df: MetricValue;
+  /** `band` is DORA's ordinal deployment-frequency phrase; the table leads with it. */
+  df: MetricValue & { band: string | null };
   lt: MetricValue;
   cfr: MetricValue;
   mttr: MetricValue;
 }
 
+/**
+ * What the page must disclose about its own measurements. Every claim here is checkable against
+ * `docs/research-dora-presentation.md`; the tier note in particular is DORA's own caveat, not a
+ * softened version of it.
+ */
 const DATA_SOURCE = {
-  deploymentDefinition: 'A PR merged to the default branch counts as one deployment.',
+  deploymentDefinition:
+    'A PR merged to the default branch counts as one deployment. This is a PROXY: DORA counts '
+    + 'deployments that reach production, and its own reference tooling warns that deriving '
+    + 'deployment metrics from merge events skews them.',
   notes: [
-    'Lead time = first commit on the PR → merge (median). Coding = first commit → PR opened; review = PR opened → merge.',
-    'Change failures = PRs titled/labelled revert or hotfix (or on hotfix/patch branches) + issues labelled bug/incident.',
-    'Time to restore = median of hotfix PR open→merge and incident issue open→close.',
+    'DORA has had five metrics since 2024. Deployment rework rate (deployments that were unplanned fixes) needs a signal we do not collect, so it is absent rather than estimated.',
+    'Deployment frequency is reported as DORA\'s ordinal band (e.g. "between once per day and once per week"); the per-day rate is the supporting arithmetic. A rate of exactly 1/day is assigned to the hour-to-day band.',
+    'Lead time = first commit on the PR → merge (median). Coding = first commit → PR opened; review = PR opened → merge. DORA\'s window starts at the same point but ends in production, so this is the first part of it.',
+    'Change failures = PRs titled/labelled revert or hotfix (or on hotfix/patch branches) + issues labelled bug/incident. Anything not named that way is not counted, so "0" means nothing matched the detectors, not that nothing broke.',
+    'Recovery time = median of hotfix PR open→merge and incident issue open→close. It is NOT DORA\'s "failed deployment recovery time", which counts only impairments caused by a change reaching production.',
     'AI-assisted = a Co-Authored-By AI trailer on any commit, a bot author, or a Claude Code / Kiro / Amazon Q / Copilot marker in the PR body.',
     'Incident issues cannot be attributed to a PR, so they count only in the "All" cohort.',
-    'Tiers follow the DORA State of DevOps bands (Elite / High / Medium / Low).',
+    'Tier badges are the 2024 State of DevOps bands. DORA applies them per application or service, calls them annual survey benchmarks rather than grades, and the 2025 report replaced them with team archetypes — so treat them as a reference point, not a maturity level.',
+    'No tier is shown for change failure rate: the 2024 values are non-monotonic across the bands (Elite 5%, High 20%, Medium 10%, Low 40%), because the levels are clusters over all metrics at once and cannot be derived from one metric alone.',
   ],
+  /** Reference marks for change failure rate, since a tier is not derivable from it. */
+  cfrReference: CFR_BANDS_2024,
 };
 
 export const toSummary = (r: RepoItem): RepoSummary => ({
@@ -301,7 +315,7 @@ async function overview(event: APIGatewayProxyEvent): Promise<APIGatewayProxyRes
       lastSyncedAt: r.lastSyncedAt ?? null,
       mergedPrs: m.sample.mergedPrs,
       aiParticipationPct: m.aiParticipationPct,
-      df: pick(m.deploymentFrequency.all),
+      df: { ...pick(m.deploymentFrequency.all), band: m.deploymentFrequency.all.band },
       lt: pick(m.leadTime.all),
       cfr: pick(m.changeFailureRate.all),
       mttr: pick(m.mttr.all),

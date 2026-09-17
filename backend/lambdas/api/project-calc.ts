@@ -25,7 +25,8 @@ export interface DoraProjectRow {
   costCenter: string | null;
   repos: string[];
   dora: {
-    df: MetricValue;
+    /** `band` is DORA's ordinal phrase for the rate; surfaces lead with it, not with `value`. */
+    df: MetricValue & { band: string | null };
     lt: MetricValue;
     cfr: MetricValue;
     mttr: MetricValue;
@@ -100,7 +101,7 @@ export function buildProjectRows(
       const m = computeDora(pooledPrs, pooledIssues, { windowDays: opts.windowDays, now: opts.now });
       const pick = (v: MetricValue): MetricValue => ({ value: v.value, tier: v.tier, n: v.n });
       dora = {
-        df: pick(m.deploymentFrequency.all),
+        df: { ...pick(m.deploymentFrequency.all), band: m.deploymentFrequency.all.band },
         lt: pick(m.leadTime.all),
         cfr: pick(m.changeFailureRate.all),
         mttr: pick(m.mttr.all),

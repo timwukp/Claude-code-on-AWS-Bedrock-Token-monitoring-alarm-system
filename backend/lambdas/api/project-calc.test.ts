@@ -47,6 +47,9 @@ describe('buildProjectRows', () => {
     expect(rows[0].dora).toMatchObject({ mergedPrs: 3 });
     expect(rows[0].dora!.df.n).toBe(3);
     expect(rows[0].dora!.aiParticipationPct).toBeCloseTo(33.3, 1);
+    // The ordinal band travels with the rate: the Projects table leads with the phrase, so a
+    // silently dropped `band` would show every project as "—" while the rate looked fine.
+    expect(rows[0].dora!.df.band).toBe('Between once per week and once per month');
   });
 
   it('notes untracked repos and computes DORA from the tracked subset', () => {
