@@ -6,6 +6,35 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Changed — the DORA page now says what it actually measures
+- **Deployment frequency reads as DORA's ordinal band**, e.g. "between once per day and once per
+  week", with the per-day rate demoted to supporting detail. Every DORA instrument states this
+  metric as one of six phrases; the decimal rate was our intermediate arithmetic, and it is the
+  form a non-expert reader misreads. The six bucket strings are used verbatim, and the one
+  boundary the sources leave open — a rate of exactly 1.0/day — is resolved upward and documented.
+- **"Proxy" moved from a footnote into the label.** A merge to the default branch is not a
+  production deployment, and DORA's own reference implementation warns that deriving deployment
+  metrics from merge events skews them. The reader who only reads labels is exactly the reader who
+  must not miss that.
+- **No tier badge on change failure rate.** The published 2024 values are non-monotonic across the
+  performance levels — Elite 5%, High 20%, Medium 10%, Low 40% — because the levels are clusters
+  over all metrics at once, so no threshold on one metric can reproduce them. The four values are
+  shown as reference marks instead, with the reason stated where the number is, and `tierFor` now
+  refuses that metric structurally rather than by convention.
+- **Tier badges are dated to the 2024 report** and carry DORA's own caveats: annual survey
+  benchmarks applied per application or service, not grades or a maturity model. The 2025 report
+  replaced the four levels with seven team archetypes, so an undated badge asserts a framework that
+  has since moved. An empty sample now reads "no band" rather than an unqualified "Unknown".
+- **The fifth metric is named.** DORA has had five metrics since 2024; deployment rework rate needs
+  a signal marking a deployment as planned or corrective, which nothing in this pipeline records.
+  The page says so on its own tile instead of presenting four metrics as the whole framework.
+- **Recovery time keeps an honest name.** DORA renamed *and* redefined this metric in 2023, and the
+  new scope covers only impairments caused by a change reaching production; ours also counts bug
+  and incident issues with no deployment linkage. Adopting the new name over an unchanged
+  computation would be worse than the old label, so the tile says what it measures instead.
+- Evidence for all of the above: `docs/research-dora-presentation.md` (14 claims from DORA's
+  primary sources, adversarially verified). No computed value changed except the removed tier.
+
 ### Added — AI-coding ROI page
 - **`/roi` sub-page** answering "is the AI coding spend worth it?" from measured data instead of
   vendor claims: per-project ROI over this portal's own per-project spend rollups and per-repo
