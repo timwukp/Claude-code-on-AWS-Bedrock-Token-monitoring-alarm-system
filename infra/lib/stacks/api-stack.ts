@@ -156,23 +156,6 @@ export class ApiStack extends cdk.Stack {
     });
     tables.tenants.grantReadWriteData(projectRegistryFn);
 
-    // AI-coding ROI (#14): read-only joins over registry + PROJDAY + DORA — least privilege.
-    const roiFn = new NodejsFunction(this, 'RoiFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
-      entry: lambdaEntry('api', 'roi.ts'),
-      projectRoot: BACKEND_ROOT,
-      depsLockFilePath: BACKEND_LOCK,
-      handler: 'handler',
-      memorySize: 512,
-      timeout: cdk.Duration.seconds(20),
-      tracing: lambda.Tracing.ACTIVE,
-      environment: commonEnv,
-      bundling: { minify: true, sourceMap: true },
-    });
-    tables.tenants.grantReadData(roiFn);
-    tables.aggregates.grantReadData(roiFn);
-    tables.dora.grantReadData(roiFn);
-
     // Least-privilege grants.
     tables.aggregates.grantReadData(usageFn);
     tables.aggregates.grantReadData(costsFn);
@@ -245,15 +228,6 @@ export class ApiStack extends cdk.Stack {
     registry.addMethod('GET', registryInt, opts);
     registry.addMethod('POST', registryInt, opts);
     registry.addResource('{id}').addMethod('DELETE', registryInt, opts);
-    const regDefaults = registry.addResource('defaults');
-    regDefaults.addMethod('GET', registryInt, opts);
-    regDefaults.addMethod('PUT', registryInt, opts);
-
-    // ROI (#14). Reads for any signed-in user.
-    const roiInt = new apigw.LambdaIntegration(roiFn);
-    const roiRes = v1.addResource('roi');
-    roiRes.addResource('projects').addMethod('GET', roiInt, opts);
-    roiRes.addResource('estimate').addMethod('GET', roiInt, opts);
     v1.addResource('quotas').addMethod('GET', new apigw.LambdaIntegration(quotasFn), opts);
     v1.addResource('governance').addMethod('GET', new apigw.LambdaIntegration(governanceFn), opts);
     const queries = v1.addResource('queries');
