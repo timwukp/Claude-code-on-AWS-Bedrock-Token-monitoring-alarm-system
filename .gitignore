@@ -31,3 +31,7 @@ __pycache__/
 .idea/
 .vscode/
 *.log
+
+# Real per-clone Claude Code settings hold account-specific inference-profile ARNs (#13);
+# copy .claude/settings.json.example and fill from the Projects stack outputs.
+.claude/settings.json

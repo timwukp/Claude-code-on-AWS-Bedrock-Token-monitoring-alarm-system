@@ -11,6 +11,7 @@ import { ProjectsPage } from './pages/ProjectsPage';
 import { GovernancePage } from './pages/GovernancePage';
 import { AnomaliesPage } from './pages/AnomaliesPage';
 import { DoraPage } from './pages/DoraPage';
+import { RoiPage } from './pages/RoiPage';
 
 configureAuth();
 
@@ -21,6 +22,7 @@ const PAGE_META: Record<string, { title: string; sub: string }> = {
   '/governance': { title: 'Cost Governance', sub: 'Budget status and enforcement guardrails' },
   '/anomalies': { title: 'Anomalies & Alerts', sub: 'Automated detection and response feed' },
   '/dora': { title: 'DORA Metrics', sub: 'Delivery performance per repo — humans + AI coding assistants' },
+  '/roi': { title: 'AI ROI', sub: 'Break-even first — DORA ROI model over measured cost and delivery, disclosed assumptions, honest brackets' },
 };
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -41,6 +43,7 @@ function App() {
           <Route path="/governance" element={<Shell><GovernancePage /></Shell>} />
           <Route path="/anomalies" element={<Shell><AnomaliesPage /></Shell>} />
           <Route path="/dora" element={<Shell><DoraPage /></Shell>} />
+          <Route path="/roi" element={<Shell><RoiPage /></Shell>} />
         </Routes>
       </BrowserRouter>
     </LoginGate>

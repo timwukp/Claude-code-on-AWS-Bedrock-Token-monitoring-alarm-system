@@ -6,6 +6,45 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Added — AI-coding ROI page
+- **`/roi` sub-page** answering "is the AI coding spend worth it?" from measured data instead of
+  vendor claims: per-project ROI over this portal's own per-project spend rollups and per-repo
+  DORA metrics, plus labor-cost assumptions the customer owns and can edit. `GET /v1/roi/projects`
+  and `GET /v1/roi/estimate` on a new read-only Lambda.
+- **Break-even leads the page** — monthly spend ÷ loaded hourly cost = the engineer-hours the
+  assistant must save to pay for itself, expressed as a share of team capacity. Two inputs and no
+  revenue guesses, so a reviewer who rejects every other assumption still gets a usable number.
+- **Model provenance**: the published DORA first-year AI ROI model, formulas verified against that
+  calculator's own source. Net time saved floors at **−100%** (the verification tax can exceed the
+  saving), the stability term is **signed** so a regression is reported as a cost, and training
+  and the J-curve dip are one-time and never annualized. Windows are 30/90 days only —
+  annualizing a week is refused with an explanation. Full write-up: `docs/ROI_METHODOLOGY.md`.
+- **Honest uncertainty**: the experimental bracket for AI coding speed (**−19%…+56%**, three RCTs
+  with opposite signs) is displayed as a range rather than collapsed into a multiplier. Surveys
+  are rejected as an input — in one trial developers forecast +24%, measured −19%, and still
+  believed +20% afterwards. Three widely quoted productivity headlines were refuted during
+  adversarial verification and appear nowhere in the product.
+- **Refusals are a feature**: terms without inputs (no revenue base, no stability baseline, under
+  4 weeks of history) are refused on-page with a stated reason, never zero-filled. Three of those
+  refusals guard the composite percentage itself, each one found by reading real per-project data
+  rather than tests: a window that **shipped nothing** (its value side would be assumption-only),
+  a project with **no staffing of its own** (a shared team size claims one team's annual saving
+  once per project, so a portfolio total becomes a multiple of a placeholder), and **spend below
+  one engineer-hour per month** (a near-zero denominator turns a few dollars into a four-digit
+  percentage). In all three the components, the measured spend and break-even are still shown, so
+  the spend stays accountable — only the headline is withheld.
+- **Forward budgeting**: reference-class P25/P50/P90 bands from a comparable project's own
+  history × expected PRs per month, presented as a band and refused below 4 weeks of history.
+- **Kill-fast, not gates**: a portfolio scatter plus a signal raised after two consecutive weeks
+  of high spend and low merged output, judged against the *prior* weeks only (out-of-sample).
+  Both are prompts for a human conversation, deliberately not automated controls.
+- **Runaway-spend guard**: any single request above a configured dollar threshold (default $50,
+  `0` disables) is written to the existing Anomalies feed with its model, project and cost, so a
+  single agent loop burning thousands of dollars becomes visible within a rollup cycle.
+- Registry projects gain optional, server-validated ROI assumptions, with org-wide defaults at
+  `GET|PUT /v1/projects/registry/defaults` (writes admin-only) and the effective source
+  (project / org / code) disclosed next to every number.
+
 ### Added — Project cost attribution × DORA join
 - **Per-project application inference profiles** — new `Tums-<env>-Projects` stack creates one
   tagged AIP per project × model (tag `tums-project=<id>` → Cost Explorer/CUR after activation;

@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** 41a127158e2e37780ea377c0314b428ae3a2f400
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is main's tip after PR #37 (the DORA feature this joins against) merged; this
 branch is cut from it. Design approved in plan mode 2026-09-17 with four owner decisions

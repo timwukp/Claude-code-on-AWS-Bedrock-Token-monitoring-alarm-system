@@ -15,6 +15,13 @@ import {
   DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { AttributionMaps } from '../ingestion/parse';
+import { RoiAssumptions } from '../api/roi-calc';
+
+/** Per-project ROI assumptions (#14) — all optional; org defaults + code defaults fill gaps. */
+export type ProjectRoiConfig = Partial<Pick<RoiAssumptions,
+  'teamSize' | 'loadedCostPerYear' | 'netTimeSavedPct' | 'ideaSuccessRate' |
+  'revenueImpactPerFeature' | 'revenueBase' | 'downtimeCostPerHour' | 'trainingCostPerUser' |
+  'jCurve' | 'baseline' | 'category'>>;
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}), { marshallOptions: { removeUndefinedValues: true } });
 const TABLE = () => process.env.TENANTS_TABLE!;
@@ -37,6 +44,8 @@ export interface RegistryProject {
   addedBy: string;
   addedAt: string;
   seededBy?: 'config';
+  /** ROI assumptions (#14); absent fields fall back to org defaults then code defaults. */
+  roi?: ProjectRoiConfig;
 }
 
 export interface ProfileCacheItem {
@@ -85,6 +94,56 @@ export interface ProjectInput {
   costCenter?: unknown;
   repos?: unknown;
   identityArns?: unknown;
+  roi?: unknown;
+}
+
+const ROI_CATEGORIES = ['product', 'chore', 'experiment'] as const;
+
+/** Validate a partial ROI-assumptions object (admin input). Pure. */
+export function validateRoiConfig(input: unknown): { roi?: ProjectRoiConfig; error?: string } {
+  if (input == null) return {};
+  if (typeof input !== 'object' || Array.isArray(input)) return { error: 'roi must be an object' };
+  const o = input as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  const num = (k: string, lo: number, hi: number, integer = false): string | null => {
+    if (o[k] === undefined || o[k] === null || o[k] === '') return null;
+    const n = Number(o[k]);
+    if (!Number.isFinite(n) || n < lo || n > hi || (integer && !Number.isInteger(n))) {
+      return `roi.${k} must be ${integer ? 'an integer ' : ''}in [${lo}, ${hi}]`;
+    }
+    out[k] = n;
+    return null;
+  };
+  for (const err of [
+    num('teamSize', 1, 10_000, true),
+    num('loadedCostPerYear', 1_000, 5_000_000),
+    num('netTimeSavedPct', -100, 200),
+    num('ideaSuccessRate', 0, 1),
+    num('revenueImpactPerFeature', 0.0001, 0.01),
+    num('revenueBase', 0, 1e12),
+    num('downtimeCostPerHour', 0, 1e8),
+    num('trainingCostPerUser', 0, 1e6),
+  ]) if (err) return { error: err };
+  if (o.category !== undefined) {
+    if (!ROI_CATEGORIES.includes(o.category as never)) return { error: `roi.category must be one of ${ROI_CATEGORIES.join(', ')}` };
+    out.category = o.category;
+  }
+  if (o.jCurve !== undefined && o.jCurve !== null) {
+    const j = o.jCurve as Record<string, unknown>;
+    const drop = Number(j.dropPct ?? 15); const months = Number(j.months ?? 3);
+    if (!Number.isFinite(drop) || drop < 0 || drop > 100) return { error: 'roi.jCurve.dropPct must be in [0, 100]' };
+    if (!Number.isFinite(months) || months < 0 || months > 24) return { error: 'roi.jCurve.months must be in [0, 24]' };
+    out.jCurve = { include: !!j.include, dropPct: drop, months };
+  }
+  if (o.baseline !== undefined && o.baseline !== null) {
+    const b = o.baseline as Record<string, unknown>;
+    const d = Number(b.deploymentsPerYear); const c = Number(b.cfrPct); const m = Number(b.mttrHours);
+    if (![d, c, m].every(Number.isFinite) || d < 0 || c < 0 || c > 100 || m < 0) {
+      return { error: 'roi.baseline needs numeric deploymentsPerYear, cfrPct [0-100], mttrHours ≥ 0' };
+    }
+    out.baseline = { deploymentsPerYear: d, cfrPct: c, mttrHours: m };
+  }
+  return { roi: out as ProjectRoiConfig };
 }
 
 /** Validate + normalize an admin-supplied project. Returns the item fields or a message. */
@@ -108,11 +167,14 @@ export function validateProject(
   const rawIds = Array.isArray(input.identityArns) ? input.identityArns : [];
   const identityArns = [...new Set(rawIds.map((a) => String(a).trim().toLowerCase()).filter(Boolean))];
   const costCenter = String(input.costCenter ?? '').trim() || undefined;
+  const { roi, error: roiError } = validateRoiConfig(input.roi);
+  if (roiError) return { error: roiError };
   return {
     project: {
       pk: PROJECT_PK, sk: id, type: 'project',
       projectId: id, name, costCenter, repos, identityArns,
       addedBy, addedAt: now.toISOString(),
+      ...(roi && Object.keys(roi).length ? { roi } : {}),
     },
   };
 }
@@ -256,4 +318,26 @@ export async function seedIfNeeded(): Promise<string[]> {
   await putSeedMarker(seeds.map((s) => s.id));
   console.log('project-registry: seeded projects', created);
   return created;
+}
+
+// ---------- ROI org defaults (#14) ----------
+
+export interface RoiDefaultsItem {
+  pk: 'REGISTRY#META';
+  sk: 'roi-defaults';
+  defaults: ProjectRoiConfig;
+  updatedBy: string;
+  updatedAt: string;
+}
+
+export async function getRoiDefaults(): Promise<ProjectRoiConfig> {
+  const res = await ddb.send(new GetCommand({ TableName: TABLE(), Key: { pk: 'REGISTRY#META', sk: 'roi-defaults' } }));
+  return ((res.Item as RoiDefaultsItem | undefined)?.defaults) ?? {};
+}
+
+export async function putRoiDefaults(defaults: ProjectRoiConfig, updatedBy: string): Promise<void> {
+  const item: RoiDefaultsItem = {
+    pk: 'REGISTRY#META', sk: 'roi-defaults', defaults, updatedBy, updatedAt: new Date().toISOString(),
+  };
+  await ddb.send(new PutCommand({ TableName: TABLE(), Item: item }));
 }

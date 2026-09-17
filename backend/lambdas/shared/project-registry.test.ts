@@ -1,4 +1,4 @@
-import { parseSeedJson, shouldSeed, validateProject } from './project-registry';
+import { parseSeedJson, shouldSeed, validateProject, validateRoiConfig } from './project-registry';
 
 describe('validateProject', () => {
   it('normalizes id/repos/identityArns to lowercase and de-dups', () => {
@@ -46,5 +46,36 @@ describe('parseSeedJson', () => {
     expect(parseSeedJson(undefined)).toEqual([]);
     expect(parseSeedJson('not json')).toEqual([]);
     expect(parseSeedJson('{"id":"obj"}')).toEqual([]);
+  });
+});
+
+describe('validateRoiConfig (#14)', () => {
+  it('accepts a full valid config and coerces numerics', () => {
+    const { roi, error } = validateRoiConfig({
+      teamSize: '4', loadedCostPerYear: 208000, netTimeSavedPct: -25,
+      revenueImpactPerFeature: 0.005, category: 'product',
+      jCurve: { include: true, dropPct: 15, months: 3 },
+      baseline: { deploymentsPerYear: 60, cfrPct: 5, mttrHours: 2 },
+    });
+    expect(error).toBeUndefined();
+    expect(roi).toMatchObject({ teamSize: 4, netTimeSavedPct: -25, category: 'product' });
+    expect(roi!.jCurve).toEqual({ include: true, dropPct: 15, months: 3 });
+  });
+  it('rejects out-of-range and malformed fields with named errors', () => {
+    expect(validateRoiConfig({ teamSize: 0 }).error).toMatch(/teamSize/);
+    expect(validateRoiConfig({ teamSize: 2.5 }).error).toMatch(/integer/);
+    expect(validateRoiConfig({ netTimeSavedPct: -150 }).error).toMatch(/netTimeSavedPct/);
+    expect(validateRoiConfig({ revenueImpactPerFeature: 0.5 }).error).toMatch(/revenueImpactPerFeature/);
+    expect(validateRoiConfig({ category: 'misc' }).error).toMatch(/category/);
+    expect(validateRoiConfig({ baseline: { deploymentsPerYear: -1 } }).error).toMatch(/baseline/);
+    expect(validateRoiConfig('nope').error).toMatch(/object/);
+  });
+  it('flows through validateProject and stays absent when empty', () => {
+    const ok = validateProject({ id: 'p1', name: 'P', roi: { teamSize: 3 } }, 't');
+    expect(ok.project!.roi).toEqual({ teamSize: 3 });
+    const bad = validateProject({ id: 'p1', name: 'P', roi: { teamSize: -1 } }, 't');
+    expect(bad.error).toMatch(/teamSize/);
+    const none = validateProject({ id: 'p1', name: 'P' }, 't');
+    expect(none.project!.roi).toBeUndefined();
   });
 });

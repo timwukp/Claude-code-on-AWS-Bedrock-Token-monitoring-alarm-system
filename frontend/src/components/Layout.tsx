@@ -9,6 +9,7 @@ const NAV = [
   { to: '/governance', label: 'Governance', ico: '🛡️' },
   { to: '/anomalies', label: 'Anomalies', ico: '🔔' },
   { to: '/dora', label: 'DORA', ico: '🚀' },
+  { to: '/roi', label: 'ROI', ico: '📈' },
 ];
 
 /** App shell: dark sidebar + topbar + content area. */

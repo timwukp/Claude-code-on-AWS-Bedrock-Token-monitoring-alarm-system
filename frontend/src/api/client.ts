@@ -63,10 +63,35 @@ export interface DoraOverviewRow {
   df: MetricValue; lt: MetricValue; cfr: MetricValue; mttr: MetricValue;
 }
 export interface DoraDataSource { deploymentDefinition: string; notes: string[] }
+// ---- ROI (#14) — mirrors backend/lambdas/api/roi-calc.ts + roi.ts ----
+export interface RoiComponent { valueUsd: number; formulaInputs: Record<string, number | string | null>; note: string }
+export interface Bands { p25: number; p50: number; p90: number }
+export interface WeeklyPoint { weekStart: string; value: number }
+export interface RoiResult {
+  window: number; annualizationFactor: number;
+  value: { timeSaved: RoiComponent; throughput: RoiComponent; stabilityDelta: RoiComponent; totalUsd: number };
+  investment: { aiSpend: RoiComponent; training: RoiComponent; jCurve: RoiComponent; totalUsd: number };
+  roiPct: number | null; paybackMonths: number | null;
+  breakEven: { hoursPerMonth: number | null; pctOfCapacity: number | null; verdict: 'within-rct-bracket' | 'above-rct-bracket' | 'unknown' };
+  unitEconomics: { usdPerMergedPr: number | null; usdPerDeployment: number | null; tokensPerMergedPr: WeeklyPoint[] };
+  uncertainty: { bracketLowPct: number; bracketHighPct: number; appliedTo: string; note: string };
+  refusals: string[]; notes: string[];
+}
+export interface RoiProjectRow {
+  projectId: string; name: string; category: string | null;
+  assumptionsSource: 'project' | 'org-default' | 'code-default';
+  roi: RoiResult;
+  bands: { usdPerPr: Bands | null; weeklyUsd: Bands | null; weeks: number };
+  killFast: { flagged: boolean; weeks: string[]; rule: string };
+  monthlySpendUsd: number; mergedPrs: number;
+}
+export interface RoiMethodology { framing: string; bracket: { lowPct: number; highPct: number }; refuses: string[]; annualization: string }
+export type ProjectRoiConfig = Record<string, unknown>;
 export type DoraWindow = 7 | 30 | 90;
 export interface RegistryProject {
   projectId: string; name: string; costCenter: string | null; repos: string[];
   identityArns: string[]; addedBy: string; addedAt: string; seeded: boolean;
+  roi?: ProjectRoiConfig | null;
 }
 export interface DoraProjectRow {
   projectId: string; name: string; costCenter: string | null; repos: string[];
@@ -94,10 +119,22 @@ export const api = {
     request<{ window: number; projects: DoraProjectRow[]; dataSource: DoraDataSource }>(`v1/dora/projects?window=${window}`),
   projectRegistry: () =>
     request<{ projects: RegistryProject[]; profiles: { arn: string; projectId: string; underlyingModelId: string; profileName: string | null }[]; isAdmin: boolean }>('v1/projects/registry'),
-  projectRegistryUpsert: (p: { id: string; name: string; costCenter?: string; repos?: string[]; identityArns?: string[] }) =>
+  projectRegistryUpsert: (p: { id: string; name: string; costCenter?: string; repos?: string[]; identityArns?: string[]; roi?: ProjectRoiConfig }) =>
     request<{ project: RegistryProject }>('v1/projects/registry', { method: 'POST', body: JSON.stringify(p) }),
   projectRegistryDelete: (id: string) =>
     request<{ deleted: boolean; items: number }>(`v1/projects/registry/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  roiProjects: (window: 30 | 90) =>
+    request<{ window: number; projects: RoiProjectRow[]; orgDefaults: ProjectRoiConfig; isAdmin: boolean; methodology: RoiMethodology }>(`v1/roi/projects?window=${window}`),
+  roiEstimate: (p: { reference: string; prsPerMonth: number; teamSize?: number; loadedCostPerYear?: number }) =>
+    request<{ reference: { projectId: string; name: string }; prsPerMonth: number; teamSize: number; loadedCostPerYear: number;
+      bands: { usdPerPr: Bands | null; weeklyUsd: Bands | null; weeks: number };
+      budgetMonthlyUsd: Bands | null; projectedBreakEvenHoursPerMonth: Bands | null; pctOfCapacityP50: number | null; notes: string[];
+      methodology: RoiMethodology }>(
+      `v1/roi/estimate?reference=${encodeURIComponent(p.reference)}&prsPerMonth=${p.prsPerMonth}`
+      + (p.teamSize != null ? `&teamSize=${p.teamSize}` : '') + (p.loadedCostPerYear != null ? `&loadedCostPerYear=${p.loadedCostPerYear}` : '')),
+  roiDefaults: () => request<{ defaults: ProjectRoiConfig; isAdmin: boolean }>('v1/projects/registry/defaults'),
+  roiDefaultsPut: (defaults: ProjectRoiConfig) =>
+    request<{ defaults: ProjectRoiConfig }>('v1/projects/registry/defaults', { method: 'PUT', body: JSON.stringify({ defaults }) }),
   doraOverview: (window: DoraWindow) =>
     request<{ window: number; repos: DoraOverviewRow[]; dataSource: DoraDataSource }>(`v1/dora/overview?window=${window}`),
   usage: (from?: string, to?: string) =>

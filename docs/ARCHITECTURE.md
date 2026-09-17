@@ -77,6 +77,11 @@ What this architecture buys you:
   - *Governance* — Bedrock budget (limit / actual / forecast) and enforcement posture (Budget
     Action hard-stop, auto-containment mode).
   - *Anomalies* — feed from Cost Anomaly Detection + automated response, with severity & root cause.
+  - *DORA* — the four delivery metrics per repo, split All / AI-assisted / Human-only, plus
+    Delivery × Cost rows per project.
+  - *ROI* — break-even engineer-hours first, then per-project component waterfalls, a portfolio
+    quadrant, unit economics, and a reference-class budget estimator. Every assumption is shown
+    with its source, and the terms the model refuses to compute are listed rather than zero-filled.
   - *Logs* — ad-hoc forensic search backed by Athena (paged, async query pattern).
 - **Charts**: client-side charting library (e.g. Recharts) over JSON from the API. QuickSight
   embedding is an optional alternative documented in the design but not the default.
@@ -98,6 +103,9 @@ REST API with a Cognito authorizer. Routes (illustrative):
 | `GET /v1/dora/metrics?repo=&window=` · `GET /v1/dora/overview` | 4 DORA metrics (All / AI-assisted / Human) + weekly timeline; per-repo comparison | computed on read from `tums-dora` |
 | `GET /v1/dora/projects?window=` | Delivery × Cost per project: pooled DORA + windowed token cost, $/deployment | `tums-dora` + `PROJDAY` rollups + registry |
 | `GET·POST /v1/projects/registry` · `DELETE …/{id}` (admin) | project registry: name / cost center / repos / identity hints | DynamoDB `tums-tenants` |
+| `GET /v1/projects/registry/defaults` · `PUT …` (admin) | org-wide ROI assumption defaults | `REGISTRY#META` item in `tums-tenants` |
+| `GET /v1/roi/projects?window=30\|90` | per-project ROI: component breakdown, break-even, unit economics, reference bands, kill-fast signal, refusals | `PROJDAY` rollups + `tums-dora` + registry assumptions |
+| `GET /v1/roi/estimate?reference=&prsPerMonth=` | reference-class budget band + projected break-even for a new project | 90-day history of the chosen reference project |
 
 **Multi-tenancy**: every request is scoped by a `tenantId` claim in the JWT. Aggregates and
 Athena queries are filtered by tenant; tenant isolation is enforced in the API layer and in
@@ -135,6 +143,12 @@ IAM/Athena workgroup boundaries. See `docs/MULTI_TENANCY.md` (skeleton) for the 
   record (profile tag → requestMetadata → identity hint → untagged), re-keys profile traffic to
   the real underlying model, and writes `PROJDAY` daily per-project rollups alongside the
   existing hourly/model/project ones.
+
+- **Runaway-spend guard (#14)**: in the same aggregator pass, any single request whose estimated
+  cost exceeds `RUNAWAY_REQUEST_USD` (default 50, `0` disables) is written to the anomalies table
+  with a deterministic sort key derived from the request id, so re-puts are idempotent and the
+  item renders on the existing Anomalies page. Judging "justified long task versus runaway loop"
+  stays a human call; the guard only makes the request visible within one rollup cycle.
 
 ### 3.5 Data plane (Bedrock logging → S3 → Athena)
 
@@ -181,6 +195,7 @@ Config is environment-driven (`infra/lib/config`) so the same code deploys `dev`
 | Tenant attribution | `requestMetadata` tags | Bedrock logs carry no IAM identity | Requires callers to tag requests |
 | Analytics store | S3 + Athena (+ Parquet) | Pay-per-scan, no cluster to run | Query latency vs a warm DB |
 | Hot reads | DynamoDB pre-aggregates | Fast, cheap dashboard reads | Aggregation pipeline to maintain |
+| ROI framing | Refuse rather than estimate | A number a skeptic can dismantle is worse than an absent one; break-even needs only spend and an hourly rate | Several projects show no ROI headline until their own staffing is configured |
 
 ---
 

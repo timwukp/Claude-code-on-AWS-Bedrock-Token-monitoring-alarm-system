@@ -35,3 +35,14 @@ export const fmtAgo = (iso: string | null | undefined, now = Date.now()): string
   if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
   return `${Math.floor(s / 86400)} d ago`;
 };
+
+/** Signed USD for waterfall labels: -$1,234 / +$1,234. */
+export const fmtSignedUsd = (n: number): string => `${n < 0 ? '−' : '+'}$${Math.abs(Math.round(n)).toLocaleString()}`;
+
+/** Compact USD: $12.3K / $1.2M. */
+export const fmtUsdK = (n: number): string => {
+  const a = Math.abs(n); const sign = n < 0 ? '−' : '';
+  if (a >= 1_000_000) return `${sign}$${(a / 1_000_000).toFixed(1)}M`;
+  if (a >= 1_000) return `${sign}$${(a / 1_000).toFixed(1)}K`;
+  return `${sign}$${a.toFixed(0)}`;
+};

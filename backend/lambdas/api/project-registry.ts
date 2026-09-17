@@ -2,7 +2,9 @@
  * Project registry API (#13) — the admin-managed mapping that joins everything:
  * project ↔ GitHub repos (DORA) ↔ identity hints (log attribution) ↔ cost center.
  *
- *   GET    /v1/projects/registry        list projects + resolved AIP profiles (+ isAdmin)
+ *   GET    /v1/projects/registry            list projects + resolved AIP profiles (+ isAdmin)
+ *   GET    /v1/projects/registry/defaults   org-wide ROI assumption defaults (#14)
+ *   PUT    /v1/projects/registry/defaults   [admin] update the org defaults
  *   POST   /v1/projects/registry        [admin] upsert {id,name,costCenter?,repos?,identityArns?}
  *   DELETE /v1/projects/registry/{id}   [admin] cascade (project + identity hints + profile cache)
  *
@@ -21,6 +23,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const route = `${event.httpMethod} ${event.resource}`;
     switch (route) {
       case 'GET /v1/projects/registry': return list(event);
+      case 'GET /v1/projects/registry/defaults': return getDefaults(event);
+      case 'PUT /v1/projects/registry/defaults': return putDefaults(event);
       case 'POST /v1/projects/registry': return upsert(event);
       case 'DELETE /v1/projects/registry/{id}': return remove(event);
       default: return notFound(`Unknown route ${route}`);
@@ -45,6 +49,21 @@ async function list(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult>
     })),
     isAdmin: isAdmin(event),
   });
+}
+
+async function getDefaults(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  return ok({ defaults: await registry.getRoiDefaults(), isAdmin: isAdmin(event) });
+}
+
+async function putDefaults(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  if (!isAdmin(event)) return forbidden('Only members of the admin group can set ROI defaults.');
+  let body: unknown = {};
+  try { body = JSON.parse(event.body ?? '{}'); } catch { return badRequest('Body must be JSON'); }
+  const { roi, error } = registry.validateRoiConfig((body as { defaults?: unknown }).defaults ?? body);
+  if (error) return badRequest(error);
+  const email = String(event.requestContext.authorizer?.claims?.email ?? 'admin');
+  await registry.putRoiDefaults(roi ?? {}, email);
+  return ok({ defaults: roi ?? {} });
 }
 
 async function upsert(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
@@ -79,5 +98,6 @@ function toProjectView(p: registry.RegistryProject) {
     addedBy: p.addedBy,
     addedAt: p.addedAt,
     seeded: p.seededBy === 'config',
+    roi: p.roi ?? null,
   };
 }
