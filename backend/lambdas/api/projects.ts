@@ -3,7 +3,7 @@ import {
   AthenaClient, StartQueryExecutionCommand, GetQueryExecutionCommand, GetQueryResultsCommand,
 } from '@aws-sdk/client-athena';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { ok, serverError } from '../shared/response';
 import { computeModelCost, normalizeModelId, summarizeCosts, TokenCounts } from './cost-calc';
 import { listProjects } from '../shared/project-registry';
@@ -19,11 +19,6 @@ const AGGREGATES_TABLE = process.env.AGGREGATES_TABLE;
 // model served each request, so exact per-model pricing (what /v1/costs does) is impossible
 // here — this is a uniform-rate approximation and will NOT match the Cost page total.
 const IN = 0.000005, OUT = 0.000025, CACHE = 0.0000005;
-
-// F-601: remember the in-flight Athena query per tenant (module scope survives warm
-// invocations) so a Retry resumes polling the SAME query instead of starting a new
-// full scan from scratch — restarting doubled the total wait to ~8-9 minutes.
-const inflightQueryByTenant = new Map<string, string>();
 
 /**
  * GET /v1/projects — usage attributed to projects, by joining Bedrock requestMetadata
@@ -43,8 +38,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       // #13: rows are priced per (project, model) with the shared rate card (the PROJECT sk has
       // always carried modelId), and registry names/cost centers replace raw ids. Same ids +
       // same card as /v1/costs → totals agree by construction, no scaling needed.
-      const [projects, totals] = await Promise.all([fastProjects(tenantId), modelTotals(tenantId)]);
-      return ok({ tenantId, source: 'dynamodb', projects, ...totals });
+      const [projects, totals, rollupsAsOf] = await Promise.all([fastProjects(tenantId), modelTotals(tenantId), rollupWatermark()]);
+      // rollupsAsOf lets the UI explain Fast-vs-Athena residuals honestly: rollups refresh every
+      // 15 min, Athena reads raw logs live — the difference is traffic since the watermark (F-801).
+      return ok({ tenantId, source: 'dynamodb', projects, rollupsAsOf, ...totals });
     }
 
     const sql = `
@@ -64,14 +61,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       ORDER BY tokens DESC
       LIMIT 100`;
 
-    let id = inflightQueryByTenant.get(tenantId);
-    if (!id) {
-      const start = await athena.send(new StartQueryExecutionCommand({
-        QueryString: sql, WorkGroup: WORKGROUP, QueryExecutionContext: { Database: DATABASE },
-      }));
-      id = start.QueryExecutionId!;
-      inflightQueryByTenant.set(tenantId, id);
-    }
+    const start = await athena.send(new StartQueryExecutionCommand({
+      QueryString: sql, WorkGroup: WORKGROUP, QueryExecutionContext: { Database: DATABASE },
+    }));
+    const id = start.QueryExecutionId!;
 
     // Poll against a wall-clock deadline — iteration counting undercounts because each
     // loop also pays Athena API latency; must finish within the Lambda timeout (28s for this
@@ -82,9 +75,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     while (true) {
       const ex = await athena.send(new GetQueryExecutionCommand({ QueryExecutionId: id }));
       state = ex.QueryExecution?.Status?.State;
-      if (state === 'SUCCEEDED') { inflightQueryByTenant.delete(tenantId); break; }
+      if (state === 'SUCCEEDED') break;
       if (state === 'FAILED' || state === 'CANCELLED') {
-        inflightQueryByTenant.delete(tenantId);
         // Most common cause in a fresh deployment: project_mapping table not created yet.
         return ok({ projects: [], note: ex.QueryExecution?.Status?.StateChangeReason ?? state });
       }
@@ -159,6 +151,15 @@ async function modelTotals(tenantId: string): Promise<{ totalTokens: number; tot
   const s = summarizeCosts(items);
   const totalTokens = s.byModel.reduce((t, m) => t + m.inputTokens + m.outputTokens, 0);
   return { totalTokens, totalEstimatedUsd: s.totalEstimatedUsd };
+}
+
+/** ISO time of the last aggregator run (SYSTEM#WATERMARK), or null. */
+async function rollupWatermark(): Promise<string | null> {
+  try {
+    const res = await ddb.send(new GetCommand({ TableName: AGGREGATES_TABLE, Key: { pk: 'SYSTEM#WATERMARK', sk: 'aggregator' } }));
+    const ms = Number(res.Item?.lastModified);
+    return Number.isFinite(ms) && ms > 0 ? new Date(ms).toISOString() : null;
+  } catch { return null; }
 }
 
 async function fastProjects(tenantId: string): Promise<any[]> {

@@ -41,6 +41,7 @@ export function ProjectsPage() {
   const [servedFrom, setServedFrom] = useState<string>('');
   const [apiTotalTokens, setApiTotalTokens] = useState<number | null>(null);
   const [apiTotalUsd, setApiTotalUsd] = useState<number | null>(null);
+  const [rollupsAsOf, setRollupsAsOf] = useState<string | null>(null);
   const [apiTotalCost, setApiTotalCost]     = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -66,6 +67,7 @@ export function ProjectsPage() {
           setServedFrom(r.source ?? 'dynamodb');
           setApiTotalTokens(r.totalTokens != null ? Number(r.totalTokens) : null);
           setApiTotalUsd(r.totalEstimatedUsd != null ? Number(r.totalEstimatedUsd) : null);
+          setRollupsAsOf((r as { rollupsAsOf?: string | null }).rollupsAsOf ?? null);
         })
         .catch((e) => { if (!cancelled) setError(String(e)); })
         .finally(() => { if (!cancelled) setLoading(false); });
@@ -80,10 +82,13 @@ export function ProjectsPage() {
         // USD by construction (QA finding N-001).
         const [{ id }, fastTotals] = await Promise.all([
           api.startQuery('byProject', 90),
-          api.projects('fast').then((r) => ({
-            tokens: r.totalTokens != null ? Number(r.totalTokens) : null,
-            usd: r.totalEstimatedUsd != null ? Number(r.totalEstimatedUsd) : null,
-          })).catch(() => ({ tokens: null, usd: null })),
+          api.projects('fast').then((r) => {
+            setRollupsAsOf((r as { rollupsAsOf?: string | null }).rollupsAsOf ?? null);
+            return {
+              tokens: r.totalTokens != null ? Number(r.totalTokens) : null,
+              usd: r.totalEstimatedUsd != null ? Number(r.totalEstimatedUsd) : null,
+            };
+          }).catch(() => ({ tokens: null, usd: null })),
         ]);
         // Athena latency is genuinely variable (measured 18s to several minutes under queue
         // contention). Polling for up to 10 minutes with a visible elapsed timer is honest;
@@ -173,12 +178,14 @@ export function ProjectsPage() {
         <Kpi label="Total tokens" value={fmtTokens(totalTokens)} accent="var(--accent-blue)" />
         <Kpi label="Total est. cost" value={fmtUsd(totalCost)} accent="var(--accent-green)"
              foot={apiTotalUsd != null && Math.abs(apiTotalUsd - rowsCost) > 0.5
-               ? `rows sum ${fmtUsd(rowsCost)} vs model rollups ${fmtUsd(apiTotalUsd)} — residual ${fmtUsd(Math.abs(apiTotalUsd - rowsCost))} is pre-project-tracking history`
-               : 'per-model rates — same rate card as the Cost page; rows reconcile to the model rollups'} />
+               ? (source === 'full'
+                   ? `Athena rows ${fmtUsd(rowsCost)} vs rollups ${fmtUsd(apiTotalUsd)}${rollupsAsOf ? ` (as of ${rollupsAsOf.slice(11, 16)} UTC)` : ''} — Athena reads raw logs live; rollups refresh every 15 min, so the ${fmtUsd(Math.abs(rowsCost - apiTotalUsd))} difference is traffic since the last rollup`
+                   : `rows sum ${fmtUsd(rowsCost)} vs model rollups ${fmtUsd(apiTotalUsd)} — residual ${fmtUsd(Math.abs(apiTotalUsd - rowsCost))} predates per-project tracking`)
+               : `per-model rates — same rate card as the Cost page${rollupsAsOf ? ` · rollups as of ${rollupsAsOf.slice(11, 16)} UTC` : ''}`} />
       </div>
 
       <Panel title="Usage by project"
-             desc="Attribution precedence per call: ① the project's application inference profile — the call is ROUTED through it, so the invocation log records the profile's ARN as modelId and the aggregator resolves its tums-project tag (config-routed, IAM-enforceable, zero per-call effort); ② requestMetadata.project_id set by the app; ③ identity hint for single-project principals; ④ untagged. Fast = managed DynamoDB rollups (full attribution, incl. the one-time historical treatment). Full = async Athena over the immutable raw logs — call-time truth, so pre-profile history stays 'untagged' there by design.">
+             desc="Attribution precedence per call: ① the project's application inference profile — the call is ROUTED through it, so the invocation log records the profile's ARN as modelId and the aggregator resolves its tums-project tag (config-routed, IAM-enforceable, zero per-call effort); ② requestMetadata.project_id set by the app; ③ identity hint for single-project principals; ④ untagged. Fast = managed DynamoDB rollups (full attribution, incl. the one-time historical treatment). Full = async Athena over the immutable raw logs — live and call-time truth, so it can run slightly ahead of the 15-minute rollups and keeps pre-profile history 'untagged' by design.">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
           <div style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
             {(['fast', 'full'] as const).map((s) => (
