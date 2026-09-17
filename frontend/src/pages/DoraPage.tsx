@@ -4,10 +4,10 @@ import {
   Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import {
-  api, AssistedBy, DoraMetrics, DoraOverviewRow, DoraPrRow, DoraRepo, DoraWindow, MetricValue, SyncStatus, Tier,
+  api, AssistedBy, DoraMetrics, DoraOverviewRow, DoraPrRow, DoraProjectRow, DoraRepo, DoraWindow, MetricValue, SyncStatus, Tier,
 } from '../api/client';
 import { Kpi, Panel } from '../components/Layout';
-import { fmtAgo, fmtAxisHours, fmtDateTime, fmtHours, fmtPct } from '../lib/format';
+import { fmtAgo, fmtAxisHours, fmtDateTime, fmtHours, fmtPct, fmtTokens, fmtUsd } from '../lib/format';
 
 /**
  * DORA metrics per tracked GitHub repo — deployment frequency, lead time for changes, change
@@ -65,6 +65,7 @@ export function DoraPage() {
   const [detailError, setDetailError] = useState<string | null>(null);
 
   const [overview, setOverview] = useState<DoraOverviewRow[] | null>(null);
+  const [projectRows, setProjectRows] = useState<DoraProjectRow[] | null>(null);
 
   const [refreshKey, setRefreshKey] = useState(0);
   const [pollCount, setPollCount] = useState(0);
@@ -115,6 +116,15 @@ export function DoraPage() {
       .finally(() => { if (!cancelled) setDetailLoading(false); });
     return () => { cancelled = true; };
   }, [selected?.repo, windowDays, refreshKey, repos?.map((r) => `${r.repo}:${r.lastSyncedAt}`).join('|')]);
+
+  // Delivery × Cost rows (#13) — best-effort: the panel hides if the endpoint is unavailable.
+  useEffect(() => {
+    let cancelled = false;
+    api.doraProjects(windowDays)
+      .then((r) => { if (!cancelled) setProjectRows(r.projects); })
+      .catch(() => { if (!cancelled) setProjectRows(null); });
+    return () => { cancelled = true; };
+  }, [windowDays, refreshKey]);
 
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
 
@@ -348,6 +358,44 @@ export function DoraPage() {
               ))}
             </tbody>
           </table>
+        </Panel>
+      )}
+
+      {/* ---- projects: delivery × cost (#13) ---- */}
+      {projectRows && projectRows.length > 0 && (
+        <Panel title="Projects — delivery × cost"
+               desc={`Each project pools DORA across its repos and prices its Bedrock usage from daily rollups — last ${windowDays} days`}>
+          <table className="data">
+            <thead>
+              <tr><th>Project</th><th className="num">Repos</th><th className="num">Merged PRs</th><th>Deploy freq.</th><th>Lead time</th><th className="num">AI %</th><th className="num">Tokens</th><th className="num">Est. USD</th><th className="num">$ / deploy</th></tr>
+            </thead>
+            <tbody>
+              {projectRows.map((p) => (
+                <tr key={p.projectId}>
+                  <td><strong>{p.name}</strong> <span className="muted mono" style={{ fontSize: 12 }}>{p.projectId}</span>
+                    {p.costCenter && <div className="muted" style={{ fontSize: 12 }}>{p.costCenter}</div>}</td>
+                  <td className="num">{p.repos.length}</td>
+                  <td className="num">{p.dora?.mergedPrs ?? '—'}</td>
+                  <td>{p.dora ? <>{p.dora.df.value ?? '—'}/d <TierBadge tier={p.dora.df.tier} /></> : <span className="muted">no repos tracked</span>}</td>
+                  <td>{p.dora ? <>{fmtHours(p.dora.lt.value)} <TierBadge tier={p.dora.lt.tier} /></> : <span className="muted">—</span>}</td>
+                  <td className="num">{fmtPct(p.dora?.aiParticipationPct ?? null)}</td>
+                  <td className="num">{fmtTokens(p.tokens)}</td>
+                  <td className="num"><strong>{fmtUsd(p.estimatedUsd)}</strong></td>
+                  <td className="num">{p.usdPerDeployment != null ? fmtUsd(p.usdPerDeployment) : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {projectRows.some((p) => p.notes.length > 0) && (
+            <p className="muted" style={{ fontSize: 12, marginTop: 10 }}>
+              {projectRows.flatMap((p) => p.notes.map((n) => `${p.projectId}: ${n}`)).join(' · ')}
+            </p>
+          )}
+          <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+            Cost is a token-based estimate (same rate card as the Cost page). A deployment is a PR
+            merged to the default branch, so $ / deploy = $ / merged PR today. Manage projects on
+            the By Project page.
+          </p>
         </Panel>
       )}
 

@@ -64,6 +64,17 @@ export interface DoraOverviewRow {
 }
 export interface DoraDataSource { deploymentDefinition: string; notes: string[] }
 export type DoraWindow = 7 | 30 | 90;
+export interface RegistryProject {
+  projectId: string; name: string; costCenter: string | null; repos: string[];
+  identityArns: string[]; addedBy: string; addedAt: string; seeded: boolean;
+}
+export interface DoraProjectRow {
+  projectId: string; name: string; costCenter: string | null; repos: string[];
+  dora: { df: MetricValue; lt: MetricValue; cfr: MetricValue; mttr: MetricValue;
+          aiParticipationPct: number | null; mergedPrs: number } | null;
+  tokens: number; estimatedUsd: number;
+  usdPerDeployment: number | null; usdPerMergedPr: number | null; notes: string[];
+}
 
 const repoPath = (repo: string) => repo.split('/').map(encodeURIComponent).join('/');
 
@@ -79,6 +90,14 @@ export const api = {
     request<{ repo: DoraRepo; window: number; metrics: DoraMetrics; recentPrs: DoraPrRow[]; dataSource: DoraDataSource }>(
       `v1/dora/metrics?repo=${encodeURIComponent(repo)}&window=${window}`,
     ),
+  doraProjects: (window: DoraWindow) =>
+    request<{ window: number; projects: DoraProjectRow[]; dataSource: DoraDataSource }>(`v1/dora/projects?window=${window}`),
+  projectRegistry: () =>
+    request<{ projects: RegistryProject[]; profiles: { arn: string; projectId: string; underlyingModelId: string; profileName: string | null }[]; isAdmin: boolean }>('v1/projects/registry'),
+  projectRegistryUpsert: (p: { id: string; name: string; costCenter?: string; repos?: string[]; identityArns?: string[] }) =>
+    request<{ project: RegistryProject }>('v1/projects/registry', { method: 'POST', body: JSON.stringify(p) }),
+  projectRegistryDelete: (id: string) =>
+    request<{ deleted: boolean; items: number }>(`v1/projects/registry/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   doraOverview: (window: DoraWindow) =>
     request<{ window: number; repos: DoraOverviewRow[]; dataSource: DoraDataSource }>(`v1/dora/overview?window=${window}`),
   usage: (from?: string, to?: string) =>
