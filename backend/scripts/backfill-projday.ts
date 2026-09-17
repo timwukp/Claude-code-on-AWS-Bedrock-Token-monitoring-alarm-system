@@ -82,17 +82,44 @@ async function main(): Promise<void> {
 
   // Aggregate ONCE over all records so requestId de-dup is global (a per-file aggregate
   // merged afterwards could double-count a request that appears in two files).
+  // Downloads run CONCURRENTLY: ~100k tiny objects fetched sequentially is a 12-hour job;
+  // a worker pool makes it minutes. Pushing into the shared array is safe — the event loop
+  // serialises the continuations.
   const records: InvocationRecord[] = [];
+  const CONCURRENCY = Number(process.env.BACKFILL_CONCURRENCY ?? '48') || 48;
+  let next = 0;
   let done = 0;
-  for (const key of keys) {
-    const res = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: key }));
-    const buf = Buffer.from(await res.Body!.transformToByteArray());
-    let body: string;
-    try { body = gunzipSync(buf).toString('utf8'); } catch { body = buf.toString('utf8'); }
-    records.push(...parseLogFile(body));
-    done++;
-    if (done % 200 === 0) console.log(`  parsed ${done}/${keys.length} objects (${records.length} records)`);
+  async function worker(): Promise<void> {
+    for (;;) {
+      const i = next++;
+      if (i >= keys.length) return;
+      const res = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: keys[i] }));
+      const buf = Buffer.from(await res.Body!.transformToByteArray());
+      let body: string;
+      try { body = gunzipSync(buf).toString('utf8'); } catch { body = buf.toString('utf8'); }
+      // SLIM each record immediately: parsed log entries can carry full request/response
+      // bodies (inline up to 100 KB) — retaining them OOMed a 4 GB heap at ~70k objects.
+      // Keep only what attribution + aggregation read.
+      for (const r of parseLogFile(body)) {
+        records.push({
+          timestamp: r.timestamp,
+          requestId: r.requestId,
+          modelId: r.modelId,
+          identity: r.identity?.arn ? { arn: r.identity.arn } : undefined,
+          requestMetadata: r.requestMetadata,
+          input: {
+            inputTokenCount: r.input?.inputTokenCount,
+            cacheReadInputTokenCount: r.input?.cacheReadInputTokenCount,
+            cacheWriteInputTokenCount: r.input?.cacheWriteInputTokenCount,
+          },
+          output: { outputTokenCount: r.output?.outputTokenCount },
+        });
+      }
+      done++;
+      if (done % 5000 === 0) console.log(`  parsed ${done}/${keys.length} objects (${records.length} records)`);
+    }
   }
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, keys.length) }, () => worker()));
   // One-time historical attribution (owner-directed): inject the mapped project as
   // requestMetadata for records with no attribution signal of their own. deriveProject's
   // precedence is unchanged — an AIP hit still wins over this injection.
