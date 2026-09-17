@@ -43,6 +43,8 @@ branch is cut from it. Design approved in plan mode 2026-09-17 with four owner d
 18. `frontend/src/api/client.ts` — RegistryProject/DoraProjectRow types + 4 calls
 19. `frontend/src/pages/DoraPage.tsx` — "Projects — delivery × cost" panel
 20. `frontend/src/pages/ProjectsPage.tsx` — registry names + admin registry panel
+21. `frontend/src/main.tsx` — By-Project page subtitle names the real attribution mechanisms
+    (inference profiles, request metadata, registry) instead of the retired CSV-only wording
 
 Non-source riders: `infra/lib/config/ci.json`, `infra/lib/config/example.env.json`,
 `backend/package.json`, `backend/package-lock.json` (dep: @aws-sdk/client-bedrock),
