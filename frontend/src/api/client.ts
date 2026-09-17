@@ -26,6 +26,9 @@ export interface UsagePoint {
   timestamp: string;
   inputTokens: number;
   outputTokens: number;
+  /** Prompt-cache reads/writes — quota accounting counts these as input; billing does not. */
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
   invocations: number;
   cost?: number; // estimated USD for this bucket (optional; older API responses omit it)
   label?: string; // short HH:MM label for chart axis (set client-side)

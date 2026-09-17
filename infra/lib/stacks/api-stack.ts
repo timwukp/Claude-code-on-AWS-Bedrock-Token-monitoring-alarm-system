@@ -69,7 +69,21 @@ export class ApiStack extends cdk.Stack {
     const costsFn = fn('CostsFn', 'costs.ts');
     const anomaliesFn = fn('AnomaliesFn', 'anomalies.ts');
     const queriesFn = fn('QueriesFn', 'queries.ts');
-    const projectsFn = fn('ProjectsFn', 'projects.ts');
+    // ProjectsFn gets a longer timeout than the 15s default: the Full (Athena) view polls the
+    // query synchronously for up to ~22s; a 15s Lambda timeout killed the invocation mid-poll
+    // and the browser surfaced status 0 / "Failed to fetch" (QA finding F-002).
+    const projectsFn = new NodejsFunction(this, 'ProjectsFn', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: lambdaEntry('api', 'projects.ts'),
+      projectRoot: BACKEND_ROOT,
+      depsLockFilePath: BACKEND_LOCK,
+      handler: 'handler',
+      memorySize: 256,
+      timeout: cdk.Duration.seconds(28),
+      tracing: lambda.Tracing.ACTIVE,
+      environment: commonEnv,
+      bundling: { minify: true, sourceMap: true },
+    });
     const quotasFn = fn('QuotasFn', 'quotas.ts');
 
     // Governance read-only view: budget status + enforcement posture for the dashboard.
@@ -153,6 +167,7 @@ export class ApiStack extends cdk.Stack {
     grantAthena(queriesFn);
     grantAthena(projectsFn);
     curatedBucket.grantRead(projectsFn); // project_mapping CSV lives in the curated bucket
+    curatedBucket.grantRead(queriesFn); // byProject template joins the same mapping CSV (F-002)
     tables.aggregates.grantReadData(projectsFn); // #7 fast path reads PROJECT rollups from DynamoDB
 
     // quotasFn reads CloudWatch Bedrock metrics + Service Quotas limits (read-only, account-wide).

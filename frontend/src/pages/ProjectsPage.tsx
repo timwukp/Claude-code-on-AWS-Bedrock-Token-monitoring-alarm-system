@@ -7,6 +7,20 @@ import { fmtTokens, fmtUsd } from '../lib/format';
  * Usage attributed to projects/users. Attribution comes from Bedrock requestMetadata tags
  * (user_id, project_id) joined to a customer-supplied project mapping. See docs/ATTRIBUTION.md.
  */
+/** Athena result rows → table rows (row 0 is the header). */
+function mapAthenaProjectRows(rows: any[]): any[] {
+  return rows.slice(1).map((r) => {
+    const c = r?.Data ?? [];
+    return {
+      projectName: c[0]?.VarCharValue ?? 'untagged',
+      costCenter: c[1]?.VarCharValue ?? '—',
+      users: Number(c[2]?.VarCharValue ?? 0),
+      tokens: Number(c[3]?.VarCharValue ?? 0),
+      estimatedUsd: Math.round(Number(c[4]?.VarCharValue ?? 0) * 1e6) / 1e6,
+    };
+  });
+}
+
 export function ProjectsPage() {
   const [rows, setRows] = useState<any[]>([]);
   const [source, setSource] = useState<'fast' | 'full'>('fast');
@@ -19,17 +33,50 @@ export function ProjectsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
     setError(null);
-    api.projects(source)
-      .then((r) => {
-        setRows(r.projects ?? []);
-        setServedFrom(r.source ?? (source === 'fast' ? 'dynamodb' : 'athena'));
-        setApiTotalTokens(r.totalTokens != null ? Number(r.totalTokens) : null);
-        setApiTotalUsd(r.totalEstimatedUsd != null ? Number(r.totalEstimatedUsd) : null);
-      })
-      .catch((e) => setError(String(e)))
-      .finally(() => setLoading(false));
+    if (source === 'fast') {
+      api.projects('fast')
+        .then((r) => {
+          if (cancelled) return;
+          setRows(r.projects ?? []);
+          setServedFrom(r.source ?? 'dynamodb');
+          setApiTotalTokens(r.totalTokens != null ? Number(r.totalTokens) : null);
+          setApiTotalUsd(r.totalEstimatedUsd != null ? Number(r.totalEstimatedUsd) : null);
+        })
+        .catch((e) => { if (!cancelled) setError(String(e)); })
+        .finally(() => { if (!cancelled) setLoading(false); });
+    } else {
+      // Full (Athena) view runs ASYNC — start the query, then poll (F-002). The scan takes
+      // 15-30s on real data, longer than any sane synchronous API timeout; the old sync path
+      // hit the Lambda timeout mid-poll and the browser surfaced status 0 / "Failed to fetch".
+      (async () => {
+        const { id } = await api.startQuery('byProject', 90);
+        const deadline = Date.now() + 75_000;
+        for (;;) {
+          if (cancelled) return;
+          const res = await api.pollQuery(id);
+          if (res.state === 'SUCCEEDED') {
+            if (cancelled) return;
+            setRows(mapAthenaProjectRows(res.rows ?? []));
+            setServedFrom('athena (async)');
+            setApiTotalTokens(null);
+            setApiTotalUsd(null);
+            setLoading(false);
+            return;
+          }
+          if (res.state === 'FAILED' || res.state === 'CANCELLED') {
+            throw new Error('Athena query failed — most often the project_mapping table has not been created yet (see docs/ATTRIBUTION.md)');
+          }
+          if (Date.now() > deadline) throw new Error('Athena query still running after 75s — use Retry in a moment');
+          await new Promise((r) => setTimeout(r, 2500));
+        }
+      })().catch((e) => {
+        if (!cancelled) { setError(String(e).replace(/^Error: /, '')); setLoading(false); }
+      });
+    }
+    return () => { cancelled = true; };
   }, [source, refreshKey]);
 
   // Keep the page frame (toggle stays clickable) while a source loads; only the table area spins.
@@ -65,7 +112,7 @@ export function ProjectsPage() {
           {servedFrom && <span className="muted" style={{ fontSize: 12 }}>served from: <strong>{servedFrom}</strong></span>}
         </div>
         {bodyLoading ? (
-          <div className="empty"><span className="spinner" /> <span className="muted">loading {source === 'fast' ? 'DynamoDB rollups' : 'Athena scan (may take ~10s)'}…</span></div>
+          <div className="empty"><span className="spinner" /> <span className="muted">loading {source === 'fast' ? 'DynamoDB rollups' : 'Athena scan (typically 15-30s — running async)'}…</span></div>
         ) : error ? (
           <div className="empty"><div className="big">⚠️</div>Failed to load: {error}{' '}
             <button onClick={() => { setError(null); setRefreshKey((k) => k + 1); }}

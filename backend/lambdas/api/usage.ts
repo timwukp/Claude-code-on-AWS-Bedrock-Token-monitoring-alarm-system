@@ -45,9 +45,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       to,
       points: items.map((i) => ({
         timestamp: i.sk,
-        // Quota accounting counts cache read/write tokens as input tokens; include
-        // them so usage KPIs reconcile with the per-model quota table (F-007).
-        inputTokens: (i.inputTokens ?? 0) + (i.cacheReadTokens ?? 0) + (i.cacheWriteTokens ?? 0),
+        // Real (billed-as-input) tokens only — the same definition the Cost and By-Project
+        // pages use, so cross-page totals reconcile (F-001). Cache read/write tokens are
+        // returned as their own fields: quota accounting counts them as input (F-007), so the
+        // page shows them separately with that caveat instead of inflating "Input tokens".
+        inputTokens: i.inputTokens ?? 0,
+        cacheReadTokens: i.cacheReadTokens ?? 0,
+        cacheWriteTokens: i.cacheWriteTokens ?? 0,
         outputTokens: i.outputTokens ?? 0,
         invocations: i.invocations ?? 0,
         throttleErrors: i.throttleErrors ?? 0,

@@ -74,9 +74,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const id = start.QueryExecutionId!;
 
     // Poll against a wall-clock deadline — iteration counting undercounts because each
-    // loop also pays Athena API latency; must finish within the Lambda's 15s timeout,
-    // otherwise the runtime kills the invocation mid-poll and the browser sees status 0 (F-002).
-    const deadline = Date.now() + 10_000;
+    // loop also pays Athena API latency; must finish within the Lambda timeout (28s for this
+    // function), otherwise the runtime kills the invocation mid-poll and the browser sees
+    // status 0 (F-002). 22s of polling + start/results/scaling fits with headroom.
+    const deadline = Date.now() + 22_000;
     let state: string | undefined;
     while (true) {
       const ex = await athena.send(new GetQueryExecutionCommand({ QueryExecutionId: id }));
