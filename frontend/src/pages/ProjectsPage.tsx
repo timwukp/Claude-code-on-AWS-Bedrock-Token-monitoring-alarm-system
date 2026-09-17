@@ -160,7 +160,7 @@ export function ProjectsPage() {
       </div>
 
       <Panel title="Usage by project"
-             desc="Attribution precedence per call: application inference profile tag → requestMetadata.project_id → identity hint → untagged. Fast = managed DynamoDB rollups (carries the full attribution, including the one-time historical treatment of pre-profile usage). Full = async Athena scan over the immutable raw logs — it reports what was true at call time, so pre-profile history stays 'untagged' there by design.">
+             desc="Attribution precedence per call: ① the project's application inference profile — the call is ROUTED through it, so the invocation log records the profile's ARN as modelId and the aggregator resolves its tums-project tag (config-routed, IAM-enforceable, zero per-call effort); ② requestMetadata.project_id set by the app; ③ identity hint for single-project principals; ④ untagged. Fast = managed DynamoDB rollups (full attribution, incl. the one-time historical treatment). Full = async Athena over the immutable raw logs — call-time truth, so pre-profile history stays 'untagged' there by design.">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
           <div style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
             {(['fast', 'full'] as const).map((s) => (
@@ -248,11 +248,16 @@ export function ProjectsPage() {
             </table>
           )}
           <p className="muted" style={{ fontSize: 12, marginTop: 10 }}>
-            Attribution precedence per call: application inference profile tag → requestMetadata.project_id →
-            identity hint → untagged. Profiles are created by the infrastructure (Tums-*-Projects stack) and
-            resolved automatically. Identity hints cover principals dedicated to one project; usage that
-            predates the profiles was attributed once, offline, by commit-time correlation — method and audit
-            artifact in docs/ATTRIBUTION.md.
+            How the AIP mapping works end-to-end: the Tums-*-Projects stack creates one inference profile per
+            project × model, tagged tums-project=&lt;id&gt;. A repo's committed Claude Code settings (or an app
+            passing the profile ARN as modelId) route every call through it — no per-call tagging. The
+            invocation log then records the profile ARN as modelId; the aggregator resolves the ARN once via
+            its tag, caches it in this registry, and re-keys the record to the real underlying model so
+            per-model pricing stays exact. With the opt-in IAM policy, tagged profiles are the ONLY invokable
+            path, making attribution unforgeable; the same tag flows to Cost Explorer for billing-grade $.
+            Identity hints cover principals dedicated to one project; usage that predates the profiles was
+            attributed once, offline, by commit-time correlation — method and audit artifact in
+            docs/ATTRIBUTION.md.
           </p>
         </Panel>
       )}
