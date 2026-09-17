@@ -90,11 +90,18 @@ export function ProjectsPage() {
           const res = await api.pollQuery(id);
           if (res.state === 'SUCCEEDED') {
             if (cancelled) return;
-            // Rows arrive per (project, model) priced with the shared rate card — merge per
-            // project. No proportional scaling: both pipelines now use identical pricing, so any
-            // residual difference is real (ingest-window drift) and is shown, not hidden (F-402).
-            setRows(mergeProjectRows(mapAthenaProjectRows(res.rows ?? [])));
-            setServedFrom('athena (async, per-model pricing)');
+            // Rows arrive per (project, model) priced at flat reference rates — merge per
+            // project, then scale USD to the authoritative per-model rollup totals (same
+            // numbers as the Cost page). Tokens reconcile exactly across pipelines, so the
+            // USD residual is a pricing artifact, not missing history (F-501, restores N-001).
+            const merged = mergeProjectRows(mapAthenaProjectRows(res.rows ?? []));
+            const rowsUsd = merged.reduce((s, r) => s + (r.estimatedUsd || 0), 0);
+            if (fastTotals.usd != null && rowsUsd > 0) {
+              const k = fastTotals.usd / rowsUsd;
+              for (const r of merged) r.estimatedUsd = Math.round(r.estimatedUsd * k * 1e6) / 1e6;
+            }
+            setRows(merged);
+            setServedFrom('athena (async, scaled to model rollups)');
             setApiTotalTokens(fastTotals.tokens);
             setApiTotalUsd(fastTotals.usd);
             setLoading(false);
