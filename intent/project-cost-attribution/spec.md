@@ -49,3 +49,15 @@ registry validation/seeding, and the rate-card guard proving opaque application-
 price to zero unless resolved at ingest. Live: deploy, seed, aggregator resolution, backfill,
 `/v1/dora/projects` with real data, IAM pilot matrix — recorded in
 docs/test-reports/feature-13-project-cost-attribution.md.
+
+## Addendum (owner-directed, 2026-09-17, post-acceptance)
+
+Two facts recorded after live deployment, both within the accepted file set:
+
+1. The attribution tag key is **`tums-project`**, not `project`: the app-wide billing tag
+   (`project=token-usage-monitoring`, applied by the CDK app aspect) overrides same-key
+   resource tags — observed live and fixed before the IAM matrix was validated.
+2. The owner directed a **one-time historical attribution** of pre-AIP untagged usage via
+   commit-time correlation (`HOUR_PROJECT_MAP` mode of the backfill script; precedence
+   unchanged; `SYSTEM#RETRO` marker prevents repetition). Go-forward attribution runs solely
+   on the strict AIP mechanism specified above.

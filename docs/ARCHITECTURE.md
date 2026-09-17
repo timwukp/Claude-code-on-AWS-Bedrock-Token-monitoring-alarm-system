@@ -96,6 +96,8 @@ REST API with a Cognito authorizer. Routes (illustrative):
 | `GET /v1/dora/repos` · `POST /v1/dora/repos` (admin) | tracked-repo registry for DORA metrics | DynamoDB `tums-dora` |
 | `DELETE /v1/dora/repos/{owner}/{name}` · `POST …/sync` (admin) | remove a repo / trigger a collector run | DynamoDB + async Lambda invoke |
 | `GET /v1/dora/metrics?repo=&window=` · `GET /v1/dora/overview` | 4 DORA metrics (All / AI-assisted / Human) + weekly timeline; per-repo comparison | computed on read from `tums-dora` |
+| `GET /v1/dora/projects?window=` | Delivery × Cost per project: pooled DORA + windowed token cost, $/deployment | `tums-dora` + `PROJDAY` rollups + registry |
+| `GET·POST /v1/projects/registry` · `DELETE …/{id}` (admin) | project registry: name / cost center / repos / identity hints | DynamoDB `tums-tenants` |
 
 **Multi-tenancy**: every request is scoped by a `tenantId` claim in the JWT. Aggregates and
 Athena queries are filtered by tenant; tenant isolation is enforced in the API layer and in
@@ -128,6 +130,12 @@ IAM/Athena workgroup boundaries. See `docs/MULTI_TENANCY.md` (skeleton) for the 
   via per-repo watermarks. It reads a fine-grained PAT from Secrets Manager and stops early when
   the GitHub rate limit runs low (resuming next run). Metrics are computed on read by the API.
 
+- **Project attribution (#13)**: the aggregator resolves application-inference-profile ARNs
+  seen in logs (GetInferenceProfile + `tums-project` tag, cached in the registry), attributes each
+  record (profile tag → requestMetadata → identity hint → untagged), re-keys profile traffic to
+  the real underlying model, and writes `PROJDAY` daily per-project rollups alongside the
+  existing hourly/model/project ones.
+
 ### 3.5 Data plane (Bedrock logging → S3 → Athena)
 
 - **Bedrock Model Invocation Logging** delivers newline-delimited JSON to a **KMS-encrypted S3
@@ -155,6 +163,7 @@ so blast radius is small and environments are reproducible:
 | `AutomationStack` | EventBridge rules, anomaly-response Lambda, SNS topics, Cost Anomaly Detection monitor/subscription, Budgets |
 | `EtlStack` | Step Functions, ECS Fargate task definition, scheduled aggregator Lambda |
 | `DoraStack` | GitHub-token secret (Secrets Manager), scheduled DORA collector Lambda; no VPC/Docker so it deploys independently of `EtlStack` |
+| `ProjectsStack` | Tagged application inference profiles per project×model (cost attribution); opt-in "profiles-only" managed policy + pilot test role |
 | `FrontendStack` | S3 site bucket, CloudFront + OAC, WAF, (optional) custom domain via ACM |
 
 Config is environment-driven (`infra/lib/config`) so the same code deploys `dev` / `staging` /

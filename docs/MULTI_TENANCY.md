@@ -29,4 +29,6 @@ only be grouped by model, not by tenant.
 
 - Per-tenant rate limits / usage plans on API Gateway.
 - Optional tenant-scoped IAM via session tags for defense-in-depth on Athena/S3.
-- Tenant lifecycle (onboard/offboard) automation in `tums-tenants` table.
+- Tenant lifecycle (onboard/offboard) automation in `tums-tenants` table. (The table now also
+  hosts the project registry — `REGISTRY#*` key spaces for project↔repo↔cost-center mapping,
+  AIP resolutions and identity hints; see `docs/ATTRIBUTION.md`.)

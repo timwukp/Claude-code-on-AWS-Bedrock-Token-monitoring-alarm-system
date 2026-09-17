@@ -12,7 +12,17 @@
  * Usage:
  *   AGGREGATES_TABLE=tums-aggregates-dev TENANTS_TABLE=tums-tenants-dev \
  *   RAW_LOG_BUCKET=<raw-log-bucket> AWS_REGION=us-east-1 \
+ *   [HOUR_PROJECT_MAP=/path/hour-project-map.json] \
  *   npx ts-node scripts/backfill-projday.ts
+ *
+ * HOUR_PROJECT_MAP (one-time historical attribution, owner-directed): a JSON object of
+ * { "YYYY-MM-DDTHH": "<projectId>" } produced by correlating hourly usage with per-repo
+ * commit timestamps. For historical records that carry NO attribution signal of their own
+ * (no requestMetadata.project_id; AIP resolution still takes precedence), the record is
+ * attributed to the mapped project. In this mode the script ALSO migrates the all-time
+ * TENANT#<t>#PROJECT rollups: ADDs the attributed sums per (project, model) and ADDs the
+ * equal negative amounts to the 'untagged' rows — atomic, safe alongside the live
+ * aggregator, and guarded by a SYSTEM#RETRO marker so it can only ever run once.
  */
 import { S3Client, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
@@ -28,6 +38,14 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = process.env.AGGREGATES_TABLE!;
 const BUCKET = process.env.RAW_LOG_BUCKET!;
 const PREFIX = process.env.LOG_PREFIX ?? 'model-logs/AWSLogs/';
+
+function loadHourMap(): Record<string, string> | null {
+  const p = process.env.HOUR_PROJECT_MAP;
+  if (!p) return null;
+  const m = JSON.parse(require('fs').readFileSync(p, 'utf8')) as Record<string, string>;
+  console.log(`One-time attribution map loaded: ${Object.keys(m).length} hours`);
+  return m;
+}
 
 async function main(): Promise<void> {
   const wm = await ddb.send(new GetCommand({ TableName: TABLE, Key: { pk: 'SYSTEM#WATERMARK', sk: 'aggregator' } }));
@@ -75,7 +93,19 @@ async function main(): Promise<void> {
     done++;
     if (done % 200 === 0) console.log(`  parsed ${done}/${keys.length} objects (${records.length} records)`);
   }
-  const all = aggregateByProjectDay(records, maps);
+  // One-time historical attribution (owner-directed): inject the mapped project as
+  // requestMetadata for records with no attribution signal of their own. deriveProject's
+  // precedence is unchanged — an AIP hit still wins over this injection.
+  const hourMap = loadHourMap();
+  const effective = hourMap
+    ? records.map((r) => {
+        if (r.requestMetadata?.project_id) return r;
+        const mapped = hourMap[r.timestamp.slice(0, 13)];
+        return mapped ? { ...r, requestMetadata: { ...(r.requestMetadata ?? {}), project_id: mapped } } : r;
+      })
+    : records;
+
+  const all = aggregateByProjectDay(effective, maps);
   console.log(`${records.length} records → ${all.size} (tenant, day, project, model) rollups`);
 
   let setWrites = 0;
@@ -128,6 +158,51 @@ async function main(): Promise<void> {
     }
   }
   console.log(`Backfill done: ${setWrites} complete-day items SET, ${boundaryWrites} boundary-day items ADDed${skippedBoundary ? ' (some boundary tenants skipped — already done)' : ''}.`);
+
+  // --- one-time all-time PROJECT rollup migration (map mode only) --------------------------
+  if (hourMap) {
+    const { aggregateByProject } = await import('../lambdas/ingestion/parse');
+    // Only records at/below the watermark: the live aggregator owns everything newer.
+    try {
+      await ddb.send(new PutCommand({
+        TableName: TABLE,
+        Item: { pk: 'SYSTEM#RETRO', sk: 'untagged-attribution', at: new Date().toISOString(), hours: Object.keys(hourMap).length },
+        ConditionExpression: 'attribute_not_exists(pk)',
+      }));
+    } catch {
+      console.log('PROJECT rollup migration already performed once — skipping (SYSTEM#RETRO marker present).');
+      return;
+    }
+    const byProject = aggregateByProject(effective, maps);
+    const byProjectRaw = aggregateByProject(records, maps); // what the rollups currently say
+    let moved = 0;
+    for (const [key, agg] of byProject) {
+      if (agg.projectId === 'untagged') continue;
+      const rawKey = key.replace(`|${agg.projectId}|`, '|untagged|');
+      const raw = byProjectRaw.get(rawKey);
+      // Only migrate the portion that was untagged before the map (metadata-tagged demo
+      // traffic is already in its project's row and must not be double-moved).
+      const wasTagged = byProjectRaw.get(key);
+      const moveIn = agg.inputTokens - (wasTagged?.inputTokens ?? 0);
+      const moveOut = agg.outputTokens - (wasTagged?.outputTokens ?? 0);
+      const moveCache = agg.cacheReadTokens - (wasTagged?.cacheReadTokens ?? 0);
+      const moveInv = agg.invocations - (wasTagged?.invocations ?? 0);
+      if (moveInv <= 0 || !raw) continue;
+      const add = async (projectId: string, sign: 1 | -1) => ddb.send(new UpdateCommand({
+        TableName: TABLE,
+        Key: { pk: `TENANT#${agg.tenant}#PROJECT`, sk: `${projectId}#${agg.modelId}` },
+        UpdateExpression: 'SET projectId = :p, modelId = :m ADD inputTokens :i, outputTokens :o, cacheReadTokens :cr, invocations :n',
+        ExpressionAttributeValues: {
+          ':p': projectId, ':m': agg.modelId,
+          ':i': sign * moveIn, ':o': sign * moveOut, ':cr': sign * moveCache, ':n': sign * moveInv,
+        },
+      }));
+      await add(agg.projectId, 1);
+      await add('untagged', -1);
+      moved++;
+    }
+    console.log(`PROJECT rollup migration: ${moved} (project, model) rows moved out of 'untagged'.`);
+  }
 }
 
 main().catch((err) => {
