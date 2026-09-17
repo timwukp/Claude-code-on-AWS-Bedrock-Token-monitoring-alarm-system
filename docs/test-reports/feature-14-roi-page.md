@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Intent** | intent/roi-page/ (accepted chain; plan base-bound to the post-#39 merge base) |
-| **Branch / PR** | `feat/roi-page` |
+| **Branch / PR** | `feat/roi-page` → #40 |
 | **Date** | 2026-09-17 |
 | **Environment** | `dev` (us-east-1) — live stacks, live API, live CloudFront site, real data |
 | **Result** | **PASS** |
