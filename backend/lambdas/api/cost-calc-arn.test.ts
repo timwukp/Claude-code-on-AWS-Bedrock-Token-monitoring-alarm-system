@@ -8,12 +8,12 @@ import { matchRate, normalizeModelId } from './cost-calc';
  */
 describe('normalizeModelId vs inference-profile ARNs', () => {
   it('system profile ARNs normalize to a rate-card-matching id', () => {
-    const id = normalizeModelId('arn:aws:bedrock:us-east-1:111122223333:inference-profile/us.anthropic.claude-sonnet-4-6');
+    const id = normalizeModelId('arn:aws:bedrock:us-east-1::inference-profile/us.anthropic.claude-sonnet-4-6');
     expect(id).toBe('us.anthropic.claude-sonnet-4-6');
     expect(matchRate(id).key).toBe('sonnet');
   });
   it('application profile ARNs stay opaque and match no rate (must be resolved at ingest)', () => {
-    const id = normalizeModelId('arn:aws:bedrock:us-east-1:111122223333:application-inference-profile/abc123opaque');
+    const id = normalizeModelId('arn:aws:bedrock:us-east-1::application-inference-profile/abc123opaque');
     expect(id).toBe('abc123opaque');
     expect(matchRate(id).key).toBe('');
     expect(matchRate(id).inPerToken).toBe(0);

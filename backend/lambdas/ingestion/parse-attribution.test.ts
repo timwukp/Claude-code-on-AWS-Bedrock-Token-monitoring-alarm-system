@@ -3,19 +3,19 @@ import {
   dayBucketOf, deriveProject,
 } from './parse';
 
-const AIP = 'arn:aws:bedrock:us-east-1:111122223333:application-inference-profile/abc123opaque';
+const AIP = 'arn:aws:bedrock:us-east-1::application-inference-profile/abc123opaque';
 const rec = (o: Partial<InvocationRecord> = {}): InvocationRecord => ({
   timestamp: '2026-09-17T06:54:27Z',
   requestId: `req-${Math.random()}`,
   modelId: 'us.anthropic.claude-sonnet-4-6',
-  identity: { arn: 'arn:aws:iam::111122223333:user/Alice' },
+  identity: { arn: 'arn:aws:iam:::user/Alice' },
   input: { inputTokenCount: 100, cacheReadInputTokenCount: 10 },
   output: { outputTokenCount: 20 },
   ...o,
 });
 const maps = (): AttributionMaps => ({
   profiles: new Map([[AIP, { projectId: 'token-monitoring', underlyingModelId: 'us.anthropic.claude-sonnet-4-6' }]]),
-  identities: new Map([['arn:aws:iam::111122223333:user/alice', 'proj-alice']]),
+  identities: new Map([['arn:aws:iam:::user/alice', 'proj-alice']]),
 });
 
 describe('deriveProject precedence', () => {
@@ -31,7 +31,7 @@ describe('deriveProject precedence', () => {
     expect(deriveProject(rec(), maps())).toEqual({ projectId: 'proj-alice', effectiveModelId: 'us.anthropic.claude-sonnet-4-6' });
   });
   it('falls back to untagged, and behaves legacy without maps', () => {
-    const stranger = rec({ identity: { arn: 'arn:aws:iam::111122223333:user/bob' } });
+    const stranger = rec({ identity: { arn: 'arn:aws:iam:::user/bob' } });
     expect(deriveProject(stranger, maps()).projectId).toBe('untagged');
     expect(deriveProject(rec({ modelId: AIP })).projectId).toBe('untagged'); // no maps → no resolution
     expect(deriveProject(rec({ requestMetadata: { project_id: 'p' } })).projectId).toBe('p');
