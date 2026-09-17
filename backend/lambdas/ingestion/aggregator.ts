@@ -1,8 +1,16 @@
 import { S3Client, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3';
+import { BedrockClient, GetInferenceProfileCommand, ListTagsForResourceCommand } from '@aws-sdk/client-bedrock';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, UpdateCommand, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { gunzipSync } from 'zlib';
-import { parseLogFile, aggregate, aggregateByProject, UsageAggregate, ProjectAggregate } from './parse';
+import {
+  parseLogFile, aggregate, aggregateByProject, aggregateByProjectDay,
+  AttributionMaps, InvocationRecord, UsageAggregate, ProjectAggregate, ProjectDayAggregate,
+} from './parse';
+import { normalizeModelId } from '../api/cost-calc';
+import {
+  PROFILE_PK, ProfileCacheItem, loadAttributionMaps, listProfiles, putProfile,
+} from '../shared/project-registry';
 
 const s3 = new S3Client({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -22,18 +30,32 @@ export const handler = async (): Promise<{ filesProcessed: number; aggregatesWri
   const watermark = await getWatermark();
   const objects = await listNewLogObjects(watermark);
 
+  // Project attribution maps (#13): AIP-ARN → project/model + identity hints. Loaded once per
+  // run; extended below when unseen application-inference-profile ARNs appear in the logs.
+  const maps = await loadAttributionMapsSafe();
+
   const allAggregates = new Map<string, UsageAggregate>();
   const allProjects = new Map<string, ProjectAggregate>();
-  let maxKeyTime = watermark;
+  const allProjectDays = new Map<string, ProjectDayAggregate>();
 
+  let maxKeyTime = watermark;
+  const batches: InvocationRecord[][] = [];
   for (const obj of objects) {
     // Skip the split-out large bodies and the permission-check markers; only main records carry tokens.
     if (obj.key.includes('/data/') || obj.key.includes('permission-check')) continue;
     const body = await getDecompressed(obj.key);
-    const records = parseLogFile(body);
-    mergeInto(allAggregates, aggregate(records));
-    mergeProjects(allProjects, aggregateByProject(records));
+    batches.push(parseLogFile(body));
     if (obj.lastModified > maxKeyTime) maxKeyTime = obj.lastModified;
+  }
+
+  // Resolve application-inference-profile ARNs we haven't cached yet, BEFORE aggregating,
+  // so this run's records are attributed correctly instead of waiting for the next run.
+  if (maps) await resolveUnseenProfiles(batches, maps);
+
+  for (const records of batches) {
+    mergeInto(allAggregates, aggregate(records, maps ?? undefined));
+    mergeProjects(allProjects, aggregateByProject(records, maps ?? undefined));
+    mergeProjectDays(allProjectDays, aggregateByProjectDay(records, maps ?? undefined));
   }
 
   let written = 0;
@@ -46,11 +68,89 @@ export const handler = async (): Promise<{ filesProcessed: number; aggregatesWri
     await upsertProjectRollup(p);
     written++;
   }
+  for (const d of allProjectDays.values()) {
+    await upsertProjectDayRollup(d);
+    written++;
+  }
 
   if (objects.length > 0) await setWatermark(maxKeyTime);
   console.log(`Processed ${objects.length} objects, wrote ${written} aggregates.`);
   return { filesProcessed: objects.length, aggregatesWritten: written };
 };
+
+const bedrock = new BedrockClient({});
+const AIP_ARN_RE = /^arn:[^:]+:bedrock:[^:]*:[^:]*:application-inference-profile\//;
+const RETRY_NEGATIVE_MS = 24 * 3_600_000;
+
+/** Registry may be undeployed (no TENANTS_TABLE): degrade to legacy attribution, don't fail. */
+async function loadAttributionMapsSafe(): Promise<AttributionMaps | null> {
+  if (!process.env.TENANTS_TABLE) return null;
+  try {
+    return await loadAttributionMaps();
+  } catch (err) {
+    console.warn('aggregator: could not load attribution maps — continuing untagged', (err as Error).message);
+    return null;
+  }
+}
+
+/**
+ * Resolve AIP ARNs seen in this batch but absent from the map: the profile's `project` tag names
+ * the owning project; its wrapped model gives the real model id for pricing. Failures are
+ * negative-cached for 24h so a later tag fix heals without hammering the control plane.
+ */
+async function resolveUnseenProfiles(batches: InvocationRecord[][], maps: AttributionMaps): Promise<void> {
+  const known = new Set(maps.profiles.keys());
+  let negatives: Map<string, ProfileCacheItem> | null = null;
+  const unseen = new Set<string>();
+  for (const records of batches) {
+    for (const r of records) {
+      if (AIP_ARN_RE.test(r.modelId) && !known.has(r.modelId)) unseen.add(r.modelId);
+    }
+  }
+  for (const arn of unseen) {
+    // Respect an unexpired negative cache entry (loaded lazily — usually there are none).
+    if (negatives === null) {
+      negatives = new Map();
+      try {
+        for (const p of await listProfiles()) if (p.projectId === 'untagged') negatives.set(p.arn, p);
+      } catch { /* table readable moments ago; treat as empty */ }
+    }
+    const neg = negatives.get(arn);
+    if (neg?.retryAfterMs && Date.now() < neg.retryAfterMs) continue;
+    try {
+      const [prof, tags] = await Promise.all([
+        bedrock.send(new GetInferenceProfileCommand({ inferenceProfileIdentifier: arn })),
+        bedrock.send(new ListTagsForResourceCommand({ resourceARN: arn })),
+      ]);
+      const projectId = tags.tags?.find((t) => t.key === 'project')?.value ?? 'untagged';
+      const wrapped = prof.models?.[0]?.modelArn ?? '';
+      const item: ProfileCacheItem = {
+        pk: PROFILE_PK, sk: arn, type: 'profile', arn,
+        projectId,
+        underlyingModelId: normalizeModelId(wrapped) || arn,
+        profileName: prof.inferenceProfileName,
+        source: 'runtime-resolve',
+        resolvedAt: new Date().toISOString(),
+        ...(projectId === 'untagged' ? { retryAfterMs: Date.now() + RETRY_NEGATIVE_MS } : {}),
+      };
+      await putProfile(item);
+      if (projectId !== 'untagged') {
+        maps.profiles.set(arn, { projectId, underlyingModelId: item.underlyingModelId });
+        console.log(`aggregator: resolved ${arn} → project=${projectId} model=${item.underlyingModelId}`);
+      } else {
+        console.warn(`aggregator: profile ${arn} has no project tag — negative-cached 24h`);
+      }
+    } catch (err) {
+      console.warn('aggregator: could not resolve profile', arn, (err as Error).message);
+      await putProfile({
+        pk: PROFILE_PK, sk: arn, type: 'profile', arn,
+        projectId: 'untagged', underlyingModelId: normalizeModelId(arn),
+        source: 'runtime-resolve', resolvedAt: new Date().toISOString(),
+        retryAfterMs: Date.now() + RETRY_NEGATIVE_MS,
+      }).catch(() => { /* best effort */ });
+    }
+  }
+}
 
 async function listNewLogObjects(since: number): Promise<{ key: string; lastModified: number }[]> {
   const found: { key: string; lastModified: number }[] = [];
@@ -149,6 +249,38 @@ async function upsertProjectRollup(p: ProjectAggregate) {
       ':p': p.projectId, ':m': p.modelId,
       ':i': p.inputTokens, ':o': p.outputTokens, ':cr': p.cacheReadTokens, ':n': p.invocations,
       ...(users.length ? { ':u': new Set(users) } : {}),
+    },
+  }));
+}
+
+/** Merge per-(tenant,day,project,model) aggregates across files; de-dup by requestId. */
+function mergeProjectDays(target: Map<string, ProjectDayAggregate>, src: Map<string, ProjectDayAggregate>) {
+  for (const [k, v] of src) {
+    const e = target.get(k);
+    if (!e) { target.set(k, v); continue; }
+    for (const id of v.requestIds) {
+      if (e.requestIds.has(id)) continue;
+      e.requestIds.add(id);
+    }
+    e.inputTokens += v.inputTokens; e.outputTokens += v.outputTokens;
+    e.cacheReadTokens += v.cacheReadTokens; e.invocations += v.invocations;
+  }
+}
+
+/**
+ * Daily project rollup (#13): pk=TENANT#<tenant>#PROJDAY, sk=<day>#<projectId>#<modelId> —
+ * lets the DORA page query project cost for the same 7/30/90-day windows it uses for metrics.
+ */
+async function upsertProjectDayRollup(d: ProjectDayAggregate) {
+  await ddb.send(new UpdateCommand({
+    TableName: TABLE,
+    Key: { pk: `TENANT#${d.tenant}#PROJDAY`, sk: `${d.day}#${d.projectId}#${d.modelId}` },
+    UpdateExpression:
+      'SET #day = :d, projectId = :p, modelId = :m ADD inputTokens :i, outputTokens :o, cacheReadTokens :cr, invocations :n',
+    ExpressionAttributeNames: { '#day': 'day' },
+    ExpressionAttributeValues: {
+      ':d': d.day, ':p': d.projectId, ':m': d.modelId,
+      ':i': d.inputTokens, ':o': d.outputTokens, ':cr': d.cacheReadTokens, ':n': d.invocations,
     },
   }));
 }
