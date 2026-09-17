@@ -63,4 +63,22 @@ export interface EnvConfig {
     readonly budgetActionThresholdPct?: number;
     readonly budgetActionRoleArns?: string[];
   };
+
+  /**
+   * DORA metrics dashboard (per-repo delivery performance for human + AI-assisted repos).
+   * `seedRepos` are registered on the collector's first run only; admins manage the list
+   * afterwards from the dashboard. The GitHub token is read from Secrets Manager — the Dora
+   * stack creates the secret with a placeholder and an operator pastes a fine-grained,
+   * read-only PAT into it (never committed).
+   */
+  readonly dora?: {
+    /** "owner/name" repos to track initially. */
+    readonly seedRepos?: string[];
+    /** Secrets Manager secret name holding the GitHub PAT. Default: token-monitor-demo/github-token */
+    readonly githubTokenSecretName?: string;
+    /** Collector schedule in hours. Default: 6 */
+    readonly scheduleHours?: number;
+    /** How far back to backfill merged PRs when a repo is first registered. Default: 180 */
+    readonly backfillDays?: number;
+  };
 }

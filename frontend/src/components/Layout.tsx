@@ -8,6 +8,7 @@ const NAV = [
   { to: '/projects', label: 'By Project', ico: '🗂️' },
   { to: '/governance', label: 'Governance', ico: '🛡️' },
   { to: '/anomalies', label: 'Anomalies', ico: '🔔' },
+  { to: '/dora', label: 'DORA', ico: '🚀' },
 ];
 
 /** App shell: dark sidebar + topbar + content area. */

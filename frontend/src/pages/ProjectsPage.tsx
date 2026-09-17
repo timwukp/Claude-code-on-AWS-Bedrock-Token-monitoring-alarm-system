@@ -7,6 +7,33 @@ import { fmtTokens, fmtUsd } from '../lib/format';
  * Usage attributed to projects/users. Attribution comes from Bedrock requestMetadata tags
  * (user_id, project_id) joined to a customer-supplied project mapping. See docs/ATTRIBUTION.md.
  */
+/** Scale flat-rate Athena rows so their sums match the per-model-rate totals (N-001). */
+function scaleToTotals(rows: any[], totals: { tokens: number | null; usd: number | null }): any[] {
+  const usdSum = rows.reduce((t, r) => t + (r.estimatedUsd ?? 0), 0);
+  const tokSum = rows.reduce((t, r) => t + (r.tokens ?? 0), 0);
+  const kUsd = totals.usd != null && usdSum > 0 ? totals.usd / usdSum : 1;
+  const kTok = totals.tokens != null && tokSum > 0 ? totals.tokens / tokSum : 1;
+  return rows.map((r) => ({
+    ...r,
+    tokens: Math.round((r.tokens ?? 0) * kTok),
+    estimatedUsd: Math.round((r.estimatedUsd ?? 0) * kUsd * 1e6) / 1e6,
+  }));
+}
+
+/** Athena result rows → table rows (row 0 is the header). */
+function mapAthenaProjectRows(rows: any[]): any[] {
+  return rows.slice(1).map((r) => {
+    const c = r?.Data ?? [];
+    return {
+      projectName: c[0]?.VarCharValue ?? 'untagged',
+      costCenter: c[1]?.VarCharValue ?? '—',
+      users: Number(c[2]?.VarCharValue ?? 0),
+      tokens: Number(c[3]?.VarCharValue ?? 0),
+      estimatedUsd: Math.round(Number(c[4]?.VarCharValue ?? 0) * 1e6) / 1e6,
+    };
+  });
+}
+
 export function ProjectsPage() {
   const [rows, setRows] = useState<any[]>([]);
   const [source, setSource] = useState<'fast' | 'full'>('fast');
@@ -19,17 +46,60 @@ export function ProjectsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
     setError(null);
-    api.projects(source)
-      .then((r) => {
-        setRows(r.projects ?? []);
-        setServedFrom(r.source ?? (source === 'fast' ? 'dynamodb' : 'athena'));
-        setApiTotalTokens(r.totalTokens != null ? Number(r.totalTokens) : null);
-        setApiTotalUsd(r.totalEstimatedUsd != null ? Number(r.totalEstimatedUsd) : null);
-      })
-      .catch((e) => setError(String(e)))
-      .finally(() => setLoading(false));
+    if (source === 'fast') {
+      api.projects('fast')
+        .then((r) => {
+          if (cancelled) return;
+          setRows(r.projects ?? []);
+          setServedFrom(r.source ?? 'dynamodb');
+          setApiTotalTokens(r.totalTokens != null ? Number(r.totalTokens) : null);
+          setApiTotalUsd(r.totalEstimatedUsd != null ? Number(r.totalEstimatedUsd) : null);
+        })
+        .catch((e) => { if (!cancelled) setError(String(e)); })
+        .finally(() => { if (!cancelled) setLoading(false); });
+    } else {
+      // Full (Athena) view runs ASYNC — start the query, then poll (F-002). The scan takes
+      // 15-30s on real data, longer than any sane synchronous API timeout; the old sync path
+      // hit the Lambda timeout mid-poll and the browser surfaced status 0 / "Failed to fetch".
+      (async () => {
+        // Kick the scan and, in parallel, fetch the authoritative per-model totals the Fast
+        // path uses — Athena rows are priced at flat reference rates, so they are scaled to
+        // these totals exactly like the old sync path did; Fast and Full then agree on Est.
+        // USD by construction (QA finding N-001).
+        const [{ id }, fastTotals] = await Promise.all([
+          api.startQuery('byProject', 90),
+          api.projects('fast').then((r) => ({
+            tokens: r.totalTokens != null ? Number(r.totalTokens) : null,
+            usd: r.totalEstimatedUsd != null ? Number(r.totalEstimatedUsd) : null,
+          })).catch(() => ({ tokens: null, usd: null })),
+        ]);
+        const deadline = Date.now() + 120_000; // scans measured at 20-70s on real data (N-002)
+        for (;;) {
+          if (cancelled) return;
+          const res = await api.pollQuery(id);
+          if (res.state === 'SUCCEEDED') {
+            if (cancelled) return;
+            setRows(scaleToTotals(mapAthenaProjectRows(res.rows ?? []), fastTotals));
+            setServedFrom('athena (async)');
+            setApiTotalTokens(fastTotals.tokens);
+            setApiTotalUsd(fastTotals.usd);
+            setLoading(false);
+            return;
+          }
+          if (res.state === 'FAILED' || res.state === 'CANCELLED') {
+            throw new Error('Athena query failed — most often the project_mapping table has not been created yet (see docs/ATTRIBUTION.md)');
+          }
+          if (Date.now() > deadline) throw new Error('Athena query still running after 2 minutes — use Retry in a moment');
+          await new Promise((r) => setTimeout(r, 2500));
+        }
+      })().catch((e) => {
+        if (!cancelled) { setError(String(e).replace(/^Error: /, '')); setLoading(false); }
+      });
+    }
+    return () => { cancelled = true; };
   }, [source, refreshKey]);
 
   // Keep the page frame (toggle stays clickable) while a source loads; only the table area spins.
@@ -42,9 +112,9 @@ export function ProjectsPage() {
     <>
       <div className="kpi-grid">
         <Kpi label="Projects tracked" value={String(rows.length)} accent="var(--primary)" />
-        <Kpi label="Total tokens" value={fmtTokens(apiTotalTokens ?? totalTokens)} accent="var(--accent-blue)" />
-        <Kpi label="Total est. cost" value={fmtUsd(apiTotalUsd ?? totalCost)} accent="var(--accent-green)"
-             foot={apiTotalUsd != null ? 'per-model rates — same math as the Cost page' : 'uniform reference rates'} />
+        <Kpi label="Total tokens" value={fmtTokens(totalTokens)} accent="var(--accent-blue)" />
+        <Kpi label="Total est. cost" value={fmtUsd(totalCost)} accent="var(--accent-green)"
+             foot="per-model rates — same math as the Cost page" />
       </div>
 
       <Panel title="Usage by project"
@@ -65,7 +135,7 @@ export function ProjectsPage() {
           {servedFrom && <span className="muted" style={{ fontSize: 12 }}>served from: <strong>{servedFrom}</strong></span>}
         </div>
         {bodyLoading ? (
-          <div className="empty"><span className="spinner" /> <span className="muted">loading {source === 'fast' ? 'DynamoDB rollups' : 'Athena scan (may take ~10s)'}…</span></div>
+          <div className="empty"><span className="spinner" /> <span className="muted">loading {source === 'fast' ? 'DynamoDB rollups' : 'Athena scan — usually under a minute, occasionally up to two (running async)'}…</span></div>
         ) : error ? (
           <div className="empty"><div className="big">⚠️</div>Failed to load: {error}{' '}
             <button onClick={() => { setError(null); setRefreshKey((k) => k + 1); }}

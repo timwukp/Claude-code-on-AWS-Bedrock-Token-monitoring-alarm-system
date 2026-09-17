@@ -15,7 +15,9 @@ export function UsagePage() {
 
   useEffect(() => {
     api.usage()
-      .then((r) => setPoints(r.points.map((p) => ({ ...p, label: p.timestamp.slice(11, 16) }))))
+      // Label carries the day (MM-DD HH:00): a 7-day hourly series repeats bare clock times,
+      // which read as duplicated/non-monotonic ticks (F-004).
+      .then((r) => setPoints(r.points.map((p) => ({ ...p, label: `${p.timestamp.slice(5, 10)} ${p.timestamp.slice(11, 16)}` }))))
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
     // Quota panel is best-effort; don't block the page if it fails.
@@ -27,19 +29,22 @@ export function UsagePage() {
 
   const totalIn = points.reduce((s, p) => s + p.inputTokens, 0);
   const totalOut = points.reduce((s, p) => s + p.outputTokens, 0);
+  const totalCache = points.reduce((s, p) => s + (p.cacheReadTokens ?? 0) + (p.cacheWriteTokens ?? 0), 0);
   const totalCalls = points.reduce((s, p) => s + p.invocations, 0);
 
   return (
     <>
       <div className="kpi-grid">
-        <Kpi label="Input tokens" value={fmtTokens(totalIn)} accent="var(--accent-blue)" foot="last 7 days (hourly buckets)" />
+        <Kpi label="Input tokens" value={fmtTokens(totalIn)} accent="var(--accent-blue)"
+             foot="last 7 days — billed input, same definition as the Cost page" />
         <Kpi label="Output tokens" value={fmtTokens(totalOut)} accent="var(--accent-green)" foot="last 7 days (hourly buckets)" />
+        <Kpi label="Prompt-cache tokens" value={fmtTokens(totalCache)} accent="var(--primary)"
+             foot="reads + writes — quota counts these as input; billing discounts them" />
         <Kpi label="Invocations" value={totalCalls.toLocaleString()} accent="var(--accent-amber)" foot="API calls" />
-        <Kpi label="Active hours" value={String(points.length)} foot="buckets with traffic" />
       </div>
 
       <Panel title="Token consumption over time"
-             desc="Hourly buckets — input vs output tokens share one Y axis; output typically dominates in agent traffic, so the tall line is output, not input.">
+             desc="Hourly buckets over the last 7 days — billed input vs output tokens (prompt-cache traffic is shown in its own KPI above; it would dwarf both series). Which series dominates depends on the workload.">
         <ResponsiveContainer width="100%" height={340}>
           <AreaChart data={points} margin={{ left: 4, right: 12, top: 8 }}>
             <defs>

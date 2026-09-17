@@ -43,6 +43,26 @@ const tenantFilter = (tenantId: string) => {
 };
 
 const TEMPLATES: Record<string, (tenantId: string, days: number) => string> = {
+  // By-project attribution with the CSV name mapping — the same query the sync
+  // GET /v1/projects runs, exposed async because the scan takes 15-30s on real data,
+  // longer than any sane synchronous API timeout (F-002). All-time, like the sync path.
+  byProject: (tenantId) => `
+    SELECT
+      COALESCE(m.project_name, l.requestMetadata['project_id'], 'untagged') AS project,
+      COALESCE(m.cost_center, '—') AS cost_center,
+      COUNT(DISTINCT l.requestMetadata['user_id']) AS users,
+      SUM(l.input.inputTokenCount + l.output.outputTokenCount) AS tokens,
+      SUM(l.input.inputTokenCount) * 0.000005
+        + SUM(l.output.outputTokenCount) * 0.000025
+        + SUM(COALESCE(l.input.cacheReadInputTokenCount, 0)) * 0.0000005 AS est_usd
+    FROM bedrock_invocation_logs l
+    LEFT JOIN project_mapping m
+      ON l.requestMetadata['project_id'] = m.project_id
+    WHERE (COALESCE(l.requestMetadata['tenant'], l.identity.arn) = '${sanitizeTenant(tenantId)}')
+    GROUP BY 1, 2
+    ORDER BY tokens DESC
+    LIMIT 100`,
+
   topModels: (tenantId, days) => `
     SELECT modelId,
            SUM(input.inputTokenCount + output.outputTokenCount) AS total_tokens,

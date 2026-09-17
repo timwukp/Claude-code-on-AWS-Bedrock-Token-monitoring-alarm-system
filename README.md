@@ -52,6 +52,9 @@ implies; the magnitude depends on a given workload's cache-hit ratio.
 - **By Project** — per-project/user attribution; fast (DynamoDB) / full (Athena + names) toggle
 - **Governance** — budget status (limit / actual / forecast) + enforcement posture
 - **Anomalies** — anomaly & alert feed with severity
+- **DORA metrics** per GitHub repo — deployment frequency, lead time, change failure rate, time to
+  restore — each split into All / AI-assisted / Human-only PRs, to measure how teams working with
+  AI coding assistants actually deliver; admins manage the tracked-repo list in the UI
 - Cognito sign-in; per-tenant isolation on every request
 
 ### Behind the scenes
@@ -65,14 +68,16 @@ implies; the magnitude depends on a given workload's cache-hit ratio.
 - **Cost controls** — AWS Budgets (actual + forecasted) + opt-in Budget Action hard-stop;
   Service Quotas headroom surfaced
 - **Heavy ETL** — Step Functions -> ECS Fargate (daily) compacts raw logs to partitioned Parquet
-- **API** — 7 REST endpoints behind a Cognito authorizer, least-privilege IAM per function
+- **DORA collector** — EventBridge-scheduled Lambda (every 6 h) pulls merged PRs + incident issues
+  from GitHub (PAT in Secrets Manager) into DynamoDB; metrics computed on read
+- **API** — 13 REST endpoints behind a Cognito authorizer, least-privilege IAM per function
 - **Forensics** — parameterized, tenant-scoped Athena query templates
 - **Integration** — a request-metadata tagging helper for project/user attribution
 - **Audit** — CloudTrail trail; CloudWatch metrics & alarms
 
 ### Platform
 
-- AWS CDK (TypeScript), 8 independently deployable stacks, config-driven, any AWS account
+- AWS CDK (TypeScript), 9 independently deployable stacks, config-driven, any AWS account
 - Multi-tenant (JWT tenant claim); CI/CD (GitHub Actions + GitLab CI)
 - KMS encryption at rest, TLS in transit, no public buckets, WAF, scoped IAM
 

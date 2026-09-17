@@ -73,9 +73,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }));
     const id = start.QueryExecutionId!;
 
-    // Poll up to ~25s.
+    // Poll against a wall-clock deadline — iteration counting undercounts because each
+    // loop also pays Athena API latency; must finish within the Lambda timeout (28s for this
+    // function), otherwise the runtime kills the invocation mid-poll and the browser sees
+    // status 0 (F-002). 22s of polling + start/results/scaling fits with headroom.
+    const deadline = Date.now() + 22_000;
     let state: string | undefined;
-    for (let i = 0; i < 25; i++) {
+    while (true) {
       const ex = await athena.send(new GetQueryExecutionCommand({ QueryExecutionId: id }));
       state = ex.QueryExecution?.Status?.State;
       if (state === 'SUCCEEDED') break;
@@ -83,6 +87,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         // Most common cause in a fresh deployment: project_mapping table not created yet.
         return ok({ projects: [], note: ex.QueryExecution?.Status?.StateChangeReason ?? state });
       }
+      if (Date.now() >= deadline) break;
       await new Promise((r) => setTimeout(r, 1000));
     }
     // Poll window elapsed while still RUNNING/QUEUED: don't fetch results on an
