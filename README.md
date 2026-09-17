@@ -70,18 +70,50 @@ implies; the magnitude depends on a given workload's cache-hit ratio.
 - **Heavy ETL** — Step Functions -> ECS Fargate (daily) compacts raw logs to partitioned Parquet
 - **DORA collector** — EventBridge-scheduled Lambda (every 6 h) pulls merged PRs + incident issues
   from GitHub (PAT in Secrets Manager) into DynamoDB; metrics computed on read
-- **API** — 13 REST endpoints behind a Cognito authorizer, least-privilege IAM per function
+- **Project cost attribution** — tagged application inference profiles per project (zero client
+  effort, IAM-enforceable); Delivery × Cost per project on the DORA page ($/deployment)
+- **API** — 17 REST endpoints behind a Cognito authorizer, least-privilege IAM per function
 - **Forensics** — parameterized, tenant-scoped Athena query templates
 - **Integration** — a request-metadata tagging helper for project/user attribution
 - **Audit** — CloudTrail trail; CloudWatch metrics & alarms
 
 ### Platform
 
-- AWS CDK (TypeScript), 9 independently deployable stacks, config-driven, any AWS account
+- AWS CDK (TypeScript), 10 independently deployable stacks, config-driven, any AWS account
 - Multi-tenant (JWT tenant claim); CI/CD (GitHub Actions + GitLab CI)
 - KMS encryption at rest, TLS in transit, no public buckets, WAF, scoped IAM
 
 ---
+
+## Project ↔ token attribution: how a token finds its project
+
+A **project** is the unit that joins spend with delivery: it names one or more GitHub repos
+(DORA metrics) and owns the Bedrock usage they generate. Every invocation-log record is
+attributed by a strict precedence ladder — strongest, least-forgeable signal first:
+
+| # | Signal | Where it lives | Why it ranks here |
+|---|---|---|---|
+| 1 | **Application inference profile (AIP)** the call came through | log `modelId` = profile ARN; profile carries tag `tums-project=<id>` | Config-routed, zero per-call effort, and **IAM-enforceable** — with the opt-in policy, project-tagged profiles are the *only* invokable path, so attribution cannot be forged or forgotten. Resolution also rewrites the record to the real underlying model, so per-model pricing stays exact. |
+| 2 | `requestMetadata.project_id` | set by the calling app (`buildRequestMetadata` helper) | Precise but voluntary — AWS provides no IAM key to require it, and IDE agents cannot send it. Kept as the *finer* grain (user, feature, ticket) on top of #1. |
+| 3 | **Identity hint** (caller ARN → project) | project registry, admin-managed | Automatic fallback for principals that are dedicated to one project (e.g. a service role). |
+| 4 | `untagged` | — | Nothing above matched. With #1 rolled out, this bucket stops growing. |
+
+The registry (`tums-tenants` table, admin-managed on the By-Project page) holds each project's
+name, cost center, repos and identity hints; the aggregator resolves unseen AIP ARNs against
+their tags automatically and caches the result. Usage lands in two shapes: all-time per-project
+rollups (the By-Project table) and **daily** rollups (`PROJDAY`) so cost answers the same
+7/30/90-day windows the DORA page uses — that is what makes “$ per deployment / $ per merged
+PR” on the DORA page possible.
+
+**One-time historical treatment (2026-09-17, owner-directed).** Usage that predates the AIP
+rollout carried no signal at all (99.7% untagged). It was attributed once, offline, by
+correlating each hour’s token usage with per-repo commit timestamps (±2h window; 90% of tokens
+matched) and written through the same pipeline with the precedence ladder intact — records
+with real signals were never overridden, unmatched hours remain `untagged`, and a `SYSTEM#RETRO`
+marker makes the migration strictly unrepeatable. The raw invocation logs are immutable: the
+Athena “Full” view still reports what was true at call time, while the managed rollups carry
+the attribution. Method and share table: `docs/test-reports/feature-13-project-cost-attribution.md`;
+full design and verification: `docs/ATTRIBUTION.md` + `docs/research-project-cost-dora-attribution.md`.
 
 ## Architecture at a glance
 

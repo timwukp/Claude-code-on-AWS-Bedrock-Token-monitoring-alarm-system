@@ -21,6 +21,42 @@ Analogy: `requestMetadata` is a label the sender sticks on the parcel before pos
 post office (Bedrock) records only what was stuck on. The monitoring system is someone reading
 the delivery records later — it can read the label, but cannot travel back to add one.
 
+## Layer 0 — application inference profiles (the enforceable layer, #13)
+
+Voluntary tagging failed in practice: 99.7% of this account's tokens arrived `untagged`,
+because IDE agents (Claude Code) cannot send `requestMetadata` and AWS provides **no IAM
+condition key to require it** (verified against the full Service Authorization Reference).
+The enforceable, zero-client-effort unit of attribution is a **tagged application inference
+profile (AIP)** per project × model:
+
+- The `Tums-<env>-Projects` stack creates them (tag `tums-project=<id>` — a dedicated key, because the app-wide billing tag already uses
+  `project`); after the tag is
+  activated in Billing → Cost allocation tags, real dollars appear per project in Cost
+  Explorer / CUR (usage-type/day grain).
+- Every call made through a profile writes the **profile ARN as `modelId`** in the invocation
+  log. The aggregator resolves unseen profile ARNs at runtime (GetInferenceProfile + tags),
+  caches the resolution in the project registry, and re-keys the record to the real underlying
+  model so per-model pricing stays correct.
+- Clients route through the profile by configuration, not per-call code: a repo-committed
+  `.claude/settings.json` env block (see `.claude/settings.json.example`) makes every Claude
+  Code session in a clone attributable; SDK apps pass the profile ARN as `modelId`.
+- Opt-in IAM enforcement (`projects.enforcementPolicy`) makes tagged profiles the ONLY
+  invokable path — attribution becomes unforgeable.
+
+**Attribution precedence per log record:** AIP tag → `requestMetadata.project_id` →
+admin identity hint (caller-ARN → project, registry-managed; also used to retro-attribute
+history) → `untagged`. The layers below remain: requestMetadata is the optional finer grain
+(user, feature, ticket), and the CSV mapping still translates ids to names for the Athena path.
+
+**One-time historical attribution (2026-09-17, owner-directed):** usage predating the AIP
+rollout was attributed once by correlating hourly usage with per-repo commit timestamps
+(±2h window; 90% of tokens matched). It runs through the same pipeline with the precedence
+ladder intact (real signals are never overridden), moves the all-time rollups out of
+`untagged` atomically, and is guarded by a `SYSTEM#RETRO` marker so it can never repeat.
+Raw invocation logs are immutable — the Athena Full view keeps reporting call-time truth.
+
+Full research + verification record: `docs/research-project-cost-dora-attribution.md`.
+
 **Two different mappings — don't conflate them:**
 
 | | Where it happens | Who owns it | Example |

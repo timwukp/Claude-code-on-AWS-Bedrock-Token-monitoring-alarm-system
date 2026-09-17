@@ -14,6 +14,8 @@
  */
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { accepted, badRequest, created, forbidden, notFound, ok, serverError } from '../shared/response';
 import { getTenantId } from '../shared/tenant';
 import { isAdmin } from '../shared/admin';
@@ -22,9 +24,13 @@ import { newRepoItem } from '../dora/collector';
 import { GhRepo, GithubHttpError, createGithubClient } from '../dora/github-client';
 import { loadGithubToken } from '../dora/secret';
 import * as store from '../dora/store';
+import { buildProjectRows, projdayRange, DoraProjectRow, ProjdayItem } from './project-calc';
+import * as projectRegistry from '../shared/project-registry';
 import { AssistedBy, PrItem, RepoItem, SyncStatus } from '../dora/types';
 
 const lambdaClient = new LambdaClient({});
+const ddbAgg = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const AGGREGATES_TABLE = process.env.AGGREGATES_TABLE;
 const COLLECTOR = process.env.DORA_COLLECTOR_FUNCTION_NAME;
 const WINDOWS = [7, 30, 90] as const;
 const REPO_RE = /^[\w.-]+\/[\w.-]+$/;
@@ -110,6 +116,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       case 'DELETE /v1/dora/repos/{owner}/{name}': return deleteRepo(event);
       case 'POST /v1/dora/repos/{owner}/{name}/sync': return syncRepo(event);
       case 'GET /v1/dora/metrics': return metrics(event);
+      case 'GET /v1/dora/projects': return projectRows(event);
       case 'GET /v1/dora/overview': return overview(event);
       default: return notFound(`Unknown route ${route}`);
     }
@@ -220,6 +227,64 @@ async function metrics(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResu
       htmlUrl: p.htmlUrl,
     }));
   return ok({ repo: toSummary(repo), window: windowDays, metrics: m, recentPrs, dataSource: DATA_SOURCE });
+}
+
+/**
+ * GET /v1/dora/projects — Delivery × Cost per registry project (#13): DORA metrics pooled
+ * across the project's repos (same computeDora as everywhere else) + windowed token cost from
+ * the PROJDAY daily rollups, priced per model with the shared rate card.
+ */
+async function projectRows(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const windowDays = parseWindow(event.queryStringParameters?.window ?? undefined);
+  if (windowDays == null) return badRequest(`window must be one of ${WINDOWS.join(', ')}`);
+  const tenantId = getTenantId(event);
+  const now = new Date();
+
+  const [projects, doraRepos] = await Promise.all([projectRegistry.listProjects(), store.listRepos()]);
+  const tracked = new Set(doraRepos.map((r) => r.sk));
+
+  const fromIso = new Date(now.getTime() - windowDays * DAY).toISOString();
+  const wantedRepos = [...new Set(projects.flatMap((p) => p.repos))].filter((r) => tracked.has(r));
+  const prsByRepo = new Map<string, Awaited<ReturnType<typeof store.queryPrs>>>();
+  const issuesByRepo = new Map<string, Awaited<ReturnType<typeof store.queryIssues>>>();
+  await Promise.all(wantedRepos.map(async (r) => {
+    const [prs, issues] = await Promise.all([store.queryPrs(r, fromIso), store.queryIssues(r, fromIso)]);
+    prsByRepo.set(r, prs);
+    issuesByRepo.set(r, issues);
+  }));
+
+  const projday = await queryProjday(tenantId, now, windowDays);
+  const rows: DoraProjectRow[] = buildProjectRows(projects, prsByRepo, issuesByRepo, projday, {
+    windowDays, now, doraTrackedRepos: tracked,
+  });
+  return ok({ window: windowDays, projects: rows, dataSource: DATA_SOURCE });
+}
+
+async function queryProjday(tenantId: string, now: Date, windowDays: number): Promise<ProjdayItem[]> {
+  const { fromSk, toSk } = projdayRange(now, windowDays);
+  const out: ProjdayItem[] = [];
+  let key: Record<string, unknown> | undefined;
+  do {
+    const res = await ddbAgg.send(new QueryCommand({
+      TableName: AGGREGATES_TABLE,
+      KeyConditionExpression: 'pk = :pk AND sk BETWEEN :from AND :to',
+      ExpressionAttributeValues: { ':pk': `TENANT#${tenantId}#PROJDAY`, ':from': fromSk, ':to': toSk },
+      ExclusiveStartKey: key,
+    }));
+    for (const it of (res.Items ?? []) as Record<string, unknown>[]) {
+      out.push({
+        day: String(it.day ?? ''),
+        projectId: String(it.projectId ?? 'untagged'),
+        modelId: String(it.modelId ?? ''),
+        inputTokens: Number(it.inputTokens ?? 0),
+        outputTokens: Number(it.outputTokens ?? 0),
+        cacheReadTokens: Number(it.cacheReadTokens ?? 0),
+        invocations: Number(it.invocations ?? 0),
+      });
+    }
+    key = res.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (key);
+  return out;
 }
 
 async function overview(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {

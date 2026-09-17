@@ -17,7 +17,7 @@ configureAuth();
 const PAGE_META: Record<string, { title: string; sub: string }> = {
   '/': { title: 'Token Usage', sub: 'Real-time consumption across models and time' },
   '/costs': { title: 'Estimated Cost', sub: 'Spend by model, derived from token usage' },
-  '/projects': { title: 'Usage by Project', sub: 'Attribution via request metadata + project mapping' },
+  '/projects': { title: 'Usage by Project', sub: 'Attribution via inference profiles, request metadata and the project registry' },
   '/governance': { title: 'Cost Governance', sub: 'Budget status and enforcement guardrails' },
   '/anomalies': { title: 'Anomalies & Alerts', sub: 'Automated detection and response feed' },
   '/dora': { title: 'DORA Metrics', sub: 'Delivery performance per repo — humans + AI coding assistants' },

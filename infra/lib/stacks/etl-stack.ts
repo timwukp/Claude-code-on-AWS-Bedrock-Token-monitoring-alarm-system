@@ -6,6 +6,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as path from 'path';
@@ -44,12 +45,20 @@ export class EtlStack extends cdk.Stack {
       tracing: lambda.Tracing.ACTIVE,
       environment: {
         AGGREGATES_TABLE: tables.aggregates.tableName,
+        TENANTS_TABLE: tables.tenants.tableName, // project registry: attribution maps + AIP cache (#13)
         RAW_LOG_BUCKET: rawLogBucket.bucketName,
         LOG_PREFIX: 'model-logs/AWSLogs/',
       },
     });
     // Reads the watermark item and writes aggregates → needs read+write.
     tables.aggregates.grantReadWriteData(aggregatorFn);
+    // Project attribution (#13): read maps + write resolved-profile cache items.
+    tables.tenants.grantReadWriteData(aggregatorFn);
+    // Resolve application-inference-profile ARNs seen in logs → owning project (tag) + model.
+    aggregatorFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['bedrock:GetInferenceProfile', 'bedrock:ListTagsForResource'],
+      resources: [`arn:aws:bedrock:${cfg.region}:${cfg.account}:application-inference-profile/*`],
+    }));
     // grantRead also grants KMS decrypt on the bucket's CMK (bucket is KMS-encrypted).
     rawLogBucket.grantRead(aggregatorFn);
 

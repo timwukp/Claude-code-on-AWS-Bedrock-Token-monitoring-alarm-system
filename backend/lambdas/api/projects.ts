@@ -3,9 +3,10 @@ import {
   AthenaClient, StartQueryExecutionCommand, GetQueryExecutionCommand, GetQueryResultsCommand,
 } from '@aws-sdk/client-athena';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { ok, serverError } from '../shared/response';
-import { summarizeCosts, TokenCounts } from './cost-calc';
+import { computeModelCost, normalizeModelId, summarizeCosts, TokenCounts } from './cost-calc';
+import { listProjects } from '../shared/project-registry';
 import { getTenantId } from '../shared/tenant';
 
 const athena = new AthenaClient({});
@@ -34,21 +35,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Fast path (#7): ?source=fast reads pre-aggregated PROJECT rollups from DynamoDB — no Athena
     // scan. Returns project_id codes (no CSV name mapping); the default Athena path adds names.
     if (event.queryStringParameters?.source === 'fast' && AGGREGATES_TABLE) {
-      const [projects, totals] = await Promise.all([fastProjects(tenantId), modelTotals(tenantId)]);
-      // Per-project rows are priced at uniform reference rates (PROJECT rollups carry no
-      // modelId). Scale them so the table sums to the authoritative per-model total —
-      // relative attribution is preserved and the page is internally consistent.
-      const rowSum = projects.reduce((t: number, p: any) => t + (p.estimatedUsd ?? 0), 0);
-      if (rowSum > 0 && totals.totalEstimatedUsd > 0) {
-        const k = totals.totalEstimatedUsd / rowSum;
-        for (const p of projects) p.estimatedUsd = Math.round(p.estimatedUsd * k * 1e6) / 1e6;
-      }
-      const tokRowSum = projects.reduce((t: number, p: any) => t + (p.tokens ?? 0), 0);
-      if (tokRowSum > 0 && totals.totalTokens > 0) {
-        const k2 = totals.totalTokens / tokRowSum;
-        for (const p of projects) p.tokens = Math.round(p.tokens * k2);
-      }
-      return ok({ tenantId, source: 'dynamodb', projects, ...totals });
+      // #13: rows are priced per (project, model) with the shared rate card (the PROJECT sk has
+      // always carried modelId), and registry names/cost centers replace raw ids. Same ids +
+      // same card as /v1/costs → totals agree by construction, no scaling needed.
+      const [projects, totals, rollupsAsOf] = await Promise.all([fastProjects(tenantId), modelTotals(tenantId), rollupWatermark()]);
+      // rollupsAsOf lets the UI explain Fast-vs-Athena residuals honestly: rollups refresh every
+      // 15 min, Athena reads raw logs live — the difference is traffic since the watermark (F-801).
+      return ok({ tenantId, source: 'dynamodb', projects, rollupsAsOf, ...totals });
     }
 
     const sql = `
@@ -160,28 +153,47 @@ async function modelTotals(tenantId: string): Promise<{ totalTokens: number; tot
   return { totalTokens, totalEstimatedUsd: s.totalEstimatedUsd };
 }
 
+/** ISO time of the last aggregator run (SYSTEM#WATERMARK), or null. */
+async function rollupWatermark(): Promise<string | null> {
+  try {
+    const res = await ddb.send(new GetCommand({ TableName: AGGREGATES_TABLE, Key: { pk: 'SYSTEM#WATERMARK', sk: 'aggregator' } }));
+    const ms = Number(res.Item?.lastModified);
+    return Number.isFinite(ms) && ms > 0 ? new Date(ms).toISOString() : null;
+  } catch { return null; }
+}
+
 async function fastProjects(tenantId: string): Promise<any[]> {
-  const res = await ddb.send(new QueryCommand({
-    TableName: AGGREGATES_TABLE,
-    KeyConditionExpression: 'pk = :pk',
-    ExpressionAttributeValues: { ':pk': `TENANT#${tenantId}#PROJECT` },
-  }));
+  const [res, registryProjects] = await Promise.all([
+    ddb.send(new QueryCommand({
+      TableName: AGGREGATES_TABLE,
+      KeyConditionExpression: 'pk = :pk',
+      ExpressionAttributeValues: { ':pk': `TENANT#${tenantId}#PROJECT` },
+    })),
+    // Registry names/cost centers (#13); tolerate an empty/missing registry.
+    listProjects().catch(() => []),
+  ]);
+  const names = new Map(registryProjects.map((p) => [p.projectId, { name: p.name, costCenter: p.costCenter ?? '—' }]));
   const byProject = new Map<string, { tokens: number; estimatedUsd: number; users: Set<string> }>();
   for (const it of res.Items ?? []) {
     const projectId = String(it.projectId ?? 'untagged');
-    const inTok = Number(it.inputTokens ?? 0);
-    const outTok = Number(it.outputTokens ?? 0);
-    const cacheTok = Number(it.cacheReadTokens ?? 0);
     const e = byProject.get(projectId) ?? { tokens: 0, estimatedUsd: 0, users: new Set<string>() };
-    e.tokens += inTok + outTok;
-    e.estimatedUsd += inTok * IN + outTok * OUT + cacheTok * CACHE;
+    e.tokens += Number(it.inputTokens ?? 0) + Number(it.outputTokens ?? 0);
+    // Per-model pricing (#13): the sk has always carried modelId — use the real rate card.
+    e.estimatedUsd += computeModelCost({
+      modelId: normalizeModelId(String(it.modelId ?? '')),
+      inputTokens: Number(it.inputTokens ?? 0),
+      outputTokens: Number(it.outputTokens ?? 0),
+      cacheReadTokens: Number(it.cacheReadTokens ?? 0),
+    }).estimatedUsd;
     const us = it.userSet as Set<string> | string[] | undefined;
     if (us) for (const u of (us instanceof Set ? us : us)) e.users.add(u);
     byProject.set(projectId, e);
   }
   return [...byProject.entries()]
     .map(([projectId, v]) => ({
-      projectId, projectName: projectId, costCenter: '—',
+      projectId,
+      projectName: names.get(projectId)?.name ?? projectId,
+      costCenter: names.get(projectId)?.costCenter ?? '—',
       users: v.users.size, tokens: v.tokens,
       estimatedUsd: Math.round(v.estimatedUsd * 1e6) / 1e6,
     }))

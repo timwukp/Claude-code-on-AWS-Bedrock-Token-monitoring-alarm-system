@@ -55,6 +55,8 @@ Ordered by impact on a cost-governance rollout.
 |---|---|---|---|
 | 10 | **DORA metrics per repo (human + AI-assisted delivery)** | ✅ | Done — `/dora` page + `GET /v1/dora/*`; a scheduled collector pulls merged PRs / incident issues from GitHub for an admin-managed repo list into `tums-dora`; metrics computed on read with All / AI-assisted / Human-only cohorts and DORA tiers. Cognito `admin` group gates repo management. See [`test-reports/feature-12`](./test-reports/feature-12-dora-metrics.md). |
 
+| 11 | **Project cost attribution × DORA join (AIP-based)** | ✅ | Done — tagged application inference profiles per project×model (`Tums-<env>-Projects`), log-pipeline attribution precedence (profile tag → requestMetadata → identity hint), PROJDAY daily rollups + backfill, project registry in `tums-tenants` with admin UI, and the DORA-page Delivery × Cost panel (`GET /v1/dora/projects`). Opt-in IAM "profiles-only" enforcement + pilot role (deny/allow matrix validated live). Historical untagged usage attributed once via commit-time correlation (`HOUR_PROJECT_MAP`). See [`test-reports/feature-13`](./test-reports/feature-13-project-cost-attribution.md). |
+
 ## Planned validation (by design — not defects)
 
 Two items are **implemented, unit-tested, and deploy-validated**, but their final *live exercise*

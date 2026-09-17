@@ -6,6 +6,40 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Added — Project cost attribution × DORA join
+- **Per-project application inference profiles** — new `Tums-<env>-Projects` stack creates one
+  tagged AIP per project × model (tag `tums-project=<id>` → Cost Explorer/CUR after activation;
+  a dedicated key, because the app-wide billing tag `project` overrides same-key resource tags).
+  Calls made through a profile are attributed with zero client effort: the invocation log's
+  `modelId` is the profile ARN, which the aggregator resolves (GetInferenceProfile + tags) and
+  caches. Opt-in `enforcementPolicy` adds the two-statement "profiles-only" managed policy + a
+  pilot test role.
+- **Attribution precedence** in the log pipeline: AIP tag → `requestMetadata.project_id` →
+  admin identity hint → `untagged`; profile-routed traffic is re-keyed to the real underlying
+  model so per-model pricing and the Cost page stay accurate.
+- **Daily project rollups** (`TENANT#<t>#PROJDAY`) so project cost answers the same 7/30/90-day
+  windows as DORA; one-off `scripts/backfill-projday.ts` retro-fills history without touching
+  existing rollups.
+- **One-time historical attribution (owner-directed)** — pre-AIP usage carried no signal
+  (99.7% untagged), so it was attributed once by correlating hourly usage with per-repo commit
+  timestamps (±2h; 90% of tokens matched). The backfill's `HOUR_PROJECT_MAP` mode injects the
+  mapped project only where no real signal exists (precedence unchanged), migrates the all-time
+  rollups out of `untagged` with equal-and-opposite atomic ADDs, and a `SYSTEM#RETRO` marker
+  makes the migration unrepeatable. Raw logs stay immutable — the Athena Full view keeps
+  reporting call-time truth.
+- **Project registry** (`tums-tenants`, previously unused): project → name / cost center /
+  repos / identity hints; `GET|POST /v1/projects/registry`, `DELETE /v1/projects/registry/{id}`
+  (admin), seeded once from config. By-Project page shows registry names and gains an admin
+  management panel; per-model pricing replaces the flat-rate scaling on the fast path.
+- **IAM matrix validated live** — pilot role: invoke via tagged AIP = Allow; direct model ids
+  = AccessDenied; confirms `bedrock:InferenceProfileArn` matches the AIP ARN when it wraps a
+  cross-region profile (closes the research open question).
+- **Delivery × Cost panel** on the DORA page — `GET /v1/dora/projects?window=`: per project,
+  DORA metrics pooled across its repos + tokens + est. USD + $/deployment ($/merged PR).
+- **Pilot template** `.claude/settings.json.example`: route a repo's Claude Code sessions
+  through its project profile ("clone repo = attributed"); real file stays untracked in this
+  public repo (ARNs embed the account id) — private enterprise repos commit it directly.
+
 ### Added — DORA metrics dashboard
 - **DORA page** (`/dora`) — per-repo Deployment Frequency, Lead Time for Changes, Change Failure
   Rate and Time to Restore, each split into **All / AI-assisted / Human-only** PRs plus an

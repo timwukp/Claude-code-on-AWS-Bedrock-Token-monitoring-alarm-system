@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api/client';
+import { api, RegistryProject } from '../api/client';
 import { Kpi, Panel } from '../components/Layout';
 import { fmtTokens, fmtUsd } from '../lib/format';
 
@@ -7,17 +7,18 @@ import { fmtTokens, fmtUsd } from '../lib/format';
  * Usage attributed to projects/users. Attribution comes from Bedrock requestMetadata tags
  * (user_id, project_id) joined to a customer-supplied project mapping. See docs/ATTRIBUTION.md.
  */
-/** Scale flat-rate Athena rows so their sums match the per-model-rate totals (N-001). */
-function scaleToTotals(rows: any[], totals: { tokens: number | null; usd: number | null }): any[] {
-  const usdSum = rows.reduce((t, r) => t + (r.estimatedUsd ?? 0), 0);
-  const tokSum = rows.reduce((t, r) => t + (r.tokens ?? 0), 0);
-  const kUsd = totals.usd != null && usdSum > 0 ? totals.usd / usdSum : 1;
-  const kTok = totals.tokens != null && tokSum > 0 ? totals.tokens / tokSum : 1;
-  return rows.map((r) => ({
-    ...r,
-    tokens: Math.round((r.tokens ?? 0) * kTok),
-    estimatedUsd: Math.round((r.estimatedUsd ?? 0) * kUsd * 1e6) / 1e6,
-  }));
+/** Athena returns one row per (project, model); merge them per project (sum tokens/USD, max users). */
+function mergeProjectRows(rows: any[]): any[] {
+  const m = new Map<string, any>();
+  for (const r of rows) {
+    const key = `${r.projectName}|${r.costCenter}`;
+    const e = m.get(key) ?? { ...r, tokens: 0, estimatedUsd: 0, users: 0 };
+    e.tokens += r.tokens ?? 0;
+    e.estimatedUsd = Math.round((e.estimatedUsd + (r.estimatedUsd ?? 0)) * 1e6) / 1e6;
+    e.users = Math.max(e.users, r.users ?? 0);
+    m.set(key, e);
+  }
+  return [...m.values()].sort((a, b) => b.tokens - a.tokens);
 }
 
 /** Athena result rows → table rows (row 0 is the header). */
@@ -40,10 +41,19 @@ export function ProjectsPage() {
   const [servedFrom, setServedFrom] = useState<string>('');
   const [apiTotalTokens, setApiTotalTokens] = useState<number | null>(null);
   const [apiTotalUsd, setApiTotalUsd] = useState<number | null>(null);
+  const [rollupsAsOf, setRollupsAsOf] = useState<string | null>(null);
   const [apiTotalCost, setApiTotalCost]     = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [elapsedSec, setElapsedSec] = useState(0);
+
+  // Project registry (#13): names/cost centers/repo links; admins manage projects here.
+  const [registry, setRegistry] = useState<RegistryProject[] | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [form, setForm] = useState({ id: '', name: '', costCenter: '', repos: '', identityArns: '' });
+  const [adminBusy, setAdminBusy] = useState(false);
+  const [adminMsg, setAdminMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,6 +67,7 @@ export function ProjectsPage() {
           setServedFrom(r.source ?? 'dynamodb');
           setApiTotalTokens(r.totalTokens != null ? Number(r.totalTokens) : null);
           setApiTotalUsd(r.totalEstimatedUsd != null ? Number(r.totalEstimatedUsd) : null);
+          setRollupsAsOf((r as { rollupsAsOf?: string | null }).rollupsAsOf ?? null);
         })
         .catch((e) => { if (!cancelled) setError(String(e)); })
         .finally(() => { if (!cancelled) setLoading(false); });
@@ -71,19 +82,31 @@ export function ProjectsPage() {
         // USD by construction (QA finding N-001).
         const [{ id }, fastTotals] = await Promise.all([
           api.startQuery('byProject', 90),
-          api.projects('fast').then((r) => ({
-            tokens: r.totalTokens != null ? Number(r.totalTokens) : null,
-            usd: r.totalEstimatedUsd != null ? Number(r.totalEstimatedUsd) : null,
-          })).catch(() => ({ tokens: null, usd: null })),
+          api.projects('fast').then((r) => {
+            setRollupsAsOf((r as { rollupsAsOf?: string | null }).rollupsAsOf ?? null);
+            return {
+              tokens: r.totalTokens != null ? Number(r.totalTokens) : null,
+              usd: r.totalEstimatedUsd != null ? Number(r.totalEstimatedUsd) : null,
+            };
+          }).catch(() => ({ tokens: null, usd: null })),
         ]);
-        const deadline = Date.now() + 120_000; // scans measured at 20-70s on real data (N-002)
+        // Athena latency is genuinely variable (measured 18s to several minutes under queue
+        // contention). Polling for up to 10 minutes with a visible elapsed timer is honest;
+        // failing at an arbitrary 2-minute mark while the query is still RUNNING was not (F-601).
+        const started = Date.now();
+        const deadline = started + 600_000;
+        setElapsedSec(0);
         for (;;) {
           if (cancelled) return;
           const res = await api.pollQuery(id);
           if (res.state === 'SUCCEEDED') {
             if (cancelled) return;
-            setRows(scaleToTotals(mapAthenaProjectRows(res.rows ?? []), fastTotals));
-            setServedFrom('athena (async)');
+            // Rows arrive per (project, model) priced with the SAME rate card as the rollups;
+            // the SQL resolves application-inference-profile ARNs to their underlying model via
+            // the registry cache, so both pipelines price identically (F-501 root cause). No
+            // proportional scaling — any residual is real and is disclosed in the KPI footer.
+            setRows(mergeProjectRows(mapAthenaProjectRows(res.rows ?? [])));
+            setServedFrom('athena (async, per-model pricing)');
             setApiTotalTokens(fastTotals.tokens);
             setApiTotalUsd(fastTotals.usd);
             setLoading(false);
@@ -92,7 +115,8 @@ export function ProjectsPage() {
           if (res.state === 'FAILED' || res.state === 'CANCELLED') {
             throw new Error('Athena query failed — most often the project_mapping table has not been created yet (see docs/ATTRIBUTION.md)');
           }
-          if (Date.now() > deadline) throw new Error('Athena query still running after 2 minutes — use Retry in a moment');
+          if (Date.now() > deadline) throw new Error('Athena query still running after 10 minutes — the workgroup may be saturated; use Retry later');
+          setElapsedSec(Math.round((Date.now() - started) / 1000));
           await new Promise((r) => setTimeout(r, 2500));
         }
       })().catch((e) => {
@@ -102,11 +126,50 @@ export function ProjectsPage() {
     return () => { cancelled = true; };
   }, [source, refreshKey]);
 
+  useEffect(() => {
+    let cancelled = false;
+    api.projectRegistry()
+      .then((r) => { if (!cancelled) { setRegistry(r.projects); setIsAdmin(r.isAdmin); } })
+      .catch(() => { if (!cancelled) setRegistry(null); }); // registry endpoint absent → hide panel
+    return () => { cancelled = true; };
+  }, [refreshKey]);
+
+  const runAdmin = async (label: string, fn: () => Promise<unknown>) => {
+    setAdminBusy(true); setAdminMsg(null);
+    try { await fn(); setAdminMsg({ kind: 'ok', text: `${label} — done` }); setRefreshKey((k) => k + 1); }
+    catch (e) { setAdminMsg({ kind: 'err', text: String(e).replace(/^Error: /, '') }); }
+    finally { setAdminBusy(false); }
+  };
+  const csv = (v: string) => v.split(',').map((x) => x.trim()).filter(Boolean);
+  const saveProject = () => {
+    if (!form.id.trim() || !form.name.trim()) return;
+    runAdmin(`Saved ${form.id.trim()}`, async () => {
+      await api.projectRegistryUpsert({
+        id: form.id.trim(), name: form.name.trim(),
+        costCenter: form.costCenter.trim() || undefined,
+        repos: csv(form.repos), identityArns: csv(form.identityArns),
+      });
+      setForm({ id: '', name: '', costCenter: '', repos: '', identityArns: '' });
+    });
+  };
+  const editProject = (p: RegistryProject) => setForm({
+    id: p.projectId, name: p.name, costCenter: p.costCenter ?? '',
+    repos: p.repos.join(', '), identityArns: p.identityArns.join(', '),
+  });
+  const deleteProject = (id: string) => {
+    if (!window.confirm(`Remove project ${id} from the registry? Usage rollups are kept.`)) return;
+    runAdmin(`Removed ${id}`, () => api.projectRegistryDelete(id));
+  };
+
   // Keep the page frame (toggle stays clickable) while a source loads; only the table area spins.
   const bodyLoading = loading;
 
-  const totalTokens = rows.reduce((s, r) => s + (Number(r.tokens) || 0), 0);
-  const totalCost   = rows.reduce((s, r) => s + (Number(r.estimatedUsd) || 0), 0);
+  // KPIs prefer the authoritative per-model rollup totals (same numbers as the Cost page);
+  // the rows' own sums are kept separately so any residual is disclosed, not hidden (F-401).
+  const rowsTokens = rows.reduce((s, r) => s + (Number(r.tokens) || 0), 0);
+  const rowsCost   = rows.reduce((s, r) => s + (Number(r.estimatedUsd) || 0), 0);
+  const totalTokens = apiTotalTokens ?? rowsTokens;
+  const totalCost   = apiTotalUsd ?? rowsCost;
 
   return (
     <>
@@ -114,11 +177,15 @@ export function ProjectsPage() {
         <Kpi label="Projects tracked" value={String(rows.length)} accent="var(--primary)" />
         <Kpi label="Total tokens" value={fmtTokens(totalTokens)} accent="var(--accent-blue)" />
         <Kpi label="Total est. cost" value={fmtUsd(totalCost)} accent="var(--accent-green)"
-             foot="per-model rates — same math as the Cost page" />
+             foot={apiTotalUsd != null && Math.abs(apiTotalUsd - rowsCost) > 0.5
+               ? (source === 'full'
+                   ? `Athena rows ${fmtUsd(rowsCost)} vs rollups ${fmtUsd(apiTotalUsd)}${rollupsAsOf ? ` (as of ${rollupsAsOf.slice(11, 16)} UTC)` : ''} — Athena reads raw logs live; rollups refresh every 15 min, so the ${fmtUsd(Math.abs(rowsCost - apiTotalUsd))} difference is traffic since the last rollup`
+                   : `rows sum ${fmtUsd(rowsCost)} vs model rollups ${fmtUsd(apiTotalUsd)} — residual ${fmtUsd(Math.abs(apiTotalUsd - rowsCost))} predates per-project tracking`)
+               : `per-model rates — same rate card as the Cost page${rollupsAsOf ? ` · rollups as of ${rollupsAsOf.slice(11, 16)} UTC` : ''}`} />
       </div>
 
       <Panel title="Usage by project"
-             desc="Attributed via requestMetadata tags + project mapping (CSV). Fast = pre-aggregated DynamoDB rollups. Full = Athena scan over raw invocation logs joined to the name mapping (untagged traffic COALESCEs into 'untagged'). The two pipelines ingest at different times, so totals can differ slightly.">
+             desc="Attribution precedence per call: ① the project's application inference profile — the call is ROUTED through it, so the invocation log records the profile's ARN as modelId and the aggregator resolves its tums-project tag (config-routed, IAM-enforceable, zero per-call effort); ② requestMetadata.project_id set by the app; ③ identity hint for single-project principals; ④ untagged. Fast = managed DynamoDB rollups (full attribution, incl. the one-time historical treatment). Full = async Athena over the immutable raw logs — live and call-time truth, so it can run slightly ahead of the 15-minute rollups and keeps pre-profile history 'untagged' by design.">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
           <div style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
             {(['fast', 'full'] as const).map((s) => (
@@ -135,7 +202,7 @@ export function ProjectsPage() {
           {servedFrom && <span className="muted" style={{ fontSize: 12 }}>served from: <strong>{servedFrom}</strong></span>}
         </div>
         {bodyLoading ? (
-          <div className="empty"><span className="spinner" /> <span className="muted">loading {source === 'fast' ? 'DynamoDB rollups' : 'Athena scan — usually under a minute, occasionally up to two (running async)'}…</span></div>
+          <div className="empty"><span className="spinner" /> <span className="muted">{source === 'fast' ? 'loading DynamoDB rollups…' : `Athena scan running asynchronously — ${elapsedSec}s elapsed. Typically 20-60s; under queue contention it can take several minutes. You can switch to Fast meanwhile.`}</span></div>
         ) : error ? (
           <div className="empty"><div className="big">⚠️</div>Failed to load: {error}{' '}
             <button onClick={() => { setError(null); setRefreshKey((k) => k + 1); }}
@@ -172,6 +239,53 @@ export function ProjectsPage() {
           </table>
         )}
       </Panel>
+
+      {isAdmin && registry && (
+        <Panel title="Manage projects" desc="Admin group only — a project is the join key of the platform: it names a cost bucket (cost center + inference-profile tag), links GitHub repos (DORA metrics), and optionally claims caller identities (attribution fallback for single-project principals)">
+          <div className="inline-form" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
+            <input value={form.id} onChange={(e) => setForm({ ...form, id: e.target.value })} placeholder="id (slug, e.g. token-monitoring)" style={{ minWidth: 200 }} disabled={adminBusy} aria-label="Project id" />
+            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Display name" style={{ minWidth: 200 }} disabled={adminBusy} aria-label="Project name" />
+            <input value={form.costCenter} onChange={(e) => setForm({ ...form, costCenter: e.target.value })} placeholder="Cost center (optional)" style={{ minWidth: 160 }} disabled={adminBusy} aria-label="Cost center" />
+          </div>
+          <div className="inline-form" style={{ marginBottom: 12, flexWrap: 'wrap' }}>
+            <input value={form.repos} onChange={(e) => setForm({ ...form, repos: e.target.value })} placeholder="Repos, comma-separated (owner/name, owner/name)" style={{ minWidth: 420 }} disabled={adminBusy} aria-label="Repos" />
+            <input value={form.identityArns} onChange={(e) => setForm({ ...form, identityArns: e.target.value })} placeholder="Identity ARNs (optional, comma-separated)" style={{ minWidth: 320 }} disabled={adminBusy} aria-label="Identity ARNs" />
+            <button className="btn-primary" onClick={saveProject} disabled={adminBusy || !form.id.trim() || !form.name.trim()}>Save project</button>
+            {adminMsg && <span className={adminMsg.kind === 'err' ? 'error-text' : 'muted'} style={{ marginTop: 0, fontSize: 13 }}>{adminMsg.text}</span>}
+          </div>
+          {registry.length > 0 && (
+            <table className="data">
+              <thead><tr><th>Project</th><th>Cost center</th><th>Repos</th><th>Identity hints</th><th></th></tr></thead>
+              <tbody>
+                {registry.map((p) => (
+                  <tr key={p.projectId}>
+                    <td><strong>{p.name}</strong> <span className="muted mono" style={{ fontSize: 12 }}>{p.projectId}</span></td>
+                    <td className="muted">{p.costCenter ?? '—'}</td>
+                    <td className="mono" style={{ fontSize: 12 }}>{p.repos.join(', ') || '—'}</td>
+                    <td className="num">{p.identityArns.length}</td>
+                    <td className="num" style={{ whiteSpace: 'nowrap' }}>
+                      <button className="btn-sm" onClick={() => editProject(p)} disabled={adminBusy}>Edit</button>{' '}
+                      <button className="btn-sm danger" onClick={() => deleteProject(p.projectId)} disabled={adminBusy}>Remove</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <p className="muted" style={{ fontSize: 12, marginTop: 10 }}>
+            How the AIP mapping works end-to-end: the Tums-*-Projects stack creates one inference profile per
+            project × model, tagged tums-project=&lt;id&gt;. A repo's committed Claude Code settings (or an app
+            passing the profile ARN as modelId) route every call through it — no per-call tagging. The
+            invocation log then records the profile ARN as modelId; the aggregator resolves the ARN once via
+            its tag, caches it in this registry, and re-keys the record to the real underlying model so
+            per-model pricing stays exact. With the opt-in IAM policy, tagged profiles are the ONLY invokable
+            path, making attribution unforgeable; the same tag flows to Cost Explorer for billing-grade $.
+            Identity hints cover principals dedicated to one project; usage that predates the profiles was
+            attributed once, offline, by commit-time correlation — method and audit artifact in
+            docs/ATTRIBUTION.md.
+          </p>
+        </Panel>
+      )}
     </>
   );
 }

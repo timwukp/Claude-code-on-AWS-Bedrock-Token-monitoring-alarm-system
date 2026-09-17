@@ -81,4 +81,29 @@ export interface EnvConfig {
     /** How far back to backfill merged PRs when a repo is first registered. Default: 180 */
     readonly backfillDays?: number;
   };
+
+  /**
+   * Project cost attribution (#13). Per seed project × model, CDK creates a tagged
+   * application inference profile (tag project=<id>) — the IAM-enforceable, zero-client-effort
+   * unit of cost attribution. The runtime registry (tums-tenants) is seeded from this list on
+   * first use only; admins manage projects from the dashboard afterwards.
+   */
+  readonly projects?: {
+    readonly seedProjects?: {
+      /** Slug: ^[a-z0-9][a-z0-9-]{1,63}$ */
+      readonly id: string;
+      readonly name: string;
+      readonly costCenter?: string;
+      /** "owner/name" GitHub repos joined to the DORA registry. */
+      readonly repos?: string[];
+      /** Full cross-region inference-profile ids to wrap, e.g. "us.anthropic.claude-sonnet-4-6". */
+      readonly models?: string[];
+    }[];
+    /**
+     * Opt-in enforcement: create the "project profiles only" managed policy + a pilot test
+     * role (attached to nothing else). Off by default (Security pillar: enforcement is a
+     * deliberate step, like enableAutoContainment).
+     */
+    readonly enforcementPolicy?: boolean;
+  };
 }

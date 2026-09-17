@@ -30,5 +30,15 @@
     "githubTokenSecretName": "token-monitor-demo/github-token",
     "scheduleHours": 6,
     "backfillDays": 180
+  },
+  "projects": {
+    "seedProjects": [{
+      "id": "token-monitoring",
+      "name": "Token Usage Monitoring",
+      "costCenter": "CC-ENG-DEMO",
+      "repos": ["timwukp/claude-code-on-aws-bedrock-token-monitoring-alarm-system"],
+      "models": ["us.anthropic.claude-fable-5-1", "us.anthropic.claude-sonnet-4-6", "us.anthropic.claude-haiku-4-5-20251001-v1:0"]
+    }],
+    "enforcementPolicy": false
   }
 }

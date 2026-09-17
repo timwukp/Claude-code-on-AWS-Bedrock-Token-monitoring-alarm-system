@@ -134,6 +134,27 @@ export class ApiStack extends cdk.Stack {
     tables.dora.grantReadWriteData(doraFn);
     dora.collectorFn.grantInvoke(doraFn);
     dora.githubSecret.grantRead(doraFn);
+    // Delivery × Cost join (#13): registry projects + PROJDAY daily cost rollups.
+    tables.tenants.grantReadData(doraFn);
+    tables.aggregates.grantReadData(doraFn);
+
+    // Project registry (#13): admin-managed project → repos / cost-center / identity hints.
+    const projectRegistryFn = new NodejsFunction(this, 'ProjectRegistryFn', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: lambdaEntry('api', 'project-registry.ts'),
+      projectRoot: BACKEND_ROOT,
+      depsLockFilePath: BACKEND_LOCK,
+      handler: 'handler',
+      memorySize: 256,
+      timeout: cdk.Duration.seconds(15),
+      tracing: lambda.Tracing.ACTIVE,
+      environment: {
+        ...commonEnv,
+        PROJECTS_SEED_JSON: JSON.stringify(cfg.projects?.seedProjects ?? []),
+      },
+      bundling: { minify: true, sourceMap: true },
+    });
+    tables.tenants.grantReadWriteData(projectRegistryFn);
 
     // Least-privilege grants.
     tables.aggregates.grantReadData(usageFn);
@@ -168,7 +189,9 @@ export class ApiStack extends cdk.Stack {
     grantAthena(projectsFn);
     curatedBucket.grantRead(projectsFn); // project_mapping CSV lives in the curated bucket
     curatedBucket.grantRead(queriesFn); // byProject template joins the same mapping CSV (F-002)
+    tables.tenants.grantReadData(queriesFn); // byProject resolves AIP ARNs via the registry profile cache (F-501)
     tables.aggregates.grantReadData(projectsFn); // #7 fast path reads PROJECT rollups from DynamoDB
+    tables.tenants.grantReadData(projectsFn); // #13 registry names/cost centers for fast-path rows
 
     // quotasFn reads CloudWatch Bedrock metrics + Service Quotas limits (read-only, account-wide).
     quotasFn.addToRolePolicy(new iam.PolicyStatement({
@@ -197,7 +220,14 @@ export class ApiStack extends cdk.Stack {
     v1.addResource('usage').addMethod('GET', new apigw.LambdaIntegration(usageFn), opts);
     v1.addResource('costs').addMethod('GET', new apigw.LambdaIntegration(costsFn), opts);
     v1.addResource('anomalies').addMethod('GET', new apigw.LambdaIntegration(anomaliesFn), opts);
-    v1.addResource('projects').addMethod('GET', new apigw.LambdaIntegration(projectsFn), opts);
+    const projects = v1.addResource('projects');
+    projects.addMethod('GET', new apigw.LambdaIntegration(projectsFn), opts);
+    // Project registry (#13). Reads for any signed-in user; writes require the admin group.
+    const registryInt = new apigw.LambdaIntegration(projectRegistryFn);
+    const registry = projects.addResource('registry');
+    registry.addMethod('GET', registryInt, opts);
+    registry.addMethod('POST', registryInt, opts);
+    registry.addResource('{id}').addMethod('DELETE', registryInt, opts);
     v1.addResource('quotas').addMethod('GET', new apigw.LambdaIntegration(quotasFn), opts);
     v1.addResource('governance').addMethod('GET', new apigw.LambdaIntegration(governanceFn), opts);
     const queries = v1.addResource('queries');
@@ -216,6 +246,7 @@ export class ApiStack extends cdk.Stack {
     doraRepo.addResource('sync').addMethod('POST', doraInt, opts);
     doraRes.addResource('metrics').addMethod('GET', doraInt, opts);
     doraRes.addResource('overview').addMethod('GET', doraInt, opts);
+    doraRes.addResource('projects').addMethod('GET', doraInt, opts); // Delivery × Cost rows (#13)
 
     new cdk.CfnOutput(this, 'ApiUrl', { value: this.restApi.url });
   }

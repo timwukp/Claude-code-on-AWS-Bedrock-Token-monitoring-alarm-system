@@ -6,6 +6,8 @@ import {
   GetQueryResultsCommand,
 } from '@aws-sdk/client-athena';
 import { ok, badRequest, serverError } from '../shared/response';
+import { RATE_CARD } from './cost-calc';
+import { listProfiles } from '../shared/project-registry';
 import { getTenantId } from '../shared/tenant';
 
 const athena = new AthenaClient({});
@@ -42,26 +44,64 @@ const tenantFilter = (tenantId: string) => {
   return `(COALESCE(requestMetadata['tenant'], identity.arn) = '${t}')`;
 };
 
-const TEMPLATES: Record<string, (tenantId: string, days: number) => string> = {
-  // By-project attribution with the CSV name mapping — the same query the sync
-  // GET /v1/projects runs, exposed async because the scan takes 15-30s on real data,
-  // longer than any sane synchronous API timeout (F-002). All-time, like the sync path.
-  byProject: (tenantId) => `
+/**
+ * SQL CASE reproducing RATE_CARD's first-substring-match semantics (cost-calc.matchRate) so
+ * Athena and the Fast path price identically; unknown models fall through to 0.
+ */
+function rateCase(field: 'inPerToken' | 'outPerToken' | 'cacheReadPerToken', modelExpr = 'l.modelId'): string {
+  const whens = RATE_CARD.map((r) => `WHEN ${modelExpr} LIKE '%${r.key.replace(/'/g, "''")}%' THEN ${r[field]}`).join(' ');
+  return `CASE ${whens} ELSE 0 END`;
+}
+
+const SAFE_SQL_STR = /^[A-Za-z0-9:._\/-]+$/;
+
+/**
+ * Build the effective-model expression from the registry's resolved-profile cache (F-501): calls
+ * routed through an application inference profile log the opaque profile ARN as modelId, which
+ * no rate matches — the rollups resolve them at ingest, so Athena must too or the pipelines
+ * disagree by exactly the profile-routed spend. Strings are allow-listed before interpolation.
+ */
+async function buildModelExpr(): Promise<string> {
+  if (!process.env.TENANTS_TABLE) return 'l.modelId';
+  try {
+    const profiles = (await listProfiles()).filter((p) => p.projectId !== 'untagged');
+    const whens = profiles
+      .filter((p) => SAFE_SQL_STR.test(p.arn) && SAFE_SQL_STR.test(p.underlyingModelId))
+      .map((p) => `WHEN l.modelId = '${p.arn}' THEN '${p.underlyingModelId}'`);
+    return whens.length ? `CASE ${whens.join(' ')} ELSE l.modelId END` : 'l.modelId';
+  } catch (err) {
+    console.warn('queries: could not load profile cache; pricing raw modelId', (err as Error).message);
+    return 'l.modelId';
+  }
+}
+
+interface TemplateCtx {
+  /** SQL expression yielding the effective model id: application-inference-profile ARNs resolved
+   * to their underlying model via the registry cache (so pricing matches the rollups), else l.modelId. */
+  modelExpr: string;
+}
+
+const TEMPLATES: Record<string, (tenantId: string, days: number, ctx: TemplateCtx) => string> = {
+  // By-project attribution with the CSV name mapping, exposed async because the scan takes
+  // 15-30s on real data (F-002). Prices PER MODEL with the same rate card the Fast path and the
+  // Cost page use (QA F-402: a flat reference rate + proportional scaling mis-priced projects
+  // with a cheaper model mix). Rows are (project, model); the client sums per project.
+  byProject: (tenantId, _days, ctx) => `
     SELECT
       COALESCE(m.project_name, l.requestMetadata['project_id'], 'untagged') AS project,
       COALESCE(m.cost_center, '—') AS cost_center,
       COUNT(DISTINCT l.requestMetadata['user_id']) AS users,
-      SUM(l.input.inputTokenCount + l.output.outputTokenCount) AS tokens,
-      SUM(l.input.inputTokenCount) * 0.000005
-        + SUM(l.output.outputTokenCount) * 0.000025
-        + SUM(COALESCE(l.input.cacheReadInputTokenCount, 0)) * 0.0000005 AS est_usd
+      COALESCE(SUM(COALESCE(l.input.inputTokenCount, 0) + COALESCE(l.output.outputTokenCount, 0)), 0) AS tokens,
+      COALESCE(SUM(COALESCE(l.input.inputTokenCount, 0)), 0) * (${rateCase('inPerToken', ctx.modelExpr)})
+        + COALESCE(SUM(COALESCE(l.output.outputTokenCount, 0)), 0) * (${rateCase('outPerToken', ctx.modelExpr)})
+        + COALESCE(SUM(COALESCE(l.input.cacheReadInputTokenCount, 0)), 0) * (${rateCase('cacheReadPerToken', ctx.modelExpr)}) AS est_usd
     FROM bedrock_invocation_logs l
     LEFT JOIN project_mapping m
       ON l.requestMetadata['project_id'] = m.project_id
     WHERE (COALESCE(l.requestMetadata['tenant'], l.identity.arn) = '${sanitizeTenant(tenantId)}')
-    GROUP BY 1, 2
+    GROUP BY 1, 2, ${ctx.modelExpr}
     ORDER BY tokens DESC
-    LIMIT 100`,
+    LIMIT 500`,
 
   topModels: (tenantId, days) => `
     SELECT modelId,
@@ -90,9 +130,10 @@ async function startQuery(event: APIGatewayProxyEvent, tenantId: string) {
   if (!template) return badRequest(`Unknown template. Allowed: ${Object.keys(TEMPLATES).join(', ')}`);
   const days = Math.min(Math.max(Number(body.days ?? 7), 1), 90);
 
+  const ctx: TemplateCtx = { modelExpr: await buildModelExpr() };
   const res = await athena.send(
     new StartQueryExecutionCommand({
-      QueryString: template(tenantId, days),
+      QueryString: template(tenantId, days, ctx),
       WorkGroup: WORKGROUP,
       QueryExecutionContext: { Database: DATABASE },
     }),

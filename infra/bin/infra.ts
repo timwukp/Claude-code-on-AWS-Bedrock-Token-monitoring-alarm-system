@@ -10,6 +10,7 @@ import { ApiStack } from '../lib/stacks/api-stack';
 import { AutomationStack } from '../lib/stacks/automation-stack';
 import { EtlStack } from '../lib/stacks/etl-stack';
 import { DoraStack } from '../lib/stacks/dora-stack';
+import { ProjectsStack } from '../lib/stacks/projects-stack';
 import { FrontendStack } from '../lib/stacks/frontend-stack';
 
 const app = new cdk.App();
@@ -24,6 +25,9 @@ const network = new NetworkStack(app, `${prefix}-Network`, { env, cfg });
 const data = new DataStack(app, `${prefix}-Data`, { env, cfg });
 const logging = new LoggingStack(app, `${prefix}-Logging`, { env, cfg, rawLogBucket: data.rawLogBucket });
 const auth = new AuthStack(app, `${prefix}-Auth`, { env, cfg });
+
+// Project cost attribution: tagged application inference profiles + opt-in enforcement (#13).
+new ProjectsStack(app, `${prefix}-Projects`, { env, cfg });
 
 // DORA collector + GitHub token secret (independent of the Bedrock-log ETL path).
 const dora = new DoraStack(app, `${prefix}-Dora`, { env, cfg, tables: data.tables });

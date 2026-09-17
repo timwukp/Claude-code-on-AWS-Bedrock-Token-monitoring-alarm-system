@@ -4,10 +4,10 @@ import {
   Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import {
-  api, AssistedBy, DoraMetrics, DoraOverviewRow, DoraPrRow, DoraRepo, DoraWindow, MetricValue, SyncStatus, Tier,
+  api, AssistedBy, DoraMetrics, DoraOverviewRow, DoraPrRow, DoraProjectRow, DoraRepo, DoraWindow, MetricValue, SyncStatus, Tier,
 } from '../api/client';
 import { Kpi, Panel } from '../components/Layout';
-import { fmtAgo, fmtAxisHours, fmtDateTime, fmtHours, fmtPct } from '../lib/format';
+import { fmtAgo, fmtAxisHours, fmtDateTime, fmtHours, fmtPct, fmtTokens, fmtUsd } from '../lib/format';
 
 /**
  * DORA metrics per tracked GitHub repo — deployment frequency, lead time for changes, change
@@ -65,6 +65,7 @@ export function DoraPage() {
   const [detailError, setDetailError] = useState<string | null>(null);
 
   const [overview, setOverview] = useState<DoraOverviewRow[] | null>(null);
+  const [projectRows, setProjectRows] = useState<DoraProjectRow[] | null>(null);
 
   const [refreshKey, setRefreshKey] = useState(0);
   const [pollCount, setPollCount] = useState(0);
@@ -116,6 +117,15 @@ export function DoraPage() {
     return () => { cancelled = true; };
   }, [selected?.repo, windowDays, refreshKey, repos?.map((r) => `${r.repo}:${r.lastSyncedAt}`).join('|')]);
 
+  // Delivery × Cost rows (#13) — best-effort: the panel hides if the endpoint is unavailable.
+  useEffect(() => {
+    let cancelled = false;
+    api.doraProjects(windowDays)
+      .then((r) => { if (!cancelled) setProjectRows(r.projects); })
+      .catch(() => { if (!cancelled) setProjectRows(null); });
+    return () => { cancelled = true; };
+  }, [windowDays, refreshKey]);
+
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
 
   const runAdmin = async (label: string, fn: () => Promise<unknown>) => {
@@ -142,10 +152,26 @@ export function DoraPage() {
   const tl = m?.timeline ?? [];
   const noData = !!m && m.sample.mergedPrs === 0;
 
-  const kpiFoot = (s: { all: MetricValue; ai: MetricValue; human: MetricValue }, kind: 'df' | 'lt' | 'cfr' | 'mttr') =>
-    s.all.n === 0
-      ? `Tier: Unknown · no ${kind === 'mttr' ? 'recovery events' : 'merged PRs'} in window`
-      : <>Tier: <strong>{s.all.tier}</strong> · AI {fmtMetric(s.ai, kind)} · Human {fmtMetric(s.human, kind)} · n={s.all.n}</>;
+  // Plain-language footers: say what the number means before naming the tier.
+  const perWeek = (perDay: number | null) => (perDay == null ? '—' : `${(perDay * 7).toFixed(1)} / week`);
+  const kpiFoot = (s: { all: MetricValue; ai: MetricValue; human: MetricValue }, kind: 'df' | 'lt' | 'cfr' | 'mttr') => {
+    if (s.all.n === 0) {
+      return kind === 'mttr'
+        ? 'Nothing to restore from — no hotfixes or incidents in this window'
+        : `No PRs merged to the default branch in the last ${windowDays} days`;
+    }
+    const tier = <>DORA tier: <strong>{s.all.tier}</strong></>;
+    switch (kind) {
+      case 'df':
+        return <>{s.all.n} merged PRs in {windowDays} days ≈ {perWeek(s.all.value)} · {tier} · AI-assisted {s.ai.n} · human-only {s.human.n}</>;
+      case 'lt':
+        return <>median from first commit to merge · AI-assisted {fmtHours(s.ai.value)} · human-only {fmtHours(s.human.value)} · {tier}</>;
+      case 'cfr':
+        return <>{Math.round(((s.all.value ?? 0) / 100) * s.all.n)} of {s.all.n} changes needed a revert, hotfix or caused an incident · {tier}</>;
+      default:
+        return <>median time from problem to fix, over {s.all.n} recovery event{s.all.n === 1 ? '' : 's'} · {tier}</>;
+    }
+  };
 
   return (
     <>
@@ -218,20 +244,26 @@ export function DoraPage() {
               ) : null}
 
               <div className="kpi-grid">
-                <Kpi label="Deployment frequency" value={perDay(m.deploymentFrequency.all.perDay)}
+                <Kpi label="How often do we ship?" value={m.deploymentFrequency.all.n === 0 ? '—' : perWeek(m.deploymentFrequency.all.perDay)}
                      accent={TIER_ACCENT[m.deploymentFrequency.all.tier]} foot={kpiFoot(m.deploymentFrequency, 'df')} />
-                <Kpi label="Lead time for changes" value={fmtHours(m.leadTime.all.value)}
+                <Kpi label="How fast does a change reach main?" value={fmtHours(m.leadTime.all.value)}
                      accent={TIER_ACCENT[m.leadTime.all.tier]} foot={kpiFoot(m.leadTime, 'lt')} />
-                <Kpi label="Change failure rate" value={fmtPct(m.changeFailureRate.all.value)}
+                <Kpi label="How often does a change break things?" value={fmtPct(m.changeFailureRate.all.value)}
                      accent={TIER_ACCENT[m.changeFailureRate.all.tier]} foot={kpiFoot(m.changeFailureRate, 'cfr')} />
-                <Kpi label="Time to restore" value={fmtHours(m.mttr.all.value)}
+                <Kpi label="How quickly do we recover?" value={fmtHours(m.mttr.all.value)}
                      accent={TIER_ACCENT[m.mttr.all.tier]} foot={kpiFoot(m.mttr, 'mttr')} />
-                <Kpi label="AI participation" value={fmtPct(m.aiParticipationPct)} accent="var(--primary)"
+                <Kpi label="How much did AI help write it?" value={fmtPct(m.aiParticipationPct)} accent="var(--primary)"
                      foot={m.sample.mergedPrs === 0 ? 'no merged PRs in window'
-                       : (Object.entries(m.byAssistant) as [Exclude<AssistedBy, null>, number][])
-                           .filter(([, n]) => n > 0).map(([k, n]) => `${ASSISTANT_LABEL[k]} ${n}`).join(' · ') || 'no AI-assisted PRs detected'} />
+                       : <>{Object.values(m.byAssistant).reduce((a, b) => a + b, 0)} of {m.sample.mergedPrs} PRs had an AI assistant
+                         {(Object.entries(m.byAssistant) as [Exclude<AssistedBy, null>, number][]).filter(([, n]) => n > 0).length
+                           ? <> ({(Object.entries(m.byAssistant) as [Exclude<AssistedBy, null>, number][]).filter(([, n]) => n > 0).map(([k, n]) => `${ASSISTANT_LABEL[k]} ${n}`).join(' · ')})</> : null}</>} />
               </div>
 
+              <p className="muted" style={{ fontSize: 12, marginTop: -12 }}>
+                These are the four DORA metrics (deployment frequency, lead time for changes, change failure rate, time to
+                restore) in plain words. A "deployment" here is a PR merged to the default branch. Tiers are the DORA
+                State of DevOps bands — Elite is best.
+              </p>
               {noData ? (
                 <div className="empty">
                   <div className="big">📭</div>
@@ -348,6 +380,44 @@ export function DoraPage() {
               ))}
             </tbody>
           </table>
+        </Panel>
+      )}
+
+      {/* ---- projects: delivery × cost (#13) ---- */}
+      {projectRows && projectRows.length > 0 && (
+        <Panel title="Projects — delivery × cost"
+               desc={`Each project pools DORA across its repos and prices its Bedrock usage from daily rollups — last ${windowDays} days`}>
+          <table className="data">
+            <thead>
+              <tr><th>Project</th><th className="num">Repos</th><th className="num">Merged PRs</th><th>Deploy freq.</th><th>Lead time</th><th className="num">AI %</th><th className="num">Tokens</th><th className="num">Est. USD</th><th className="num">$ / deploy</th></tr>
+            </thead>
+            <tbody>
+              {projectRows.map((p) => (
+                <tr key={p.projectId}>
+                  <td><strong>{p.name}</strong> <span className="muted mono" style={{ fontSize: 12 }}>{p.projectId}</span>
+                    {p.costCenter && <div className="muted" style={{ fontSize: 12 }}>{p.costCenter}</div>}</td>
+                  <td className="num">{p.repos.length}</td>
+                  <td className="num">{p.dora?.mergedPrs ?? '—'}</td>
+                  <td>{p.dora ? <>{p.dora.df.value ?? '—'}/d <TierBadge tier={p.dora.df.tier} /></> : <span className="muted">no repos tracked</span>}</td>
+                  <td>{p.dora ? <>{fmtHours(p.dora.lt.value)} <TierBadge tier={p.dora.lt.tier} /></> : <span className="muted">—</span>}</td>
+                  <td className="num">{fmtPct(p.dora?.aiParticipationPct ?? null)}</td>
+                  <td className="num">{fmtTokens(p.tokens)}</td>
+                  <td className="num"><strong>{fmtUsd(p.estimatedUsd)}</strong></td>
+                  <td className="num">{p.usdPerDeployment != null ? fmtUsd(p.usdPerDeployment) : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {projectRows.some((p) => p.notes.length > 0) && (
+            <p className="muted" style={{ fontSize: 12, marginTop: 10 }}>
+              {projectRows.flatMap((p) => p.notes.map((n) => `${p.projectId}: ${n}`)).join(' · ')}
+            </p>
+          )}
+          <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+            Cost is a token-based estimate (same rate card as the Cost page). A deployment is a PR
+            merged to the default branch, so $ / deploy = $ / merged PR today. Manage projects on
+            the By Project page.
+          </p>
         </Panel>
       )}
 
