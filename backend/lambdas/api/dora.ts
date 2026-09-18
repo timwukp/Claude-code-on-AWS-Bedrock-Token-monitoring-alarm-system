@@ -317,7 +317,7 @@ async function overview(event: APIGatewayProxyEvent): Promise<APIGatewayProxyRes
       aiParticipationPct: m.aiParticipationPct,
       df: { ...pick(m.deploymentFrequency.all), band: m.deploymentFrequency.all.band },
       lt: pick(m.leadTime.all),
-      cfr: pick(m.changeFailureRate.all),
+      cfr: pick(m.changeFailRate.all),
       mttr: pick(m.mttr.all),
     };
   }));

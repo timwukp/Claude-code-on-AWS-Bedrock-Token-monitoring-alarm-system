@@ -160,7 +160,7 @@ async function projects(event: APIGatewayProxyEvent): Promise<APIGatewayProxyRes
       windowDays, spendUsd, tokens,
       mergedPrs: dora.sample.mergedPrs,
       deployments: dora.deploymentFrequency.all.deployments,
-      cfrPct: dora.changeFailureRate.all.value,
+      cfrPct: dora.changeFailRate.all.value,
       mttrHours: dora.mttr.all.value,
       weeklySpendUsd, weeklyTokens,
       weeklyMergedPrs: weeklyPrs(prs.filter((x) => x.mergedAt >= fromIso)),

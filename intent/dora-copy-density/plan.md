@@ -28,8 +28,10 @@ branch's merge base. Nothing is stacked: #39, #40, #41 and #42 are all merged.
 3. `backend/lambdas/api/dora.ts` — rename the field on the metrics and overview payloads; rewrite
    `DATA_SOURCE.notes` to one claim per note and **delete** the note that says the band leads with
    the rate as supporting arithmetic; add `canonicalSource` and `bandReference`.
-4. `backend/lambdas/api/project-calc.ts` — rename the change-fail field on the Delivery × Cost row.
-5. `backend/lambdas/api/project-calc.test.ts` — rename references.
+4. `backend/lambdas/api/project-calc.ts` — rename the change-fail field read for the Delivery × Cost
+   row.
+5. `backend/lambdas/api/roi.ts` — rename the change-fail field read into `RoiWindowAggregates.cfrPct`.
+   The ROI page's own copy is unaffected; this is the rename reaching its second consumer.
 
 ### Frontend
 6. `frontend/src/components/Layout.tsx` — `Kpi` gains `chip?: ReactNode`, rendered as a badge beside

@@ -2,13 +2,18 @@
  * Pure DORA metric math (no I/O) so it is unit-testable offline. Definitions and tier
  * thresholds are ported from the reference implementation (`dora_calculator.py`):
  *
- *  - Deployment Frequency  = merged PRs in window / days             (deploy := merge to default)
- *  - Lead Time for Changes = median(mergedAt − firstCommitAt) hours   (+ p95, mean, coding/review)
- *  - Change Failure Rate   = (reverts + hotfixes + incidents) / merged PRs × 100, capped at 100
- *  - Time to Restore       = median(hotfix mergedAt − createdAt ∪ incident closedAt − createdAt)
+ *  - Deployment frequency  = merged PRs in window / days             (deploy := merge to default)
+ *  - Change lead time      = median(mergedAt − firstCommitAt) hours   (+ p95, mean, coding/review)
+ *  - Change fail rate      = (reverts + hotfixes + incidents) / merged PRs × 100, capped at 100
+ *  - Recovery time         = median(hotfix mergedAt − createdAt ∪ incident closedAt − createdAt)
+ *
+ * The labels above are DORA's own, from `https://dora.dev/guides/dora-metrics/` — one surface,
+ * cited by URL, because DORA's several surfaces disagree with each other about these names. Note
+ * the spelling "change fail rate": DORA's live instrument contains no occurrence of "change
+ * failure rate" (`docs/research-dora-card-copy.md` §1–2).
  *
  * How these relate to DORA's canonical definitions, so nothing here overclaims
- * (`docs/research-dora-presentation.md` has the citations):
+ * (`docs/research-dora-presentation.md` and `docs/research-dora-card-copy.md` have the citations):
  *
  *  - DORA anchors all of its metrics on **production deployment**. Merge-to-default is a PROXY;
  *    DORA's own reference implementation says a merge push event "is not its own distinct change"
@@ -50,11 +55,13 @@ export interface DeploymentFrequency extends MetricValue {
   perDay: number | null;
   deployments: number;
   /**
-   * The rate re-expressed as DORA's own ordinal band, verbatim from the Quick Check's
-   * `deployfreq` responses. DORA never states this metric as a rate — every one of its
-   * instruments uses these phrases — and "about once a week" is the form a non-expert reads
-   * correctly on the first pass. `null` when there is no sample.
-   * See `docs/research-dora-presentation.md` §1.3.
+   * The rate re-expressed as DORA's own ordinal phrase, verbatim from the Quick Check's
+   * `deployfreq` responses. It is a **reference form, not the headline**: DORA's own live
+   * instrument scores delivery performance on a continuous 0–10 scale against an industry mean and
+   * uses no ordinal band as a label at all, so a surface that leads with a band asserts a shape
+   * DORA has moved away from. The measured rate leads; this phrase belongs in a disclosure next to
+   * the dated band table. `null` when there is no sample.
+   * See `docs/research-dora-card-copy.md` §4 (which supersedes `research-dora-presentation.md` §1.3).
    */
   band: string | null;
 }
@@ -66,7 +73,7 @@ export interface LeadTime extends MetricValue {
   /** Median hours from PR open to merge. */
   reviewHours: number | null;
 }
-export interface ChangeFailureRate extends MetricValue {
+export interface ChangeFailRate extends MetricValue {
   reverts: number;
   hotfixes: number;
   incidents: number;
@@ -88,7 +95,7 @@ export interface WeekBucket {
 export interface DoraMetrics {
   deploymentFrequency: Split<DeploymentFrequency>;
   leadTime: Split<LeadTime>;
-  changeFailureRate: Split<ChangeFailureRate>;
+  changeFailRate: Split<ChangeFailRate>;
   mttr: Split<Mttr>;
   /** % of merged PRs in window with an AI assistant attributed (null if no PRs). */
   aiParticipationPct: number | null;
@@ -109,9 +116,10 @@ type Threshold = readonly [number, Tier];
  * tiers — Elite 5%, **High 20%, Medium 10%**, Low 40% — because the clusters are discovered over
  * the whole metric vector, not thresholded per metric. DORA discusses this itself as "one of the
  * potential pitfalls of using these performance levels". A tier therefore cannot be derived from
- * a change failure rate alone, so we do not invent one: `tierFor('cfr', …)` returns `Unknown` and
- * the UI shows the measured percentage against `CFR_BANDS_2024` as reference values instead.
- * See `docs/research-dora-presentation.md` §1.4.
+ * a change fail rate alone, so we do not invent one: `tierFor('cfr', …)` returns `Unknown` and the
+ * UI shows the measured percentage against `CFR_BANDS_2024` as reference values instead.
+ * See `docs/research-dora-presentation.md` §1.4. `BANDS_2024_REFERENCE` below re-expresses these
+ * boundaries in the words a reader compares with, and inherits the same exclusion by construction.
  */
 const TIERS: Record<Exclude<MetricKey, 'cfr'>, { higherIsBetter: boolean; thresholds: readonly Threshold[] }> = {
   df: { higherIsBetter: true, thresholds: [[1, 'Elite'], [1 / 7, 'High'], [1 / 30, 'Medium']] },
@@ -126,6 +134,54 @@ export const CFR_BANDS_2024: readonly { readonly tier: Exclude<Tier, 'Unknown'>;
   { tier: 'Medium', pct: 10 },
   { tier: 'Low', pct: 40 },
 ];
+
+export interface BandReference {
+  /** Metric key. `cfr` never appears here — its published values are not thresholds. */
+  metric: Exclude<MetricKey, 'cfr'>;
+  /** DORA's own label for the metric the 2024 bands were published against. */
+  label: string;
+  /** One row per 2024 performance level, best first. */
+  bands: readonly { readonly tier: Exclude<Tier, 'Unknown'>; readonly text: string }[];
+}
+
+const RATE_WORDS: readonly (readonly [number, string])[] = [
+  [1, 'once per day'], [1 / 7, 'once per week'], [1 / 30, 'once per month'], [1 / 182, 'once per six months'],
+];
+const HOUR_WORDS: readonly (readonly [number, string])[] = [
+  [1, 'one hour'], [24, 'one day'], [168, 'one week'], [720, 'one month'],
+];
+const rateWords = (perDay: number) =>
+  RATE_WORDS.find(([v]) => Math.abs(v - perDay) < 1e-9)?.[1] ?? `${Math.round(perDay * 100) / 100} per day`;
+const hourWords = (hours: number) => HOUR_WORDS.find(([v]) => v === hours)?.[1] ?? `${hours} hours`;
+
+const BAND_WORDING: Record<Exclude<MetricKey, 'cfr'>, { label: string; better: (b: number) => string; worst: (b: number) => string }> = {
+  df: { label: 'Deployment frequency', better: (b) => `at least ${rateWords(b)}`, worst: (b) => `less than ${rateWords(b)}` },
+  lt: { label: 'Change lead time', better: (b) => `within ${hourWords(b)}`, worst: (b) => `more than ${hourWords(b)}` },
+  mttr: { label: 'Failed deployment recovery time', better: (b) => `within ${hourWords(b)}`, worst: (b) => `more than ${hourWords(b)}` },
+};
+
+/**
+ * The 2024 bands as a dated **reference table**, derived from `TIERS` so the two can never drift
+ * apart, and shipped to the client as data so a page renders these numbers once inside a disclosure
+ * instead of re-stating them on every tile. `label` is DORA's own name for the metric each band was
+ * published against — which for recovery time is deliberately NOT the name of our `mttr` field; a
+ * surface showing this table has to say which of its metrics map exactly and which do not.
+ * See `docs/research-dora-card-copy.md` §4–5: DORA's live instrument no longer bands at all, so
+ * these values are historical context, never a grade.
+ */
+export const BANDS_2024_REFERENCE: readonly BandReference[] = (Object.keys(TIERS) as Exclude<MetricKey, 'cfr'>[])
+  .map((metric) => {
+    const { thresholds } = TIERS[metric];
+    const w = BAND_WORDING[metric];
+    return {
+      metric,
+      label: w.label,
+      bands: [
+        ...thresholds.map(([boundary, tier]) => ({ tier: tier as Exclude<Tier, 'Unknown'>, text: w.better(boundary) })),
+        { tier: 'Low' as const, text: w.worst(thresholds[thresholds.length - 1][0]) },
+      ],
+    };
+  });
 
 export function tierFor(metric: MetricKey, value: number | null): Tier {
   if (metric === 'cfr') return 'Unknown';
@@ -244,7 +300,7 @@ function leadTime(prs: PrForMetrics[]): LeadTime {
   };
 }
 
-function changeFailureRate(prs: PrForMetrics[], incidents: number): ChangeFailureRate {
+function changeFailRate(prs: PrForMetrics[], incidents: number): ChangeFailRate {
   const reverts = prs.filter((p) => p.isRevert).length;
   const hotfixes = prs.filter((p) => p.isHotfix && !p.isRevert).length;
   const failures = reverts + hotfixes + incidents;
@@ -330,7 +386,7 @@ export function computeDora(
     deploymentFrequency: split((c) => deploymentFrequency(c, days)),
     leadTime: split((c) => leadTime(c)),
     // Incidents can't be attributed to a cohort → only the `all` cohort counts them.
-    changeFailureRate: split((c, cohort) => changeFailureRate(c, cohort === 'all' ? issues.length : 0)),
+    changeFailRate: split((c, cohort) => changeFailRate(c, cohort === 'all' ? issues.length : 0)),
     mttr: split((c, cohort) => mttr(c, cohort === 'all' ? issues : [])),
     aiParticipationPct: prs.length === 0 ? null : round1((aiCount / prs.length) * 100),
     byAssistant,

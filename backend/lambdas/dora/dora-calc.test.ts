@@ -1,4 +1,6 @@
-import { CFR_BANDS_2024, computeDora, deployFrequencyBand, hoursBetween, isoWeek, median, percentile, tierFor } from './dora-calc';
+import {
+  BANDS_2024_REFERENCE, CFR_BANDS_2024, computeDora, deployFrequencyBand, hoursBetween, isoWeek, median, percentile, tierFor,
+} from './dora-calc';
 import { IssueForMetrics, PrForMetrics } from './types';
 
 const NOW = new Date('2026-09-16T12:00:00.000Z');
@@ -84,6 +86,52 @@ describe('tierFor', () => {
   });
 });
 
+describe('BANDS_2024_REFERENCE', () => {
+  it('covers every metric that has a tier, and never change fail rate', () => {
+    expect(BANDS_2024_REFERENCE.map((r) => r.metric).sort()).toEqual(['df', 'lt', 'mttr']);
+    // A cfr row here would re-assert the tier this codebase deliberately refuses: the published
+    // 2024 values are non-monotonic, so no boundary ordering reproduces them.
+    expect(BANDS_2024_REFERENCE.some((r) => (r.metric as string) === 'cfr')).toBe(false);
+  });
+
+  it('states four levels per metric, best first, in words rather than raw boundaries', () => {
+    for (const row of BANDS_2024_REFERENCE) {
+      expect(row.bands.map((b) => b.tier)).toEqual(['Elite', 'High', 'Medium', 'Low']);
+      // The fallback renderings ("0.14 per day", "24 hours") mean a threshold moved without its
+      // wording being updated; the table would then read like arithmetic, not like a benchmark.
+      for (const b of row.bands) expect(b.text).not.toMatch(/\d/);
+    }
+  });
+
+  it('re-expresses the thresholds in the units the tiers are computed from', () => {
+    const df = BANDS_2024_REFERENCE.find((r) => r.metric === 'df')!;
+    expect(df.label).toBe('Deployment frequency');
+    expect(df.bands.map((b) => b.text)).toEqual([
+      'at least once per day', 'at least once per week', 'at least once per month', 'less than once per month',
+    ]);
+    const lt = BANDS_2024_REFERENCE.find((r) => r.metric === 'lt')!;
+    expect(lt.label).toBe('Change lead time');
+    expect(lt.bands.map((b) => b.text)).toEqual([
+      'within one day', 'within one week', 'within one month', 'more than one month',
+    ]);
+    // DORA's own name for the metric these bands were published against - which is NOT what our
+    // `mttr` field computes. The page has to keep saying so; the data must not quietly imply it.
+    const mttr = BANDS_2024_REFERENCE.find((r) => r.metric === 'mttr')!;
+    expect(mttr.label).toBe('Failed deployment recovery time');
+    expect(mttr.bands.map((b) => b.text)).toEqual([
+      'within one hour', 'within one day', 'within one week', 'more than one week',
+    ]);
+  });
+
+  it('agrees with tierFor at every published boundary', () => {
+    expect(tierFor('df', 1)).toBe('Elite');
+    expect(tierFor('df', 1 / 7)).toBe('High');
+    expect(tierFor('df', 1 / 30)).toBe('Medium');
+    expect(tierFor('lt', 24)).toBe('Elite');
+    expect(tierFor('mttr', 1)).toBe('Elite');
+  });
+});
+
 describe('deployFrequencyBand', () => {
   it('maps a rate onto DORA\'s six ordinal buckets', () => {
     expect(deployFrequencyBand(3)).toBe('On demand (multiple deploys per day)');
@@ -130,7 +178,7 @@ describe('computeDora', () => {
     const m = computeDora([], [], { windowDays: 30, now: NOW });
     expect(m.deploymentFrequency.all).toMatchObject({ value: null, tier: 'Unknown', n: 0, deployments: 0 });
     expect(m.leadTime.all).toMatchObject({ value: null, tier: 'Unknown', p95: null, mean: null });
-    expect(m.changeFailureRate.all).toMatchObject({ value: null, tier: 'Unknown', failures: 0 });
+    expect(m.changeFailRate.all).toMatchObject({ value: null, tier: 'Unknown', failures: 0 });
     expect(m.mttr.all).toMatchObject({ value: null, tier: 'Unknown', n: 0 });
     expect(m.aiParticipationPct).toBeNull();
     expect(m.sample).toMatchObject({ mergedPrs: 0, incidents: 0, windowDays: 30 });
@@ -188,13 +236,13 @@ describe('computeDora', () => {
       [issue(10, 2)],
       { windowDays: 30, now: NOW },
     );
-    expect(m.changeFailureRate.all).toMatchObject({ reverts: 1, hotfixes: 1, incidents: 1, failures: 3, value: 75, tier: 'Unknown' });
+    expect(m.changeFailRate.all).toMatchObject({ reverts: 1, hotfixes: 1, incidents: 1, failures: 3, value: 75, tier: 'Unknown' });
     const capped = computeDora([pr({ mergedHoursAgo: 1, isRevert: true })], [issue(5, 1), issue(6, 1)], { windowDays: 30, now: NOW });
-    expect(capped.changeFailureRate.all.value).toBe(100);
+    expect(capped.changeFailRate.all.value).toBe(100);
     const clean = computeDora([pr({ mergedHoursAgo: 1 }), pr({ mergedHoursAgo: 2 })], [], { windowDays: 30, now: NOW });
     // 0% is the best possible rate and still gets no tier: the tier is a cluster over all five
     // metrics, not a threshold on this one. The value is what the page shows.
-    expect(clean.changeFailureRate.all).toMatchObject({ value: 0, tier: 'Unknown' });
+    expect(clean.changeFailRate.all).toMatchObject({ value: 0, tier: 'Unknown' });
   });
 
   it('computes MTTR from hotfix PR durations and closed incident issues only', () => {
@@ -224,9 +272,9 @@ describe('computeDora', () => {
     expect(m.leadTime.ai.value).toBe(6);
     expect(m.leadTime.human.value).toBe(150);
     // Incidents count only in `all`; cohorts use their own denominators.
-    expect(m.changeFailureRate.all).toMatchObject({ failures: 2, value: 50 });
-    expect(m.changeFailureRate.ai).toMatchObject({ failures: 0, incidents: 0, value: 0 });
-    expect(m.changeFailureRate.human).toMatchObject({ failures: 1, incidents: 0, value: 50 });
+    expect(m.changeFailRate.all).toMatchObject({ failures: 2, value: 50 });
+    expect(m.changeFailRate.ai).toMatchObject({ failures: 0, incidents: 0, value: 0 });
+    expect(m.changeFailRate.human).toMatchObject({ failures: 1, incidents: 0, value: 50 });
     expect(m.mttr.human.n).toBe(0);
   });
 
