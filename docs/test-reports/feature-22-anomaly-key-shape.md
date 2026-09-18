@@ -1,7 +1,7 @@
 # Feature 22 — Anomaly table key-shape drift (one key definition, and the rows already written)
 
 - **Chain:** `intent/anomaly-key-shape/` · base `main@de81fb7` (the chain's `Accepted-for`, and its
-  merge base) · **PR:** TBD
+  merge base) · **PR:** #50
 - **Origin:** the anomalies feed had never shown an alert, and nothing reported that. Read as
   "no anomalies detected". The `fmtTokens` rider closes **F-1201**, a QA finding that had recurred
   five further times and belonged to no other open plan.
