@@ -5,6 +5,7 @@ import {
 import { api, UsagePoint } from '../api/client';
 import { Kpi, Panel } from '../components/Layout';
 import { fmtTokens, fmtAxisTokens } from '../lib/format';
+import { gridProps, legendProps, MARK, role, tooltipProps, xAxisProps, yAxisProps } from '../charts/theme';
 
 /** Token usage over time + KPI summary + Bedrock quota headroom, for the signed-in tenant. */
 export function UsagePage() {
@@ -35,10 +36,10 @@ export function UsagePage() {
   return (
     <>
       <div className="kpi-grid">
-        <Kpi label="Input tokens" value={fmtTokens(totalIn)} accent="var(--accent-blue)"
+        <Kpi label="Input tokens" value={fmtTokens(totalIn)} accent={role('input')}
              foot="last 7 days — billed input, same definition as the Cost page" />
-        <Kpi label="Output tokens" value={fmtTokens(totalOut)} accent="var(--accent-green)" foot="last 7 days (hourly buckets)" />
-        <Kpi label="Prompt-cache tokens" value={fmtTokens(totalCache)} accent="var(--primary)"
+        <Kpi label="Output tokens" value={fmtTokens(totalOut)} accent={role('output')} foot="last 7 days (hourly buckets)" />
+        <Kpi label="Prompt-cache tokens" value={fmtTokens(totalCache)} accent={role('cache')}
              foot="reads + writes — quota counts these as input; billing discounts them" />
         <Kpi label="Invocations" value={totalCalls.toLocaleString()} accent="var(--accent-amber)" foot="API calls" />
       </div>
@@ -47,23 +48,13 @@ export function UsagePage() {
              desc="Hourly buckets over the last 7 days — billed input vs output tokens (prompt-cache traffic is shown in its own KPI above; it would dwarf both series). Which series dominates depends on the workload.">
         <ResponsiveContainer width="100%" height={340}>
           <AreaChart data={points} margin={{ left: 4, right: 12, top: 8 }}>
-            <defs>
-              <linearGradient id="gIn" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#2563eb" stopOpacity={0.35} />
-                <stop offset="100%" stopColor="#2563eb" stopOpacity={0.02} />
-              </linearGradient>
-              <linearGradient id="gOut" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#16a34a" stopOpacity={0.35} />
-                <stop offset="100%" stopColor="#16a34a" stopOpacity={0.02} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
-            <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} />
-            <YAxis tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={false} tickFormatter={fmtAxisTokens} width={48} />
-            <Tooltip contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 13 }} />
-            <Legend iconType="circle" wrapperStyle={{ fontSize: 13, paddingTop: 8 }} />
-            <Area type="monotone" dataKey="inputTokens" name="Input tokens" stroke="#2563eb" strokeWidth={2} fill="url(#gIn)" />
-            <Area type="monotone" dataKey="outputTokens" name="Output tokens" stroke="#16a34a" strokeWidth={2} fill="url(#gOut)" />
+            <CartesianGrid {...gridProps()} />
+            <XAxis dataKey="label" {...xAxisProps()} />
+            <YAxis {...yAxisProps(fmtAxisTokens)} width={48} />
+            <Tooltip {...tooltipProps()} />
+            <Legend {...legendProps()} wrapperStyle={{ fontSize: 13, paddingTop: 8 }} />
+            <Area type="monotone" dataKey="inputTokens" name="Input tokens" stroke={role('input')} fill={role('input')} {...MARK.area} />
+            <Area type="monotone" dataKey="outputTokens" name="Output tokens" stroke={role('output')} fill={role('output')} {...MARK.area} />
           </AreaChart>
         </ResponsiveContainer>
         {points.length === 0 && <p className="muted">No data yet — once aggregation runs, points appear here.</p>}
