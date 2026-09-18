@@ -103,7 +103,7 @@ export function buildProjectRows(
       dora = {
         df: { ...pick(m.deploymentFrequency.all), band: m.deploymentFrequency.all.band },
         lt: pick(m.leadTime.all),
-        cfr: pick(m.changeFailureRate.all),
+        cfr: pick(m.changeFailRate.all),
         mttr: pick(m.mttr.all),
         aiParticipationPct: m.aiParticipationPct,
         mergedPrs: m.sample.mergedPrs,

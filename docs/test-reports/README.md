@@ -18,7 +18,8 @@ results. One report per feature (mapped to a GitHub issue / PR).
 | DORA metrics dashboard (human + AI-assisted delivery) | — | #37 | [feature-12](./feature-12-dora-metrics.md) | PASS |
 | Project cost attribution × DORA join | — | #39 | [feature-13](./feature-13-project-cost-attribution.md) | PASS |
 | AI-coding ROI page (cost × DORA × manpower) | — | #40 | [feature-14](./feature-14-roi-page.md) | PASS |
-| Canonical DORA labels (say what is measured) | — | TBD | [feature-15](./feature-15-dora-canonical-labels.md) | PASS |
+| Canonical DORA labels (say what is measured) | — | #42 | [feature-15](./feature-15-dora-canonical-labels.md) | PASS |
+| DORA copy density (one card, one measurement) | — | #43 | [feature-16](./feature-16-dora-copy-density.md) | PASS |
 | Athena attribution parity (Full view sees the profile tier) | — | #44 | [feature-17](./feature-17-athena-attribution-parity.md) | PASS |
 
 Each report records: scope, unit-test results, build/synth gates, real-AWS validation evidence,

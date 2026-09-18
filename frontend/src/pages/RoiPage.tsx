@@ -143,7 +143,7 @@ export function RoiPage() {
                          an org-level labor constant, but a borrowed team SIZE is this project's own
                          property — say so rather than presenting it as measured. */}
                      {be.pctOfCapacity != null && p.assumptionsSource !== 'project'
-                       ? <> (against a {p.assumptionsSource === 'org-default' ? 'org-default' : 'code-default'} team size)</> : null}
+                       ? <> (against {p.assumptionsSource === 'org-default' ? 'an org-default' : 'a code-default'} team size)</> : null}
                      {' '}<span className={`badge ${v.cls}`}>{v.text}</span>
                    </>} />
             );

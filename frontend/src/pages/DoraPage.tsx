@@ -4,37 +4,36 @@ import {
   Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import {
-  api, AssistedBy, DoraMetrics, DoraOverviewRow, DoraPrRow, DoraProjectRow, DoraRepo, DoraWindow, MetricValue, SyncStatus, Tier,
+  api, AssistedBy, DoraDataSource, DoraMetrics, DoraOverviewRow, DoraPrRow, DoraProjectRow, DoraRepo, DoraWindow, SyncStatus,
 } from '../api/client';
-import { Kpi, Panel } from '../components/Layout';
+import { Disclosure, Kpi, Panel } from '../components/Layout';
 import { fmtAgo, fmtAxisHours, fmtDateTime, fmtHours, fmtPct, fmtTokens, fmtUsd } from '../lib/format';
 
 /**
- * DORA metrics per tracked GitHub repo — deployment frequency, change lead time, change failure
- * rate and recovery time — each split into All / AI-assisted / Human-only PRs, so a team can see
- * whether working with AI coding assistants (Claude Code, Kiro, Amazon Q) changes its delivery
- * performance. Admins (Cognito `admin` group) manage the repo list. Backed by GET /v1/dora/* (#12).
+ * Software delivery performance per tracked GitHub repo — DORA's four measurable metrics, each
+ * split into All / AI-assisted / Human-only PRs, so a team can see whether working with AI coding
+ * assistants changes its delivery performance. Admins manage the repo list. GET /v1/dora/* (#12).
  *
- * Presentation rules, all traceable to `docs/research-dora-presentation.md`:
- *  - A "deployment" here is a PR merged to the default branch, which is a PROXY for DORA's
- *    production deployment. The word "proxy" belongs at the number, not in a footnote (§1.8).
- *  - Deployment frequency leads with DORA's ordinal band; the per-day rate is the supporting
- *    arithmetic, because DORA never states this metric as a rate (§1.3).
- *  - Change failure rate carries NO tier badge: the 2024 band values are non-monotonic, so a tier
- *    is not derivable from that metric alone (§1.4). The four published values are shown instead.
- *  - Every tier badge is dated 2024, since the 2025 report replaced the levels with archetypes.
- *  - DORA has five metrics; the one we cannot compute is named rather than quietly dropped (§1.1).
+ * Presentation contract, from `docs/research-dora-card-copy.md` (which supersedes
+ * `research-dora-presentation.md` where the two disagree):
+ *  - **One card = one canonical noun label + at most one qualifier chip + one number + one line of
+ *    sample provenance.** Definitions, deviations and bands live in the disclosure at the bottom.
+ *  - **No band, tier or benchmark on any card face** (§4, 3-0). DORA's own live instrument scores
+ *    delivery performance on a continuous scale against an industry mean; `Elite/High/Medium/Low`
+ *    appear zero times as labels in it. The measured rate leads; the 2024 bands are dated reference
+ *    data inside the disclosure. This reverses the band-as-headline choice shipped in #42.
+ *  - No percentile either: it is the defensible substitute for a band, and it needs a benchmark
+ *    distribution this product does not have (§5). The disclosure says so rather than staying quiet.
+ *  - Labels are the canonical nouns from one dora.dev surface, cited by URL, because DORA's own
+ *    surfaces disagree with each other about these names (§1–2). Note "change fail rate".
+ *  - Coverage state — `not collected`, an empty sample — stays **on the card face** (§7). It is a
+ *    finding about this tenant's data, not a definition.
+ *  - The disclosure is a native `<details>`, never a hover tooltip (§7: NN/g, WCAG 1.4.13).
+ *  - The AI metric is not one of DORA's, so it does not sit in the DORA grid, and it is named for
+ *    exactly what it counts: PRs carrying an AI co-author trailer (§8).
  */
 
 const WINDOWS: DoraWindow[] = [7, 30, 90];
-const TIER_ACCENT: Record<Tier, string> = {
-  Elite: 'var(--accent-green)',
-  High: 'var(--accent-blue)',
-  Medium: 'var(--warning)',
-  Low: 'var(--danger)',
-  Unknown: 'var(--text-dim)',
-};
-const TIER_BADGE: Record<Tier, string> = { Elite: 'success', High: 'info', Medium: 'warning', Low: 'critical', Unknown: 'neutral' };
 const ASSISTANT_LABEL: Record<Exclude<AssistedBy, null>, string> = {
   'claude-code': 'Claude Code', kiro: 'Kiro', 'amazon-q': 'Amazon Q', copilot: 'Copilot',
 };
@@ -50,39 +49,52 @@ const POLL_MS = 10_000;
 const POLL_MAX = 12;
 
 const isBusy = (s: SyncStatus) => s === 'pending' || s === 'syncing';
-const perDay = (v: number | null) => (v == null ? '—' : `${v.toFixed(2)}/day`);
-const fmtMetric = (m: MetricValue, kind: 'df' | 'lt' | 'cfr' | 'mttr') =>
-  kind === 'df' ? perDay(m.value) : kind === 'cfr' ? fmtPct(m.value) : fmtHours(m.value);
 const parseWindow = (raw: string | null): DoraWindow => (WINDOWS.includes(Number(raw) as DoraWindow) ? (Number(raw) as DoraWindow) : 30);
 
-/**
- * Short headline for each of DORA's six ordinal bands. The band string itself is the citable
- * label and is always printed alongside; this is only what fits on one line of a KPI tile.
- */
-const BAND_HEADLINE: Record<string, string> = {
-  'On demand (multiple deploys per day)': 'On demand',
-  'Between once per hour and once per day': 'About daily',
-  'Between once per day and once per week': 'About weekly',
-  'Between once per week and once per month': 'About monthly',
-  'Between once per month and once every six months': 'A few times a year',
-  'Less than once per six months': 'Rarely',
-};
-const bandHeadline = (band: string | null) => (band == null ? '—' : BAND_HEADLINE[band] ?? band);
+/** The rate a reader compares with. DORA states this metric ordinally, never as a per-day decimal. */
+const perWeek = (perDayValue: number | null) => (perDayValue == null ? '—' : `${(perDayValue * 7).toFixed(1)} / week`);
 
 /**
- * Tier badges are dated on purpose. The 2024 State of DevOps levels were replaced by seven team
- * archetypes in 2025, so an undated badge asserts a framework that has since moved. `Unknown`
- * means the window had no sample, which is a different statement from a low tier.
+ * The one qualifier a card is allowed. It names the *kind* of gap between our measurement and
+ * DORA's definition; the gap itself is spelled out in the disclosure, which is where a reader can
+ * actually read it. The title is a pointer, deliberately not a second copy of the caveat.
  */
-function TierBadge({ tier }: { tier: Tier }) {
-  if (tier === 'Unknown') return <span className="badge neutral" title="Not enough data in this window to place a band">no band</span>;
-  return (
-    <span className={`badge ${TIER_BADGE[tier]}`}
-          title="2024 State of DevOps band. DORA applies these per application or service as an annual survey benchmark — not a grade or a maturity level.">
-      {tier} (2024)
-    </span>
-  );
-}
+const Chip = ({ text }: { text: string }) => (
+  <span className="badge neutral" title="How this differs from DORA's definition is in “Definitions & limitations” below">{text}</span>
+);
+
+/**
+ * How each card relates to the canonical metric. One row per DORA metric, including the one we do
+ * not collect — naming the gap costs less than the credibility of a four-metric page presented as
+ * the whole framework.
+ */
+const METRIC_MAP: readonly { dora: string; here: string; deviation: string }[] = [
+  {
+    dora: 'Deployment frequency',
+    here: 'Merges to the default branch, per week',
+    deviation: 'Proxy. DORA counts deployments that reach production, and its own reference tooling warns that deriving deployment metrics from merge events skews them.',
+  },
+  {
+    dora: 'Change lead time',
+    here: 'Median hours from first commit on the PR to merge',
+    deviation: 'Partial. The start point is DORA\'s exactly (a commit in version control); DORA\'s window ends in production, so this measures its first part.',
+  },
+  {
+    dora: 'Change fail rate',
+    here: 'Reverts + hotfixes + bug/incident issues, over merges',
+    deviation: 'Detector-based: PR titles, labels, branch names and issue labels. 0% means nothing matched those detectors, not that nothing broke.',
+  },
+  {
+    dora: 'Failed deployment recovery time',
+    here: 'Median of hotfix PR open→merge and incident open→close',
+    deviation: 'Not DORA\'s metric, so it does not take its name. DORA counts only impairments caused by a change reaching production; this also counts issues with no deployment linkage.',
+  },
+  {
+    dora: 'Deployment rework rate',
+    here: 'Not collected',
+    deviation: 'Needs a signal marking a deployment as planned or corrective. Nothing in this pipeline records one.',
+  },
+];
 
 export function DoraPage() {
   const [params, setParams] = useSearchParams();
@@ -94,7 +106,7 @@ export function DoraPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [reposError, setReposError] = useState<string | null>(null);
 
-  const [detail, setDetail] = useState<{ repo: DoraRepo; metrics: DoraMetrics; recentPrs: DoraPrRow[]; notes: string[] } | null>(null);
+  const [detail, setDetail] = useState<{ repo: DoraRepo; metrics: DoraMetrics; recentPrs: DoraPrRow[]; dataSource: DoraDataSource } | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
 
@@ -142,7 +154,7 @@ export function DoraPage() {
     Promise.all([api.doraMetrics(selected.repo, windowDays), api.doraOverview(windowDays)])
       .then(([m, o]) => {
         if (cancelled) return;
-        setDetail({ repo: m.repo, metrics: m.metrics, recentPrs: m.recentPrs, notes: m.dataSource.notes });
+        setDetail({ repo: m.repo, metrics: m.metrics, recentPrs: m.recentPrs, dataSource: m.dataSource });
         setOverview(o.repos);
         setDetailError(null);
       })
@@ -186,28 +198,13 @@ export function DoraPage() {
   const tl = m?.timeline ?? [];
   const noData = !!m && m.sample.mergedPrs === 0;
 
-  // Plain-language footers: say what the number means before naming the tier.
-  const perWeek = (perDay: number | null) => (perDay == null ? '—' : `${(perDay * 7).toFixed(1)} / week`);
-  const kpiFoot = (s: { all: MetricValue & { band?: string | null }; ai: MetricValue; human: MetricValue }, kind: 'df' | 'lt' | 'cfr' | 'mttr') => {
-    if (s.all.n === 0) {
-      return kind === 'mttr'
-        ? 'Nothing to recover from — no hotfixes or incident issues in this window'
-        : `No PRs merged to the default branch in the last ${windowDays} days`;
-    }
-    const band = <>2024 DORA band: <strong>{s.all.tier}</strong></>;
-    switch (kind) {
-      case 'df':
-        return <>DORA's own wording: "{s.all.band ?? '—'}" · {s.all.n} merges in {windowDays} days ≈ {perWeek(s.all.value)} · {band} · AI-assisted {s.ai.n} · human-only {s.human.n}</>;
-      case 'lt':
-        return <>median from first commit to merge — DORA's window starts at the same commit but ends in production, so this is the first part of it · AI-assisted {fmtHours(s.ai.value)} · human-only {fmtHours(s.human.value)} · {band}</>;
-      // No tier on this metric: see TierBadge/§1.4. The published values are printed so the reader
-      // still has something to compare against.
-      case 'cfr':
-        return <>{Math.round(((s.all.value ?? 0) / 100) * s.all.n)} of {s.all.n} changes needed a revert or hotfix, or coincided with a bug/incident issue · <strong>no band</strong>: the 2024 values are non-monotonic (Elite 5% · High 20% · Medium 10% · Low 40%), so this metric alone cannot place a team</>;
-      default:
-        return <>median from problem recorded to fix merged, over {s.all.n} event{s.all.n === 1 ? '' : 's'} · this is not DORA's failed deployment recovery time, which counts only failures caused by a change reaching production · {band}</>;
-    }
-  };
+  // One line of sample provenance per card: what was counted, over what window. Nothing else.
+  const noMerges = `no merges to ${selected?.defaultBranch ?? 'the default branch'} in ${windowDays} days`;
+  const aiAssisted = m ? Object.values(m.byAssistant).reduce((a, b) => a + b, 0) : 0;
+  const assistantBreakdown = m
+    ? (Object.entries(m.byAssistant) as [Exclude<AssistedBy, null>, number][])
+      .filter(([, n]) => n > 0).map(([k, n]) => `${ASSISTANT_LABEL[k]} ${n}`).join(' · ')
+    : '';
 
   return (
     <>
@@ -279,41 +276,36 @@ export function DoraPage() {
                 </p>
               ) : null}
 
-              <div className="kpi-grid">
-                {/* The band is the headline; the rate lives in the footer. "proxy" and "to main"
-                    are in the label itself, because the reader who only reads labels is exactly
-                    the reader who must not mistake this for a production deployment count. */}
-                <Kpi label="How often do changes reach main? (deployment-frequency proxy)"
-                     value={m.deploymentFrequency.all.n === 0 ? '—' : bandHeadline(m.deploymentFrequency.all.band)}
-                     accent={TIER_ACCENT[m.deploymentFrequency.all.tier]} foot={kpiFoot(m.deploymentFrequency, 'df')} />
-                <Kpi label="How long from first commit to main? (part of change lead time)" value={fmtHours(m.leadTime.all.value)}
-                     accent={TIER_ACCENT[m.leadTime.all.tier]} foot={kpiFoot(m.leadTime, 'lt')} />
-                <Kpi label="How often does a change need a revert or hotfix?" value={fmtPct(m.changeFailureRate.all.value)}
-                     accent="var(--text-dim)" foot={kpiFoot(m.changeFailureRate, 'cfr')} />
-                <Kpi label="How long to recover once something breaks?" value={fmtHours(m.mttr.all.value)}
-                     accent={TIER_ACCENT[m.mttr.all.tier]} foot={kpiFoot(m.mttr, 'mttr')} />
-                {/* The fifth metric. Naming the gap is cheaper than the credibility cost of a
-                    four-metric page presented as the whole framework. */}
-                <Kpi label="Deployment rework rate (5th DORA metric)" value="not collected" accent="var(--text-dim)"
-                     foot="Share of deployments that were unplanned fixes. It needs a signal marking a deployment as planned or corrective, which nothing in this pipeline records today." />
-                <Kpi label="How much did AI help write it?" value={fmtPct(m.aiParticipationPct)} accent="var(--primary)"
-                     foot={m.sample.mergedPrs === 0 ? 'no merged PRs in window'
-                       : <>{Object.values(m.byAssistant).reduce((a, b) => a + b, 0)} of {m.sample.mergedPrs} PRs had an AI assistant
-                         {(Object.entries(m.byAssistant) as [Exclude<AssistedBy, null>, number][]).filter(([, n]) => n > 0).length
-                           ? <> ({(Object.entries(m.byAssistant) as [Exclude<AssistedBy, null>, number][]).filter(([, n]) => n > 0).map(([k, n]) => `${ASSISTANT_LABEL[k]} ${n}`).join(' · ')})</> : null}</>} />
-              </div>
+              {/* DORA's own umbrella term is "software delivery performance", split into
+                  throughput and stability. Recovery time sits under stability: three of DORA's
+                  four first-party surfaces put it there, including its live instrument, even
+                  though the definitions guide files it under throughput. */}
+              <Panel title="Software delivery throughput" desc={`How much change reaches ${selected.defaultBranch}, and how long it takes to get there`}>
+                <div className="kpi-grid" style={{ marginBottom: 0 }}>
+                  <Kpi label="Deployment frequency" chip={<Chip text="proxy" />}
+                       value={m.deploymentFrequency.all.n === 0 ? '—' : perWeek(m.deploymentFrequency.all.value)}
+                       foot={m.deploymentFrequency.all.n === 0 ? noMerges
+                         : `${m.deploymentFrequency.all.n} merges to ${selected.defaultBranch} · ${windowDays} days`} />
+                  <Kpi label="Change lead time" chip={<Chip text="partial" />} value={fmtHours(m.leadTime.all.value)}
+                       foot={m.leadTime.all.n === 0 ? noMerges
+                         : `median first commit → merge · ${m.leadTime.all.n} changes`} />
+                </div>
+              </Panel>
 
-              <p className="muted" style={{ fontSize: 12, marginTop: -12 }}>
-                DORA has <strong>five</strong> metrics; four of them are measurable from this data. A "deployment" here is a
-                PR merged to the default branch — a <strong>proxy</strong>, since DORA counts deployments that reach
-                production, and its own reference tooling warns that deriving deployment metrics from merge events skews
-                them. Bands are the <strong>2024</strong> State of DevOps levels, which DORA applies per application or
-                service as an annual survey benchmark rather than a grade; the 2025 report replaced them with team
-                archetypes. Change failure rate carries no band because the 2024 values are non-monotonic across the
-                levels, so no single metric can place a team. Reverts, hotfixes and incidents are detected from PR titles,
-                branch names and issue labels, so <strong>0% means nothing matched those detectors</strong>, not that
-                nothing broke.
-              </p>
+              <Panel title="Software delivery stability" desc="How often a change goes wrong, and how long the recovery takes">
+                <div className="kpi-grid" style={{ marginBottom: 0 }}>
+                  <Kpi label="Change fail rate" value={fmtPct(m.changeFailRate.all.value)}
+                       foot={m.changeFailRate.all.n === 0 ? noMerges
+                         : `${m.changeFailRate.all.failures} of ${m.changeFailRate.all.n} changes reverted, hotfixed or tied to an incident`} />
+                  <Kpi label="Recovery time" chip={<Chip text="not DORA's" />} value={fmtHours(m.mttr.all.value)}
+                       foot={m.mttr.all.n === 0 ? 'no hotfixes or incidents in this window'
+                         : `median problem recorded → fixed · ${m.mttr.all.n} event${m.mttr.all.n === 1 ? '' : 's'}`} />
+                  {/* Coverage state stays on the card face: it is a finding about this data, not a
+                      definition, so it does not belong behind the disclosure. */}
+                  <Kpi label="Deployment rework rate" chip={<Chip text="not collected" />} value="—"
+                       foot="needs a planned-vs-corrective deployment signal" />
+                </div>
+              </Panel>
               {noData ? (
                 <div className="empty">
                   <div className="big">📭</div>
@@ -348,10 +340,20 @@ export function DoraPage() {
                     </ResponsiveContainer>
                   </Panel>
 
-                  <Panel title="Lead time breakdown" desc="Where the time goes, by cohort (medians over the window)">
+                  {/* The cohort split is a second data dimension, not provenance, so it gets its
+                      own row instead of a trailing "· AI-assisted n · human-only n" on every card.
+                      The AI figure leads this panel rather than the DORA grid: no DORA metric
+                      covers AI-authored share, so sitting it among the five would imply sanction. */}
+                  <Panel title="AI-assisted vs human-only" desc="Does AI participation change delivery performance? Medians over the window, per cohort">
+                    <div className="kpi-grid" style={{ gridTemplateColumns: 'minmax(220px, 1fr)' }}>
+                      <Kpi label="AI-assisted changes" value={fmtPct(m.aiParticipationPct)} accent="var(--primary)"
+                           foot={m.sample.mergedPrs === 0 ? noMerges
+                             : <>{aiAssisted} of {m.sample.mergedPrs} PRs carry an AI co-author trailer
+                               {assistantBreakdown ? <> ({assistantBreakdown})</> : null}</>} />
+                    </div>
                     <table className="data">
                       <thead>
-                        <tr><th>Cohort</th><th className="num">PRs</th><th className="num">Coding (first commit → PR)</th><th className="num">Review (PR → merge)</th><th className="num">Total lead time</th><th className="num">p95</th><th>Tier</th></tr>
+                        <tr><th>Cohort</th><th className="num">Merges</th><th className="num">Coding (first commit → PR)</th><th className="num">Review (PR → merge)</th><th className="num">Total lead time</th><th className="num">p95</th><th className="num">Change fail rate</th></tr>
                       </thead>
                       <tbody>
                         {(['all', 'ai', 'human'] as const).map((c) => {
@@ -364,17 +366,16 @@ export function DoraPage() {
                               <td className="num">{fmtHours(v.reviewHours)}</td>
                               <td className="num">{fmtHours(v.value)}</td>
                               <td className="num">{fmtHours(v.p95)}</td>
-                              <td><TierBadge tier={v.tier} /></td>
+                              <td className="num">{fmtPct(m.changeFailRate[c].value)}</td>
                             </tr>
                           );
                         })}
                       </tbody>
                     </table>
                     <p className="muted" style={{ fontSize: 12, marginTop: 10 }}>
-                      Change failures in window: {m.changeFailureRate.all.reverts} revert PR(s), {m.changeFailureRate.all.hotfixes} hotfix PR(s),{' '}
-                      {m.changeFailureRate.all.incidents} incident issue(s) (labelled bug/incident). Incidents cannot be attributed to a cohort, so they count only under All.
-                      Coding / Review / Total are each independent medians over the cohort's PRs, so the stage columns need not sum to the total
-                      (e.g. half the PRs spend their time coding, the other half in review → both stage medians can be near zero while the total median is hours).
+                      Change failures in window: {m.changeFailRate.all.reverts} revert PR(s), {m.changeFailRate.all.hotfixes} hotfix PR(s),{' '}
+                      {m.changeFailRate.all.incidents} incident issue(s) — incidents cannot be attributed to a cohort, so they count only under All.
+                      Coding, Review and Total are each independent medians, so the stage columns need not sum to the total.
                     </p>
                   </Panel>
 
@@ -413,7 +414,7 @@ export function DoraPage() {
         <Panel title="All tracked repositories" desc={`Side-by-side over the last ${windowDays} days — same definitions as above`}>
           <table className="data">
             <thead>
-              <tr><th>Repository</th><th className="num">Merged PRs</th><th className="num">AI %</th><th>Deploy freq. (proxy)</th><th>Commit → main</th><th>Change failure</th><th>Recovery time</th><th>Status</th></tr>
+              <tr><th>Repository</th><th className="num">Merged PRs</th><th className="num">AI %</th><th className="num">Deployment frequency</th><th className="num">Change lead time</th><th className="num">Change fail rate</th><th className="num">Recovery time</th><th>Status</th></tr>
             </thead>
             <tbody>
               {overview.map((r) => (
@@ -421,21 +422,16 @@ export function DoraPage() {
                   <td><strong>{r.repo}</strong></td>
                   <td className="num">{r.mergedPrs}</td>
                   <td className="num">{fmtPct(r.aiParticipationPct)}</td>
-                  <td title={r.df.band ?? undefined}>{bandHeadline(r.df.band)} <span className="muted">{perDay(r.df.value)}</span> <TierBadge tier={r.df.tier} /></td>
-                  <td>{fmtHours(r.lt.value)} <TierBadge tier={r.lt.tier} /></td>
-                  {/* No badge here on purpose — a per-metric tier is not derivable for this one. */}
-                  <td>{fmtPct(r.cfr.value)}</td>
-                  <td>{fmtHours(r.mttr.value)} <TierBadge tier={r.mttr.tier} /></td>
+                  {/* Measured values only — no band, tier or benchmark in any cell. */}
+                  <td className="num">{perWeek(r.df.value)}</td>
+                  <td className="num">{fmtHours(r.lt.value)}</td>
+                  <td className="num">{fmtPct(r.cfr.value)}</td>
+                  <td className="num">{fmtHours(r.mttr.value)}</td>
                   <td><span className={`badge ${STATUS_BADGE[r.status].cls}`}>{STATUS_BADGE[r.status].text}</span></td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <p className="muted" style={{ fontSize: 12, marginTop: 10 }}>
-            Deployment frequency is DORA's ordinal band with the measured rate beside it. Change failure rate has no band;
-            compare it against the four published 2024 values (Elite 5% · High 20% · Medium 10% · Low 40%), which are not
-            in ascending order because the levels are clusters over all metrics at once.
-          </p>
         </Panel>
       )}
 
@@ -445,7 +441,7 @@ export function DoraPage() {
                desc={`Each project pools DORA across its repos and prices its Bedrock usage from daily rollups — last ${windowDays} days`}>
           <table className="data">
             <thead>
-              <tr><th>Project</th><th className="num">Repos</th><th className="num">Merged PRs</th><th>Deploy freq. (proxy)</th><th>Commit → main</th><th className="num">AI %</th><th className="num">Tokens</th><th className="num">Est. USD</th><th className="num">$ / merge</th></tr>
+              <tr><th>Project</th><th className="num">Repos</th><th className="num">Merged PRs</th><th className="num">Deployment frequency</th><th className="num">Change lead time</th><th className="num">AI %</th><th className="num">Tokens</th><th className="num">Est. USD</th><th className="num">$ / merge</th></tr>
             </thead>
             <tbody>
               {projectRows.map((p) => (
@@ -454,8 +450,8 @@ export function DoraPage() {
                     {p.costCenter && <div className="muted" style={{ fontSize: 12 }}>{p.costCenter}</div>}</td>
                   <td className="num">{p.repos.length}</td>
                   <td className="num">{p.dora?.mergedPrs ?? '—'}</td>
-                  <td title={p.dora?.df.band ?? undefined}>{p.dora ? <>{bandHeadline(p.dora.df.band)} <TierBadge tier={p.dora.df.tier} /></> : <span className="muted">no repos tracked</span>}</td>
-                  <td>{p.dora ? <>{fmtHours(p.dora.lt.value)} <TierBadge tier={p.dora.lt.tier} /></> : <span className="muted">—</span>}</td>
+                  <td className="num">{p.dora ? perWeek(p.dora.df.value) : <span className="muted">no repos tracked</span>}</td>
+                  <td className="num">{p.dora ? fmtHours(p.dora.lt.value) : <span className="muted">—</span>}</td>
                   <td className="num">{fmtPct(p.dora?.aiParticipationPct ?? null)}</td>
                   <td className="num">{fmtTokens(p.tokens)}</td>
                   <td className="num"><strong>{fmtUsd(p.estimatedUsd)}</strong></td>
@@ -509,10 +505,69 @@ export function DoraPage() {
         </Panel>
       )}
 
+      {/* Everything that used to sit on a card face, in one place a reader can open by keyboard.
+          Relocating a caveat is not deleting it: every string removed from a card is below. */}
       {detail && (
-        <p className="muted" style={{ fontSize: 12 }}>
-          <strong>How these are measured.</strong> {detail.notes.join(' ')}
-        </p>
+        <Disclosure summary="Definitions & limitations">
+          <p>
+            Labels on this page are the canonical metric names from{' '}
+            {detail.dataSource.canonicalSource
+              ? <a href={detail.dataSource.canonicalSource} target="_blank" rel="noreferrer">DORA's own definitions guide</a>
+              : <>DORA's own definitions guide</>}
+            . One surface, cited by URL, because DORA's several surfaces disagree with each other about these names.
+          </p>
+
+          <h3>How each metric here relates to DORA's</h3>
+          <table className="data">
+            <thead><tr><th>DORA's metric</th><th>What this page measures</th><th>Where it differs</th></tr></thead>
+            <tbody>
+              {METRIC_MAP.map((r) => (
+                <tr key={r.dora}><td><strong>{r.dora}</strong></td><td>{r.here}</td><td>{r.deviation}</td></tr>
+              ))}
+            </tbody>
+          </table>
+
+          {detail.dataSource.bandReference?.length ? (
+            <>
+              <h3>The 2024 performance levels, for reference only</h3>
+              <p>
+                These are the 2024 State of DevOps bands, kept as dated context. They are not shown next to the numbers
+                above: DORA's current instrument scores software delivery performance on a continuous scale against an
+                industry mean and uses no band as a label, and the 2025 report replaced the levels with team archetypes.
+                For recovery time the band was published against DORA's own metric, which is not what this page computes.
+              </p>
+              <table className="data">
+                <thead><tr><th>Metric (DORA's name)</th><th>Elite</th><th>High</th><th>Medium</th><th>Low</th></tr></thead>
+                <tbody>
+                  {detail.dataSource.bandReference.map((b) => (
+                    <tr key={b.metric}>
+                      <td><strong>{b.label}</strong></td>
+                      {b.bands.map((x) => <td key={x.tier}>{x.text}</td>)}
+                    </tr>
+                  ))}
+                  {detail.dataSource.cfrReference?.length ? (
+                    <tr>
+                      <td><strong>Change fail rate</strong></td>
+                      {detail.dataSource.cfrReference.map((x) => <td key={x.tier}>{x.pct}%</td>)}
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+              {detail.dataSource.cfrReference?.length ? (
+                <p>
+                  The change-fail-rate row is deliberately not in ascending order, and no band is derived from it: the
+                  published values rise and fall across the levels because the levels are clusters over all metrics at
+                  once, so this metric alone cannot place a team.
+                </p>
+              ) : null}
+            </>
+          ) : null}
+
+          <h3>What this page does not claim</h3>
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
+            {detail.dataSource.notes.map((n) => <li key={n} style={{ marginBottom: 4 }}>{n}</li>)}
+          </ul>
+        </Disclosure>
       )}
     </>
   );

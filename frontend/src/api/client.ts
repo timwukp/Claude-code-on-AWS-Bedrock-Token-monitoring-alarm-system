@@ -45,7 +45,7 @@ export interface Split<T> { all: T; ai: T; human: T }
 export interface DoraMetrics {
   deploymentFrequency: Split<DeployFreqValue & { perDay: number | null; deployments: number }>;
   leadTime: Split<MetricValue & { p95: number | null; mean: number | null; codingHours: number | null; reviewHours: number | null }>;
-  changeFailureRate: Split<MetricValue & { reverts: number; hotfixes: number; incidents: number; failures: number }>;
+  changeFailRate: Split<MetricValue & { reverts: number; hotfixes: number; incidents: number; failures: number }>;
   mttr: Split<MetricValue>;
   aiParticipationPct: number | null;
   byAssistant: Record<Exclude<AssistedBy, null>, number>;
@@ -64,11 +64,21 @@ export interface DoraOverviewRow {
   repo: string; status: SyncStatus; lastSyncedAt: string | null; mergedPrs: number; aiParticipationPct: number | null;
   df: DeployFreqValue; lt: MetricValue; cfr: MetricValue; mttr: MetricValue;
 }
+export interface BandReference {
+  metric: 'df' | 'lt' | 'mttr';
+  /** DORA's own label for the metric these bands were published against. */
+  label: string;
+  bands: { tier: Exclude<Tier, 'Unknown'>; text: string }[];
+}
 export interface DoraDataSource {
   deploymentDefinition: string;
   notes: string[];
+  /** The single dora.dev surface our labels come from, cited by URL. */
+  canonicalSource?: string;
   /** Published 2024 change-fail-rate values, shown as reference marks since no tier is derivable. */
   cfrReference?: { tier: Exclude<Tier, 'Unknown'>; pct: number }[];
+  /** The 2024 bands in words, for the definitions disclosure. Never includes change fail rate. */
+  bandReference?: BandReference[];
 }
 // ---- ROI (#14) — mirrors backend/lambdas/api/roi-calc.ts + roi.ts ----
 export interface RoiComponent { valueUsd: number; formulaInputs: Record<string, number | string | null>; note: string }
