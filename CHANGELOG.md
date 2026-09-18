@@ -6,6 +6,20 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Added — the ROI model as a picture, with the selected project's numbers in it
+- **`/roi` now draws its model** inside "How to read this page": three input columns (measured by
+  this portal · configured assumptions · DORA's first-year model), the Value and Investment totals,
+  `ROI = (Value − Investment) ÷ Investment`, payback and break-even. Inline SVG on the theme tokens,
+  `role="img"` with title/description, text selectable. A project selector (shared with the forward
+  estimator) fills every box with that project's own value, tagged *measured*, *assumed* or
+  *derived*; components the page refused to compute are faded with the refusal reason.
+- **"J-curve" is renamed "Adoption dip"** on the diagram, the waterfall series and the API
+  methodology string (`roi.ts`), with DORA's term kept once in parentheses; the diagram footer
+  defines it in one sentence — temporarily slower while learning the tool, one-time, first year
+  only, off by default, editable per project. Two open caveats are stated on the diagram rather
+  than fixed: the dip is a people-level cost charged once per project, and the model is
+  first-year while this portal computes on rolling windows.
+- No computed value changes. Reviewed live at the 2026-09-18 customer demo before landing here.
 ### Changed — DORA cards: one card, one measurement
 - **Every card is now a canonical noun label, at most one qualifier chip, one number and one line
   of sample provenance.** The previous pass made the page factually correct by stacking its caveats
