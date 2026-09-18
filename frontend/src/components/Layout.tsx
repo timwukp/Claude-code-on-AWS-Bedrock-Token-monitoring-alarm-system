@@ -50,17 +50,39 @@ export function Layout({ title, subtitle, user, children }: {
   );
 }
 
-export function Kpi({ label, value, accent, foot }: {
-  label: string; value: string; accent?: string; foot?: ReactNode;
+/**
+ * One measurement per card: a label, at most one qualifier `chip`, one number, and one line of
+ * `foot` provenance saying what was counted. Definitions belong in a `Disclosure`, not here — a
+ * card that carries its own caveats stops being scannable.
+ */
+export function Kpi({ label, value, accent, chip, foot }: {
+  label: string; value: string; accent?: string; chip?: ReactNode; foot?: ReactNode;
 }) {
   return (
     <div className="kpi">
       <div className="label">
         {accent && <span className="dot" style={{ background: accent }} />}{label}
+        {chip}
       </div>
       <div className="value">{value}</div>
       {foot && <div className="delta muted">{foot}</div>}
     </div>
+  );
+}
+
+/**
+ * Progressive disclosure on native `<details>/<summary>`, so it opens by keyboard and by touch
+ * with no ARIA wiring and no hover dependency — a hover-only tooltip cannot carry information a
+ * reader needs (NN/g; WCAG 1.4.13). `open` seeds the initial state only; the element owns it after.
+ */
+export function Disclosure({ summary, open, children }: {
+  summary: string; open?: boolean; children: ReactNode;
+}) {
+  return (
+    <details className="disclosure" open={open}>
+      <summary>{summary}</summary>
+      <div className="disclosure-body">{children}</div>
+    </details>
   );
 }
 

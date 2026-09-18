@@ -144,6 +144,24 @@ table.data tr:hover td { background: #f8fafc; }
 .badge.success { background: #f0fdf4; color: var(--success); }
 .badge.neutral { background: #f1f5f9; color: var(--text-dim); }
 
+/* ---------- Disclosure (native details/summary — keyboard- and touch-openable) ---------- */
+.disclosure {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow); margin-bottom: 24px;
+}
+.disclosure > summary {
+  padding: 14px 20px; cursor: pointer; font-size: 14px; font-weight: 600;
+  list-style: none; display: flex; align-items: center; gap: 8px;
+}
+.disclosure > summary::-webkit-details-marker { display: none; }
+.disclosure > summary::before { content: '▸'; color: var(--text-dim); font-size: 12px; }
+.disclosure[open] > summary::before { content: '▾'; }
+.disclosure > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.disclosure-body { padding: 0 20px 18px; font-size: 13px; color: var(--text-dim); }
+.disclosure-body h3 { font-size: 13px; font-weight: 650; color: var(--text); margin: 14px 0 6px; }
+.disclosure-body p { margin: 0 0 8px; }
+.disclosure-body table.data { font-size: 13px; }
+
 /* ---------- Segmented control (repo / window pickers) ---------- */
 .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; flex-wrap: wrap; }
 .seg button { padding: 6px 14px; font-size: 13px; border: none; cursor: pointer; background: #fff;
