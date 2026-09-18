@@ -27,6 +27,7 @@ results. One report per feature (mapped to a GitHub issue / PR).
 | Projects / ROI follow-ups (F-1706 cent drift, F-1707 refusal scope) | — | TBD | [feature-21b](./feature-21b-projects-roi-followups.md) | PASS |
 | Anomaly table key-shape drift (one key definition + one-off row repair) | — | #50 | [feature-22](./feature-22-anomaly-key-shape.md) | PASS |
 | Model-hop latency (measured hops only, fleet scope stated) | — | TBD | [feature-18](./feature-18-latency-observability.md) | PASS |
+| Model-hop latency — inference-profile ids resolved to model names (qa F-PR52-002) | — | TBD | [feature-18b](./feature-18b-latency-profile-labels.md) | PASS |
 
 Each report records: scope, unit-test results, build/synth gates, real-AWS validation evidence,
 any defect found+fixed during validation, and a verdict. Reports are written before opening the
