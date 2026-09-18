@@ -120,6 +120,22 @@ export interface DoraProjectRow {
 
 const repoPath = (repo: string) => repo.split('/').map(encodeURIComponent).join('/');
 
+
+export type OverviewWindow = 7 | 30 | 90 | 'mtd';
+export interface OverviewResponse {
+  tenantId: string;
+  window: { kind: '7' | '30' | '90' | 'mtd'; days: number; from: string; to: string; priorFrom: string; priorTo: string };
+  spend: { currentUsd: number; priorUsd: number; deltaUsd: number; deltaPct: number | null; tokens: number; priorTokens: number; daily: { day: string; usd: number; tokens: number }[] };
+  byModel: { modelId: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; invocations: number; estimatedUsd: number }[];
+  movers: { projectId: string; name: string | null; currentUsd: number; priorUsd: number; deltaUsd: number; deltaPct: number | null }[];
+  coverage: { firstDayWithData: string | null; partial: boolean };
+  rollupsAsOf: string | null;
+}
+export interface GovernanceBudget {
+  name?: string; limitUsd: number; actualUsd: number; forecastedUsd: number; timeUnit?: string;
+  actualPct?: number; forecastedPct?: number; billingDataAvailable?: boolean; forecastAvailable?: boolean; error?: string;
+}
+
 export const api = {
   doraRepos: () => request<{ repos: DoraRepo[]; tokenConfigured: boolean; isAdmin: boolean }>('v1/dora/repos'),
   doraAddRepo: (repo: string) =>
@@ -165,7 +181,8 @@ export const api = {
   projects: (source: 'fast' | 'full' = 'fast') =>
     request<{ projects: any[]; source?: string; totalTokens?: number | string; totalEstimatedUsd?: number }>(`v1/projects${source === 'fast' ? '?source=fast' : ''}`),
   quotas: () => request<{ throttles: { throttledCount: number; clientErrors: number; throttled: boolean }; headroom: any[] }>('v1/quotas'),
-  governance: () => request<{ budget: any; enforcement: any }>('v1/governance'),
+  governance: () => request<{ budget: GovernanceBudget | null; enforcement: any }>('v1/governance'),
+  overview: (window: OverviewWindow) => request<OverviewResponse>(`v1/overview?window=${window}`),
   startQuery: (template: string, days: number) =>
     request<{ id: string }>('v1/queries', { method: 'POST', body: JSON.stringify({ template, days }) }),
   pollQuery: (id: string) => request<{ id: string; state: string; rows?: any[] }>(`v1/queries/${id}`),

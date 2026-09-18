@@ -242,6 +242,8 @@ table.data tr:last-child td { border-bottom: none; }
 table.data tr:hover td { background: var(--surface-2); }
 .mono { font-family: 'SF Mono', 'Roboto Mono', monospace; font-size: var(--fs-base); }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
+.delta-up { color: var(--danger); }
+.delta-down { color: var(--success); }
 
 /* ---------- Badges ---------- */
 .badge { display: inline-flex; align-items: center; gap: 5px; padding: 2px var(--sp-2);

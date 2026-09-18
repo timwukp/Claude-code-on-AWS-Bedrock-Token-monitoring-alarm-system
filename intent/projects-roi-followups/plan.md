@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** de81fb784c1da662ef4ab27721d58d3682946c79
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #48 (feature-21), the merge base at branch time. Small
 chain taken while the queue was empty; the other session's `latency-observability` (feature-18) follows

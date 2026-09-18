@@ -6,6 +6,22 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Added — an Overview landing page, and the endpoint that makes it honest
+- **`/` is now an Overview**: four tiles — Spend (window total, delta against the *named* prior equal
+  period, sparkline), Budget (month-to-date billed vs limit with a status: On track · Forecast over ·
+  Over · No billing data · Setup required), Anomalies (count in window, critical called out),
+  Deployment frequency (median across synced repositories) — each with an ⓘ and a link to its page,
+  plus a **What changed** table of the projects whose spend moved most. Overview is the first nav
+  item; Token Usage moves to `/usage`. Follows the global time range.
+- **`GET /v1/overview?window=7|30|90|mtd`** (new, additive): spend for the window and the prior equal
+  period, a zero-filled daily series, per-model rows and per-project movers — one read of the daily
+  per-project rollups priced with the Cost page's rate card, so Overview, Cost and Projects reconcile
+  by construction. `coverage.partial` flags a comparison against an incomplete baseline. Month-to-date
+  compares the elapsed days with the same span of the previous month.
+- **`/v1/governance`** gains `billingDataAvailable` / `forecastAvailable` (additive) so "$0 because the
+  account is not billed directly" is distinguishable from a real $0.
+- No existing number or field changes.
+
 ### Fixed — two qa findings that kept recurring across PRs
 - **By Project (Fast):** the "Total est. cost" foot now discloses that rows are shown to the cent, so
   their sum can differ from the authoritative rollup total by a few cents (F-1706). The header value
