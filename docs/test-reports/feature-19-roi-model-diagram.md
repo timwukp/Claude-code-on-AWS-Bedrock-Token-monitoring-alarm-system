@@ -1,7 +1,7 @@
 # Feature 19 — Live ROI model diagram (measured · assumed · refused, per project)
 
 - **Chain:** `intent/roi-model-diagram/` · **Branch:** `feat/roi-model-diagram` off `main@37ae499`
-  (post-#44) · **PR:** TBD
+  (post-#44), rebased onto `e4895b0` (post-#43) · **PR:** #45
 - **Origin:** owner request after the 2026-09-18 UX audit — the ROI model has no authoritative
   industry definition, so the page should *show* it, not only describe it. The component was
   hand-deployed to dev for that day's customer demo and reviewed live; this PR is its formal landing.
@@ -9,9 +9,7 @@
   never hover-only; R3: hierarchy and consistency); `docs/ROI_METHODOLOGY.md` (the model the picture
   draws); assumption-mapping review of the "J-curve" line (summarised in the intent).
 - **Date:** 2026-09-18
-- **Verdict:** PASS on gates; live validation recorded below once this PR's turn in the merge queue
-  comes (the dev API currently carries another open chain's Lambda, so a stack deploy from this
-  branch is deferred until that chain lands or the owner orders otherwise).
+- **Verdict:** PASS — gates, local authenticated render, and the live dev validation below.
 
 ## Two things this report has to say plainly
 
@@ -45,11 +43,15 @@ No computed value changes; `roi-calc.ts` and its tests untouched.
 
 ## Live validation (dev)
 
-_Pending — to be filled at this PR's queue turn:_ deploy `Tums-dev-Api`; direct Lambda invoke asserts
-`methodology.annualization` contains `adoption dip`; frontend deploy; authenticated Playwright pass on
-`/roi`: one `svg[role=img]` in the first panel, `<title>` changes when the selector changes, zero
-console/page errors; served bundle grepped for `Adoption dip` and for no bare `J-curve` outside the
-footer gloss.
+- `cdk deploy Tums-dev-Api --context env=dev` from this branch (2026-09-18 ~16:10; `Tums-dev-Data/Auth/Dora`
+  no changes). Direct invoke of the ROI Lambda with a tenant + admin claims event → HTTP 200, 21
+  projects, and `methodology.annualization` = `Rate-like terms scale by 365/window; one-time costs
+  (training, adoption dip — DORA's "J-curve") do not.`
+- Frontend: PR #45's qa run synced this branch's build to dev — served bundle `index-rtK6wL36.js`.
+  Grep of the served bundle: `Adoption dip` ×3; the only remaining `J-curve` occurrences are the
+  parenthetical gloss and the footer definition, as specified.
+- Authenticated Playwright pass (owner's session, 1440×900) on the served site: `/roi` renders exactly
+  one `svg[role=img]` inside the first panel; all seven routes report zero console and page errors.
 
 The identical component was live on dev from 14:10 to the end of the demo (served bundles
 `index-CjXdq0CW.js` → `index-B5qe4QiI.js`), verified then with the owner's session on all routes: zero
