@@ -1,5 +1,5 @@
 import { useEffect, useState, ReactNode } from 'react';
-import { signIn, signOut, getCurrentUser } from './cognito';
+import { signIn, getCurrentUser } from './cognito';
 
 /**
  * Minimal auth gate: renders children only when a Cognito session exists, otherwise shows a
@@ -45,12 +45,5 @@ export function LoginGate({ children }: { children: ReactNode }) {
     );
   }
 
-  return (
-    <div>
-      <div style={{ textAlign: 'right', padding: 8 }}>
-        <button onClick={() => signOut().then(() => setAuthed(false))}>Sign out</button>
-      </div>
-      {children}
-    </div>
-  );
+  return <>{children}</>;
 }
