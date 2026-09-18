@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** 06a9f9c4e3a9f43f471de04a264b5428d93c01d0
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #40 (ROI page) and PR #41 (the DORA presentation
 research) landed, which is this branch's merge base. The chain was drafted while #40 was still
