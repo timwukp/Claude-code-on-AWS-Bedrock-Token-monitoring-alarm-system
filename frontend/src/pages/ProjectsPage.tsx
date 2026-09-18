@@ -182,10 +182,8 @@ export function ProjectsPage() {
   // the rows' own sums are kept separately so any residual is disclosed, not hidden (F-401).
   const rowsTokens = rows.reduce((s, r) => s + (Number(r.tokens) || 0), 0);
   const rowsCost   = rows.reduce((s, r) => s + (Number(r.estimatedUsd) || 0), 0);
-  // Full (Athena) view: KPIs must sum the rows actually displayed (F-1703); the rollup
-  // totals stay in state only so the footer can disclose the live-vs-rollup residual.
-  const totalTokens = source === 'full' ? rowsTokens : (apiTotalTokens ?? rowsTokens);
-  const totalCost   = source === 'full' ? rowsCost   : (apiTotalUsd ?? rowsCost);
+  const totalTokens = apiTotalTokens ?? rowsTokens;
+  const totalCost   = apiTotalUsd ?? rowsCost;
 
   return (
     <>
