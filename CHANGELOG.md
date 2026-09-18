@@ -6,6 +6,35 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Fixed — every security alert we had ever written was unreachable from the feed built to show it
+- **The anomalies table had one reader and two writers that disagreed about its primary key, on both
+  halves.** `anomaly-response/index.ts` wrote `pk = TENANT#<tenant>#ANOMALY` with a bare
+  `<eventTime>#<type>#<sourceIp>` sort key; the only reader, `GET /v1/anomalies`, queries
+  `pk = TENANT#<tenant>` with `begins_with(sk, 'ANOMALY#')`. Nothing in the stack could report it: a
+  `PutItem` with the wrong key succeeds, and a `Query` that matches nothing returns an empty page —
+  which is exactly what "no anomalies detected" looks like.
+- **`backend/lambdas/shared/anomaly-key.ts` is now the single definition** (`ANOMALY_SK_PREFIX`,
+  `anomalyPk()`, `anomalySk()`), used by all three call sites — both writers and the reader.
+  `ingestion/aggregator.ts` (the feature-14 runaway-spend writer) was already correct but only via a
+  duplicated literal, so it was switched too: a third independent spelling of the key is the hazard
+  that produced the defect. `detectedAt` leads the sort key, so lexicographic order is chronological
+  and the reader's existing `ScanIndexForward: false` stays newest-first with no secondary index.
+  Keys are deterministic, so a re-processed batch re-puts rather than duplicating an alert.
+  16 new cases in `backend/lambdas/shared/anomaly-key.test.ts`.
+- **The rows already written were repaired, not written off.** `backend/scripts/migrate-anomaly-keys.ts`
+  is one-off, dry-run by default (`--apply` required to write); each replacement is a `Put` under
+  `attribute_not_exists(pk)` and the legacy row is deleted only after the replacement is confirmed, so
+  a mid-run crash leaves a duplicate — visible, cleanable — rather than a lost alert. On dev: 3 items,
+  `0 already readable, 3 to rewrite` (two `AccessDenied`, one `OffHoursUsage` — every alert the table
+  held), then `3 migrated`, then 3 of 3 returned by the **reader's own** key condition, and a clean
+  re-run. The script is not standing tooling: standing tooling for a broken shape keeps it alive.
+- **The browser render of the Anomalies page was not read this round** — verification was at the
+  API/table layer via the reader's key condition.
+- **`fmtTokens` scales past `M` to `B` and `T`** with a pinned `en-US` locale, closing F-1201 (and five
+  further recurrences), where a cumulative cache-read token total rendered as `16215.23M` — four digits
+  of mantissa with no thousands separator.
+- No change to anomaly detection, to the `/v1/anomalies` contract, or to any table, index or GSI.
+
 ### Changed — one time range for the whole portal
 - **A single 7 / 30 / 90 days / month-to-date control in the top bar**, carried in the URL (`?window=`)
   so a link reproduces the view. Usage, DORA, ROI and Anomalies follow it; every page states the range
