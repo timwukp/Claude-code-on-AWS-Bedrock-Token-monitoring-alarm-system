@@ -35,6 +35,30 @@ are grouped by development milestone rather than strict semver releases.
 - Evidence for all of the above: `docs/research-dora-presentation.md` (14 claims from DORA's
   primary sources, adversarially verified). No computed value changed except the removed tier.
 
+### Fixed — the Full (Athena) project view now attributes profile-routed traffic
+- **The Athena statements gained the application-inference-profile tier**, ahead of
+  `requestMetadata.project_id`, in the same order the aggregator applies. Profile-routed calls log
+  the profile ARN as `modelId` and carry no `project_id`, so the strongest attribution tier — the
+  one this product recommends and can enforce — was the one the Full view could not see: on live
+  data it reported 99.97 % `untagged` against 20 attributed projects in Fast, and a project
+  attributed only by profile routing was absent from it entirely (qa F-1101). Both statements —
+  the async `byProject` template the page runs and the synchronous `/v1/projects` — inline the
+  registry's resolved-profile cache (a no-`ELSE` `CASE`, and a `VALUES` CTE) rather than mirroring
+  it to a second store; an empty or unreadable cache degrades to the previous SQL with a warning.
+- **The page's copy overstated intentionality.** It called the whole Fast/Full divergence "by
+  design"; only part of it was. It now names the two tiers Full cannot resolve — the admin identity
+  hint and the one-time historical back-fill, which exist only as rollup state — and says the
+  residual `untagged` share is those two tiers, not lost usage. On dev the residue reconciles to
+  the token: 98.8 % pre-profile history, 1.2 % identity-hint territory.
+- **One project, one name.** A row attributed by profile is labelled by project id; both Full paths
+  now relabel from the project registry, so a project reads identically in Fast and Full.
+- **Currency has thousands separators** (`$13,858.35`), locale pinned to `en-US` (qa F-1102).
+- **The bug-fix agent reports "nothing patchable" as a result, not a failure.** Its non-zero exit
+  under `bash -e` aborted the qa step before the workflow's own comment, stall-detector and fuse
+  steps, so an unfixable finding produced a red check with no explanation. It also now salvages a
+  diff from a max-token-truncated reply (the closing fence never arrives) and asks for the diff
+  before the analysis. Hardening it does not green PR #43 by itself — the finding needed this fix.
+
 ### Added — AI-coding ROI page
 - **`/roi` sub-page** answering "is the AI coding spend worth it?" from measured data instead of
   vendor claims: per-project ROI over this portal's own per-project spend rollups and per-repo

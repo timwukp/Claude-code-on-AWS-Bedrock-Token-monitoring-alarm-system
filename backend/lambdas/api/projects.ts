@@ -6,7 +6,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { ok, serverError } from '../shared/response';
 import { computeModelCost, normalizeModelId, summarizeCosts, TokenCounts } from './cost-calc';
-import { listProjects } from '../shared/project-registry';
+import { listProfiles, listProjects } from '../shared/project-registry';
 import { getTenantId } from '../shared/tenant';
 
 const athena = new AthenaClient({});
@@ -21,9 +21,18 @@ const AGGREGATES_TABLE = process.env.AGGREGATES_TABLE;
 const IN = 0.000005, OUT = 0.000025, CACHE = 0.0000005;
 
 /**
- * GET /v1/projects — usage attributed to projects, by joining Bedrock requestMetadata
- * (project_id / user_id) to a customer-supplied project mapping table (project_mapping),
- * loaded from a CSV in S3. Falls back to the raw project_id when no mapping row exists.
+ * GET /v1/projects — usage attributed to projects.
+ *
+ * Attribution precedence, the same order the aggregator applies so Fast and Full agree on which
+ * tier wins: **AIP tag ▷ requestMetadata.project_id ▷ untagged.** The AIP tier resolves an
+ * application-inference-profile ARN (which is what `modelId` holds for profile-routed calls)
+ * through the profile cache; the metadata tier joins `requestMetadata.project_id` to the
+ * customer-supplied `project_mapping` CSV in S3 for names and cost centres.
+ *
+ * Two tiers the Fast path has and this one deliberately does NOT, because they exist only as
+ * DynamoDB state and no raw-log signal carries them: the admin **identity hint**, and the
+ * one-time historical `HOUR_PROJECT_MAP` attribution. Raw logs stay immutable, so the Full view
+ * reports call-time truth and pre-AIP history stays `untagged` here by design. The page says so.
  *
  * Synchronous Athena run (start → poll → results) since the result set is small (one row per
  * project). For large tenants, switch to the async pattern used by /v1/queries.
@@ -44,22 +53,20 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return ok({ tenantId, source: 'dynamodb', projects, rollupsAsOf, ...totals });
     }
 
-    const sql = `
-      SELECT
-        COALESCE(m.project_name, l.requestMetadata['project_id'], 'untagged') AS project,
-        COALESCE(m.cost_center, '—') AS cost_center,
-        COUNT(DISTINCT l.requestMetadata['user_id']) AS users,
-        SUM(l.input.inputTokenCount + l.output.outputTokenCount) AS tokens,
-        SUM(l.input.inputTokenCount) * ${IN}
-          + SUM(l.output.outputTokenCount) * ${OUT}
-          + SUM(COALESCE(l.input.cacheReadInputTokenCount, 0)) * ${CACHE} AS est_usd
-      FROM bedrock_invocation_logs l
-      LEFT JOIN project_mapping m
-        ON l.requestMetadata['project_id'] = m.project_id
-      WHERE COALESCE(l.requestMetadata['tenant'], l.identity.arn) = '${sanitize(tenantId)}'
-      GROUP BY 1, 2
-      ORDER BY tokens DESC
-      LIMIT 100`;
+    // The Full view used to attribute from requestMetadata alone, so profile-routed traffic —
+    // whose modelId IS the AIP ARN and which carries no project_id — could only ever land in
+    // 'untagged' (qa F-1101: Athena showed 4 rows / 99.97% untagged where Fast showed 20
+    // projects). The profile cache is the same self-healing source of truth the aggregator
+    // maintains, so read it here and inline it rather than mirroring it into a second store.
+    const [profileItems, registryProjects] = await Promise.all([
+      listProfiles().catch((e) => {
+        console.warn('projects: profile cache unreadable, AIP tier disabled', (e as Error).message);
+        return [];
+      }),
+      listProjects().catch(() => []),
+    ]);
+    const profiles = profileItems.filter((p) => p.projectId && p.projectId !== 'untagged');
+    const sql = buildFullSql(tenantId, profiles);
 
     const start = await athena.send(new StartQueryExecutionCommand({
       QueryString: sql, WorkGroup: WORKGROUP, QueryExecutionContext: { Database: DATABASE },
@@ -101,6 +108,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         estimatedUsd: Math.round(Number(c[4]?.VarCharValue ?? 0) * 1e6) / 1e6,
       };
     });
+    // An AIP-attributed row is labelled with its project id when the project_mapping CSV has no
+    // row for it; relabel from the registry so Full and Fast name the same project identically
+    // (Fast already does this). Pure relabel — ids are unique, so no rows merge and no aggregate
+    // is recomputed.
+    const registry = new Map(registryProjects.map((p) => [p.projectId, { name: p.name, costCenter: p.costCenter ?? '—' }]));
+    for (const p of athenaProjects) {
+      const hit = registry.get(p.projectName);
+      if (!hit) continue;
+      p.projectName = hit.name;
+      if (p.costCenter === '—') p.costCenter = hit.costCenter;
+    }
     // Same treatment as the fast path: scale rows to the authoritative per-model totals so
     // Fast, Full, and the Cost page all agree (Athena prices at flat reference rates and its
     // log coverage window differs from the rollups).
@@ -126,6 +144,63 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
 function sanitize(v: string): string {
   return v.replace(/'/g, "''").replace(/[^\w@.\-:/]/g, '');
+}
+
+/**
+ * Cap on inlined profile rows. One AIP exists per project × model, so a few dozen is the real
+ * shape; the cap only stops a pathological cache from pushing the statement toward Athena's
+ * 262 kB query limit. Truncation degrades attribution for the overflow, never the query.
+ */
+export const MAX_PROFILE_ROWS = 400;
+
+/**
+ * Build the Full-view (Athena) SQL. Attribution precedence mirrors the aggregator's, so Full and
+ * Fast agree on which tier wins: **AIP tag ▷ requestMetadata ▷ untagged**.
+ *
+ * The profile→project mapping is inlined as a CTE of VALUES instead of being exported to S3 as a
+ * second Glue table: the DynamoDB profile cache is already authoritative and self-healing, a
+ * mirror would add a staleness window, and doing the fold in SQL keeps grouping single-pass —
+ * folding profile rows into projects afterwards in the Lambda would break COUNT(DISTINCT user),
+ * which cannot be re-aggregated across merged groups without over-counting shared users.
+ *
+ * Exported for unit tests: this is pure string building.
+ */
+export function buildFullSql(tenantId: string, profiles: { arn: string; projectId: string }[]): string {
+  const rows = profiles.slice(0, MAX_PROFILE_ROWS)
+    .map((p) => `('${sanitize(p.arn)}', '${sanitize(p.projectId)}')`)
+    .join(', ');
+  // An empty VALUES list is a syntax error, so with no resolved profiles emit the pre-#F-1101
+  // shape: identical behaviour, one join fewer.
+  const withClause = rows ? `WITH profile_map (profile_arn, project_id) AS (VALUES ${rows})\n      ` : '';
+  const aipJoin = rows
+    ? `LEFT JOIN profile_map ap
+        ON l.modelId = ap.profile_arn
+      LEFT JOIN project_mapping pm
+        ON ap.project_id = pm.project_id
+      `
+    : '';
+  // Name/cost-centre for an AIP-attributed row come from the same project_mapping CSV as the
+  // metadata tier, so a project reads identically whichever tier attributed it.
+  const project = rows
+    ? "COALESCE(pm.project_name, ap.project_id, m.project_name, l.requestMetadata['project_id'], 'untagged')"
+    : "COALESCE(m.project_name, l.requestMetadata['project_id'], 'untagged')";
+  const costCenter = rows ? "COALESCE(pm.cost_center, m.cost_center, '—')" : "COALESCE(m.cost_center, '—')";
+  return `
+      ${withClause}SELECT
+        ${project} AS project,
+        ${costCenter} AS cost_center,
+        COUNT(DISTINCT l.requestMetadata['user_id']) AS users,
+        SUM(l.input.inputTokenCount + l.output.outputTokenCount) AS tokens,
+        SUM(l.input.inputTokenCount) * ${IN}
+          + SUM(l.output.outputTokenCount) * ${OUT}
+          + SUM(COALESCE(l.input.cacheReadInputTokenCount, 0)) * ${CACHE} AS est_usd
+      FROM bedrock_invocation_logs l
+      ${aipJoin}LEFT JOIN project_mapping m
+        ON l.requestMetadata['project_id'] = m.project_id
+      WHERE COALESCE(l.requestMetadata['tenant'], l.identity.arn) = '${sanitize(tenantId)}'
+      GROUP BY 1, 2
+      ORDER BY tokens DESC
+      LIMIT 100`;
 }
 
 /**

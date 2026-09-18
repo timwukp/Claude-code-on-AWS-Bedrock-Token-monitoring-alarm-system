@@ -75,20 +75,53 @@ async function buildModelExpr(): Promise<string> {
   }
 }
 
+/**
+ * Profile ARN → project id, as a CASE with **no ELSE**: a non-profile call yields NULL so the
+ * caller's COALESCE falls through to the next attribution tier. Same cache, same guard and same
+ * failure posture as buildModelExpr — an unreadable cache disables the tier rather than failing
+ * the query, which degrades attribution to the pre-fix behaviour instead of breaking the page.
+ */
+export function projectExprFrom(profiles: { arn: string; projectId?: string }[]): string | null {
+  const whens = profiles
+    .filter((p) => p.projectId && p.projectId !== 'untagged'
+      && SAFE_SQL_STR.test(p.arn) && SAFE_SQL_STR.test(p.projectId))
+    .map((p) => `WHEN l.modelId = '${p.arn}' THEN '${p.projectId}'`);
+  return whens.length ? `CASE ${whens.join(' ')} END` : null;
+}
+
+async function buildProjectExpr(): Promise<string | null> {
+  if (!process.env.TENANTS_TABLE) return null;
+  try {
+    return projectExprFrom(await listProfiles());
+  } catch (err) {
+    console.warn('queries: could not load profile cache; AIP attribution tier disabled', (err as Error).message);
+    return null;
+  }
+}
+
 interface TemplateCtx {
   /** SQL expression yielding the effective model id: application-inference-profile ARNs resolved
    * to their underlying model via the registry cache (so pricing matches the rollups), else l.modelId. */
   modelExpr: string;
+  /** SQL expression yielding the project an AIP-routed call belongs to, or NULL when the call was
+   * not profile-routed — deliberately no ELSE, so a COALESCE falls through to the next tier.
+   * `null` when nothing resolves, so the template omits the tier entirely. */
+  projectExpr: string | null;
 }
 
-const TEMPLATES: Record<string, (tenantId: string, days: number, ctx: TemplateCtx) => string> = {
+export const TEMPLATES: Record<string, (tenantId: string, days: number, ctx: TemplateCtx) => string> = {
   // By-project attribution with the CSV name mapping, exposed async because the scan takes
   // 15-30s on real data (F-002). Prices PER MODEL with the same rate card the Fast path and the
   // Cost page use (QA F-402: a flat reference rate + proportional scaling mis-priced projects
   // with a cheaper model mix). Rows are (project, model); the client sums per project.
+  // Attribution precedence matches the aggregator's — AIP tag ▷ requestMetadata ▷ untagged. Before
+  // the AIP tier existed here, profile-routed calls (modelId = the AIP ARN, no project_id in
+  // requestMetadata) could only land in 'untagged', so this view reported ~99.97% untagged against
+  // 20 attributed projects in Fast (qa F-1101). The two tiers still absent are the ones with no
+  // raw-log signal at all: the admin identity hint and the one-time historical treatment.
   byProject: (tenantId, _days, ctx) => `
     SELECT
-      COALESCE(m.project_name, l.requestMetadata['project_id'], 'untagged') AS project,
+      COALESCE(${ctx.projectExpr ? `${ctx.projectExpr}, ` : ''}m.project_name, l.requestMetadata['project_id'], 'untagged') AS project,
       COALESCE(m.cost_center, '—') AS cost_center,
       COUNT(DISTINCT l.requestMetadata['user_id']) AS users,
       COALESCE(SUM(COALESCE(l.input.inputTokenCount, 0) + COALESCE(l.output.outputTokenCount, 0)), 0) AS tokens,
@@ -130,7 +163,8 @@ async function startQuery(event: APIGatewayProxyEvent, tenantId: string) {
   if (!template) return badRequest(`Unknown template. Allowed: ${Object.keys(TEMPLATES).join(', ')}`);
   const days = Math.min(Math.max(Number(body.days ?? 7), 1), 90);
 
-  const ctx: TemplateCtx = { modelExpr: await buildModelExpr() };
+  const [modelExpr, projectExpr] = await Promise.all([buildModelExpr(), buildProjectExpr()]);
+  const ctx: TemplateCtx = { modelExpr, projectExpr };
   const res = await athena.send(
     new StartQueryExecutionCommand({
       QueryString: template(tenantId, days, ctx),

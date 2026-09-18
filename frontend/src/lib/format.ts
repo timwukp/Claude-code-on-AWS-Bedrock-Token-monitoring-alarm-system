@@ -1,5 +1,12 @@
 /** Shared formatting helpers for the dashboard. */
-export const fmtUsd = (n: number): string => `$${n.toFixed(2)}`;
+
+/** USD with thousands separators and exactly 2 decimals: "$13,858.35".
+ *
+ * The locale is pinned rather than left to the browser (qa F-1102 was the missing separator;
+ * an unpinned locale is the same bug's mirror image — a de-DE reader would see "$13.858,35"
+ * for a figure the rest of the page states in en-US form). */
+export const fmtUsd = (n: number): string =>
+  `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export const fmtTokens = (n: number): string =>
   n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2)}M` : n >= 1_000 ? `${(n / 1_000).toFixed(1)}k` : String(n);
@@ -37,7 +44,8 @@ export const fmtAgo = (iso: string | null | undefined, now = Date.now()): string
 };
 
 /** Signed USD for waterfall labels: -$1,234 / +$1,234. */
-export const fmtSignedUsd = (n: number): string => `${n < 0 ? '−' : '+'}$${Math.abs(Math.round(n)).toLocaleString()}`;
+export const fmtSignedUsd = (n: number): string =>
+  `${n < 0 ? '−' : '+'}$${Math.abs(Math.round(n)).toLocaleString('en-US')}`;
 
 /** Compact USD: $12.3K / $1.2M. */
 export const fmtUsdK = (n: number): string => {
