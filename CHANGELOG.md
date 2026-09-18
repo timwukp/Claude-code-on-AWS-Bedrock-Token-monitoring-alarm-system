@@ -6,12 +6,51 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Changed — DORA cards: one card, one measurement
+- **Every card is now a canonical noun label, at most one qualifier chip, one number and one line
+  of sample provenance.** The previous pass made the page factually correct by stacking its caveats
+  onto the card faces: the deployment-frequency card carried three competing headlines for one
+  fact, and one caption line merged four categories under a single separator. The caveats are
+  relocated, not deleted.
+- **No band, tier or benchmark on any card face — this reverses the entry below.** DORA's own live
+  instrument scores software delivery performance on a continuous scale against an industry mean;
+  `Elite`/`High`/`Medium`/`Low` appear zero times as labels in it, and the 2025 report speaks of
+  clusters, not levels. So the measured rate leads and the 2024 bands become a dated reference table
+  inside the disclosure. Dating them was right; leading with them was not. No percentile is shown
+  either: it is the defensible substitute for a band, and it needs a benchmark distribution this
+  product does not have — which the disclosure states rather than leaving the absence unexplained.
+- **Labels are DORA's canonical nouns from one surface, cited by URL** — deployment frequency,
+  change lead time, **change fail rate** (not "change failure rate"), failed deployment recovery
+  time, deployment rework rate. DORA's own surfaces disagree with each other about these names, so
+  attributing our wording to "DORA" generically would be unfalsifiable. The payload field and the
+  interface were renamed to match.
+- **Cards are grouped under DORA's own umbrella**, software delivery performance: throughput and
+  stability, with recovery time under stability, where three of DORA's four first-party surfaces
+  put it even though its definitions guide files it under throughput.
+- **One "Definitions & limitations" disclosure** on native `<details>/<summary>` — keyboard- and
+  touch-openable with no ARIA wiring — absorbs both long caveat paragraphs, the measurement notes,
+  both table captions and every caveat-carrying tooltip. Information a reader needs cannot live in
+  a hover tooltip. Coverage state stays on the card face: "not collected" and an empty sample are
+  findings about a tenant's data, not definitions.
+- **The AI metric left the DORA grid.** No DORA metric covers AI-authored share, so sitting it
+  among the five implied a sanction that does not exist. It heads the cohort panel and is named for
+  exactly what it counts: pull requests carrying an AI co-author trailer. The cohort split likewise
+  became its own row instead of a fragment appended to every card caption.
+- `dataSource` now ships `canonicalSource` and `bandReference` — the 2024 thresholds in the words a
+  reader compares with, derived from the tier thresholds so the two cannot drift, and excluding
+  change fail rate by construction. `DATA_SOURCE.notes` carries one claim per note.
+- Evidence: `docs/research-dora-card-copy.md` (8 findings, each adversarially verified). Terseness
+  itself is a design judgement, not a research finding — the comprehension angle was refuted.
+- No computed metric value changed.
+
 ### Changed — the DORA page now says what it actually measures
 - **Deployment frequency reads as DORA's ordinal band**, e.g. "between once per day and once per
   week", with the per-day rate demoted to supporting detail. Every DORA instrument states this
   metric as one of six phrases; the decimal rate was our intermediate arithmetic, and it is the
   form a non-expert reader misreads. The six bucket strings are used verbatim, and the one
   boundary the sources leave open — a rate of exactly 1.0/day — is resolved upward and documented.
+  *Superseded by the entry above: DORA's live instrument uses no band as a label, so the measured
+  rate leads and the band moved into the definitions disclosure.*
 - **"Proxy" moved from a footnote into the label.** A merge to the default branch is not a
   production deployment, and DORA's own reference implementation warns that deriving deployment
   metrics from merge events skews them. The reader who only reads labels is exactly the reader who
@@ -25,6 +64,8 @@ are grouped by development milestone rather than strict semver releases.
   benchmarks applied per application or service, not grades or a maturity model. The 2025 report
   replaced the four levels with seven team archetypes, so an undated badge asserts a framework that
   has since moved. An empty sample now reads "no band" rather than an unqualified "Unknown".
+  *Superseded by the entry above: the badges are off the page entirely, and the dated bands survive
+  as a reference table inside the disclosure.*
 - **The fifth metric is named.** DORA has had five metrics since 2024; deployment rework rate needs
   a signal marking a deployment as planned or corrective, which nothing in this pipeline records.
   The page says so on its own tile instead of presenting four metrics as the whole framework.
