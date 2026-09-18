@@ -5,6 +5,7 @@ import './styles.css';
 import { configureAuth, getUserEmail } from './auth/cognito';
 import { LoginGate } from './auth/LoginGate';
 import { Layout } from './components/Layout';
+import type { Window } from './lib/time-range';
 import { UsagePage } from './pages/UsagePage';
 import { CostsPage } from './pages/CostsPage';
 import { ProjectsPage } from './pages/ProjectsPage';
@@ -15,14 +16,14 @@ import { RoiPage } from './pages/RoiPage';
 
 configureAuth();
 
-const PAGE_META: Record<string, { title: string; sub: string }> = {
-  '/': { title: 'Token Usage', sub: 'Real-time consumption across models and time' },
-  '/costs': { title: 'Estimated Cost', sub: 'Spend by model, derived from token usage' },
-  '/projects': { title: 'Usage by Project', sub: 'Attribution via inference profiles, request metadata and the project registry' },
-  '/governance': { title: 'Cost Governance', sub: 'Budget status and enforcement guardrails' },
-  '/anomalies': { title: 'Anomalies & Alerts', sub: 'Automated detection and response feed' },
-  '/dora': { title: 'DORA Metrics', sub: 'Delivery performance per repo — humans + AI coding assistants' },
-  '/roi': { title: 'AI ROI', sub: 'Break-even first — DORA ROI model over measured cost and delivery, disclosed assumptions, honest brackets' },
+const PAGE_META: Record<string, { title: string; sub: string; windows?: readonly Window[]; fixedCaption?: string }> = {
+  '/': { title: 'Token Usage', sub: 'Consumption across models and time', windows: [7, 30, 90, 'mtd'] },
+  '/costs': { title: 'Estimated Cost', sub: 'Spend by model, derived from token usage', windows: [], fixedCaption: 'All time · token-based estimate' },
+  '/projects': { title: 'Usage by Project', sub: 'Attribution via inference profiles, request metadata and the project registry', windows: [], fixedCaption: 'All time · rollups' },
+  '/governance': { title: 'Cost Governance', sub: 'Budget status and enforcement guardrails', windows: [], fixedCaption: 'Month to date · AWS Budgets period' },
+  '/anomalies': { title: 'Anomalies & Alerts', sub: 'Automated detection and response feed', windows: [7, 30, 90, 'mtd'] },
+  '/dora': { title: 'DORA Metrics', sub: 'Delivery performance per repo — humans + AI coding assistants', windows: [7, 30, 90] },
+  '/roi': { title: 'AI ROI', sub: 'Break-even first — DORA ROI model over measured cost and delivery, disclosed assumptions, honest brackets', windows: [30, 90] },
 };
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -30,7 +31,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   useEffect(() => { getUserEmail().then(setUser); }, []);
   const { pathname } = useLocation();
   const meta = PAGE_META[pathname === '/usage' ? '/' : pathname] ?? PAGE_META['/'];
-  return <Layout title={meta.title} subtitle={meta.sub} user={user}>{children}</Layout>;
+  return <Layout title={meta.title} subtitle={meta.sub} user={user} windows={meta.windows} fixedCaption={meta.fixedCaption}>{children}</Layout>;
 }
 
 function App() {

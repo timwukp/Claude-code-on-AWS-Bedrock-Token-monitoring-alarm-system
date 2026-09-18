@@ -23,6 +23,7 @@ results. One report per feature (mapped to a GitHub issue / PR).
 | Athena attribution parity (Full view sees the profile tier) | — | #44 | [feature-17](./feature-17-athena-attribution-parity.md) | PASS |
 | Live ROI model diagram (measured · assumed · refused, per project) | — | #45 | [feature-19](./feature-19-roi-model-diagram.md) | PASS |
 | UX foundation (tokens, icons, tiles, help panel, dark theme) | — | #46 | [feature-20](./feature-20-ux-foundation.md) | PASS |
+| Global time range (one control, URL-synced, every page states its period) | — | #48 | [feature-21](./feature-21-global-time-range.md) | PASS |
 
 Each report records: scope, unit-test results, build/synth gates, real-AWS validation evidence,
 any defect found+fixed during validation, and a verdict. Reports are written before opening the

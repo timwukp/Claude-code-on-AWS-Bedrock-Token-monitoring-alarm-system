@@ -1,22 +1,31 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client';
+import { EmptyState } from '../components/EmptyState';
 import { Kpi, Panel } from '../components/Layout';
+import { useTimeRange } from '../lib/time-range';
 
 const sevClass = (s: string) =>
   s === 'CRITICAL' ? 'critical' : s === 'WARNING' ? 'warning' : 'info';
 
 /** Feed of anomaly/alert events (Cost Anomaly Detection + automated response signals). */
+const detectedAt = (a: any): string => String(a.detectedAt ?? (typeof a.sk === 'string' ? a.sk.replace(/^ANOMALY#/, '').slice(0, 24) : ''));
+
 export function AnomaliesPage() {
-  const [items, setItems] = useState<any[]>([]);
+  const range = useTimeRange([7, 30, 90, 'mtd']);
+  const [all, setAll] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.anomalies().then((r) => setItems(r.anomalies)).catch((e) => setError(String(e))).finally(() => setLoading(false));
+    api.anomalies().then((r) => setAll(r.anomalies)).catch((e) => setError(String(e))).finally(() => setLoading(false));
   }, []);
 
-  if (error) return <div className="empty"><div className="big">⚠️</div>Failed to load anomalies: {error}</div>;
-  if (loading) return <div className="empty"><span className="spinner" /></div>;
+  // The API returns the newest 100 detections with no window parameter; the window is applied here.
+  const items = useMemo(() => all.filter((a) => detectedAt(a) >= range.fromIso), [all, range.fromIso]);
+  const olderCount = all.length - items.length;
+
+  if (error) return <EmptyState kind="error" title="Anomalies could not be loaded" detail={error} action={{ label: 'Retry', onClick: () => location.reload() }} />;
+  if (loading) return <EmptyState kind="loading" title="Loading anomalies…" />;
 
   const critical = items.filter((a) => a.severity === 'CRITICAL').length;
   const warning = items.filter((a) => a.severity === 'WARNING').length;
@@ -24,15 +33,20 @@ export function AnomaliesPage() {
   return (
     <>
       <div className="kpi-grid">
-        <Kpi label="Total alerts" value={String(items.length)} accent="var(--primary)" />
+        <Kpi label="Total alerts" value={String(items.length)} accent="var(--primary)" foot={range.label.toLowerCase()} />
         <Kpi label="Critical" value={String(critical)} accent="var(--danger)" />
         <Kpi label="Warning" value={String(warning)} accent="var(--warning)" />
       </div>
 
       <Panel title="Alert feed"
-             desc="Newest first — from EventBridge → automated response. Shows the most recent detections; an old top entry means no anomalies have fired since then.">
+             desc={`Newest first, ${range.label.toLowerCase()} — from EventBridge → automated response.${olderCount > 0 ? ` ${olderCount} older detection${olderCount === 1 ? '' : 's'} outside this window.` : ''}`}>
         {items.length === 0 ? (
-          <div className="empty"><div className="big">✅</div>No anomalies recorded. All clear.</div>
+          <EmptyState kind="empty" icon="check"
+            title={`No anomalies detected in the ${range.label.toLowerCase()}`}
+            detail={olderCount > 0
+              ? `${olderCount} older detection${olderCount === 1 ? '' : 's'} exist outside this window.`
+              : 'Detectors are the aggregator’s spend-runaway guard and Cost Anomaly Detection; a detection appears here within minutes of firing.'}
+            action={olderCount > 0 ? { label: 'Show last 90 days', onClick: () => range.setWindow(90) } : { label: 'View budget guardrails', to: '/governance' }} />
         ) : (
           <table className="data">
             <thead>

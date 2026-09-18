@@ -8,6 +8,8 @@ import {
 } from '../api/client';
 import { Disclosure, Kpi, Panel } from '../components/Layout';
 import { fmtAgo, fmtAxisHours, fmtDateTime, fmtHours, fmtPct, fmtTokens, fmtUsd } from '../lib/format';
+import { gridProps, legendProps, MARK, role, series, surfaceGap, tooltipProps, xAxisProps, yAxisProps } from '../charts/theme';
+import { useTimeRange } from '../lib/time-range';
 
 /**
  * Software delivery performance per tracked GitHub repo — DORA's four measurable metrics, each
@@ -33,7 +35,6 @@ import { fmtAgo, fmtAxisHours, fmtDateTime, fmtHours, fmtPct, fmtTokens, fmtUsd 
  *    exactly what it counts: PRs carrying an AI co-author trailer (§8).
  */
 
-const WINDOWS: DoraWindow[] = [7, 30, 90];
 const ASSISTANT_LABEL: Record<Exclude<AssistedBy, null>, string> = {
   'claude-code': 'Claude Code', kiro: 'Kiro', 'amazon-q': 'Amazon Q', copilot: 'Copilot',
 };
@@ -49,7 +50,6 @@ const POLL_MS = 10_000;
 const POLL_MAX = 12;
 
 const isBusy = (s: SyncStatus) => s === 'pending' || s === 'syncing';
-const parseWindow = (raw: string | null): DoraWindow => (WINDOWS.includes(Number(raw) as DoraWindow) ? (Number(raw) as DoraWindow) : 30);
 
 /** The rate a reader compares with. DORA states this metric ordinally, never as a per-day decimal. */
 const perWeek = (perDayValue: number | null) => (perDayValue == null ? '—' : `${(perDayValue * 7).toFixed(1)} / week`);
@@ -98,7 +98,8 @@ const METRIC_MAP: readonly { dora: string; here: string; deviation: string }[] =
 
 export function DoraPage() {
   const [params, setParams] = useSearchParams();
-  const windowDays = parseWindow(params.get('window'));
+  const range = useTimeRange([7, 30, 90]);
+  const windowDays = range.window as DoraWindow;
   const repoParam = params.get('repo');
 
   const [repos, setRepos] = useState<DoraRepo[] | null>(null);
@@ -126,7 +127,6 @@ export function DoraPage() {
   }, [repos, repoParam]);
 
   const setRepo = (repo: string) => setParams((p) => { p.set('repo', repo); return p; }, { replace: true });
-  const setWindow = (w: DoraWindow) => setParams((p) => { p.set('window', String(w)); return p; }, { replace: true });
 
   // 1) Registry (drives everything else). Re-runs on manual refresh and on poll ticks.
   useEffect(() => {
@@ -219,11 +219,6 @@ export function DoraPage() {
             ))}
           </div>
         )}
-        <div className="seg" aria-label="Window">
-          {WINDOWS.map((w) => (
-            <button key={w} className={windowDays === w ? 'active' : ''} onClick={() => setWindow(w)}>{w} days</button>
-          ))}
-        </div>
         {selected && (
           <span className="muted" style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <span className={`badge ${STATUS_BADGE[selected.status].cls}`}>{STATUS_BADGE[selected.status].text}</span>
@@ -317,13 +312,13 @@ export function DoraPage() {
                   <Panel title="Merges to the default branch per week" desc="The deployment-frequency proxy over time, split by whether an AI assistant participated">
                     <ResponsiveContainer width="100%" height={280}>
                       <BarChart data={tl} margin={{ left: 4, right: 12, top: 8 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
-                        <XAxis dataKey="week" tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} tickFormatter={(w: string) => w.slice(5)} />
-                        <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={false} width={32} tickFormatter={(n: number) => (n === 0 ? '' : String(n))} />
-                        <Tooltip contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 13 }} />
-                        <Legend iconType="circle" wrapperStyle={{ fontSize: 13, paddingTop: 8 }} />
-                        <Bar dataKey="deploysHuman" name="Human-only PRs" stackId="d" fill="#2563eb" radius={[0, 0, 0, 0]} />
-                        <Bar dataKey="deploysAi" name="AI-assisted PRs" stackId="d" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                        <CartesianGrid {...gridProps()} />
+                        <XAxis dataKey="week" {...xAxisProps()} tickFormatter={(w: string) => w.slice(5)} />
+                        <YAxis allowDecimals={false} {...yAxisProps((n: number) => (n === 0 ? '' : String(n)))} width={32} />
+                        <Tooltip {...tooltipProps()} />
+                        <Legend {...legendProps()} wrapperStyle={{ fontSize: 13, paddingTop: 8 }} />
+                        <Bar dataKey="deploysHuman" name="Human-only PRs" stackId="d" fill={role('human')} {...surfaceGap()} {...MARK.barStackedBottom} />
+                        <Bar dataKey="deploysAi" name="AI-assisted PRs" stackId="d" fill={role('ai')} {...surfaceGap()} {...MARK.bar} />
                       </BarChart>
                     </ResponsiveContainer>
                   </Panel>
@@ -331,11 +326,11 @@ export function DoraPage() {
                   <Panel title="Lead time per week" desc="Median hours from first commit to merge for PRs merged that week">
                     <ResponsiveContainer width="100%" height={260}>
                       <LineChart data={tl} margin={{ left: 4, right: 12, top: 8 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
-                        <XAxis dataKey="week" tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} tickFormatter={(w: string) => w.slice(5)} />
-                        <YAxis tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={false} width={40} tickFormatter={fmtAxisHours} />
-                        <Tooltip contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 13 }} formatter={(v: number) => fmtHours(v)} />
-                        <Line type="monotone" dataKey="medianLeadHours" name="Median lead time" stroke="#16a34a" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                        <CartesianGrid {...gridProps()} />
+                        <XAxis dataKey="week" {...xAxisProps()} tickFormatter={(w: string) => w.slice(5)} />
+                        <YAxis {...yAxisProps(fmtAxisHours)} width={40} />
+                        <Tooltip {...tooltipProps()} formatter={(v: number) => fmtHours(v)} />
+                        <Line type="monotone" dataKey="medianLeadHours" name="Median lead time" stroke={series()[2]} {...MARK.line} dot={{ r: MARK.dot.r, fill: series()[2], strokeWidth: 0 }} connectNulls />
                       </LineChart>
                     </ResponsiveContainer>
                   </Panel>

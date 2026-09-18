@@ -6,27 +6,56 @@ import { api, UsagePoint } from '../api/client';
 import { Kpi, Panel } from '../components/Layout';
 import { fmtTokens, fmtAxisTokens } from '../lib/format';
 import { gridProps, legendProps, MARK, role, tooltipProps, xAxisProps, yAxisProps } from '../charts/theme';
+import { EmptyState } from '../components/EmptyState';
+import { useTimeRange } from '../lib/time-range';
 
 /** Token usage over time + KPI summary + Bedrock quota headroom, for the signed-in tenant. */
+/** Hourly points read fine over a week; past that they blur into a wall, so bucket to days. */
+function bucketDaily(points: UsagePoint[]): UsagePoint[] {
+  const by = new Map<string, UsagePoint>();
+  for (const p of points) {
+    const day = p.timestamp.slice(0, 10);
+    const e = by.get(day) ?? { ...p, timestamp: `${day}T00:00:00Z`, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, invocations: 0 };
+    e.inputTokens += p.inputTokens; e.outputTokens += p.outputTokens;
+    e.cacheReadTokens = (e.cacheReadTokens ?? 0) + (p.cacheReadTokens ?? 0);
+    e.cacheWriteTokens = (e.cacheWriteTokens ?? 0) + (p.cacheWriteTokens ?? 0);
+    e.invocations += p.invocations;
+    by.set(day, e);
+  }
+  return [...by.values()];
+}
+
 export function UsagePage() {
+  const range = useTimeRange([7, 30, 90, 'mtd']);
   const [points, setPoints] = useState<UsagePoint[]>([]);
   const [quota, setQuota] = useState<{ throttles: any; headroom: any[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const daily = range.days > 14;
   useEffect(() => {
-    api.usage()
+    let cancelled = false;
+    setLoading(true);
+    api.usage(range.fromIso, range.toIso)
       // Label carries the day (MM-DD HH:00): a 7-day hourly series repeats bare clock times,
-      // which read as duplicated/non-monotonic ticks (F-004).
-      .then((r) => setPoints(r.points.map((p) => ({ ...p, label: `${p.timestamp.slice(5, 10)} ${p.timestamp.slice(11, 16)}` }))))
-      .catch((e) => setError(String(e)))
-      .finally(() => setLoading(false));
-    // Quota panel is best-effort; don't block the page if it fails.
+      // which read as duplicated/non-monotonic ticks (F-004). Longer windows are bucketed to days.
+      .then((r) => {
+        if (cancelled) return;
+        const pts = daily ? bucketDaily(r.points) : r.points;
+        setPoints(pts.map((p) => ({ ...p, label: daily ? p.timestamp.slice(5, 10) : `${p.timestamp.slice(5, 10)} ${p.timestamp.slice(11, 16)}` })));
+        setError(null);
+      })
+      .catch((e) => { if (!cancelled) setError(String(e)); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [range.fromIso, range.toIso, daily]);
+  useEffect(() => {
+    // Quota panel is best-effort and window-independent; don't block the page if it fails.
     api.quotas().then(setQuota).catch(() => setQuota(null));
   }, []);
 
-  if (error) return <div className="empty"><div className="big">⚠️</div>Failed to load usage: {error}</div>;
-  if (loading) return <div className="empty"><span className="spinner" /></div>;
+  if (error) return <EmptyState kind="error" title="Usage could not be loaded" detail={error} action={{ label: 'Retry', onClick: () => location.reload() }} />;
+  if (loading && points.length === 0) return <EmptyState kind="loading" title="Loading usage…" />;
 
   const totalIn = points.reduce((s, p) => s + p.inputTokens, 0);
   const totalOut = points.reduce((s, p) => s + p.outputTokens, 0);
@@ -37,15 +66,15 @@ export function UsagePage() {
     <>
       <div className="kpi-grid">
         <Kpi label="Input tokens" value={fmtTokens(totalIn)} accent={role('input')}
-             foot="last 7 days — billed input, same definition as the Cost page" />
-        <Kpi label="Output tokens" value={fmtTokens(totalOut)} accent={role('output')} foot="last 7 days (hourly buckets)" />
+             foot={`${range.label.toLowerCase()} — billed input, same definition as the Cost page`} />
+        <Kpi label="Output tokens" value={fmtTokens(totalOut)} accent={role('output')} foot={`${range.label.toLowerCase()} (${daily ? 'daily' : 'hourly'} buckets)`} />
         <Kpi label="Prompt-cache tokens" value={fmtTokens(totalCache)} accent={role('cache')}
              foot="reads + writes — quota counts these as input; billing discounts them" />
         <Kpi label="Invocations" value={totalCalls.toLocaleString()} accent="var(--accent-amber)" foot="API calls" />
       </div>
 
       <Panel title="Token consumption over time"
-             desc="Hourly buckets over the last 7 days — billed input vs output tokens (prompt-cache traffic is shown in its own KPI above; it would dwarf both series). Which series dominates depends on the workload.">
+             desc={`${daily ? 'Daily' : 'Hourly'} buckets, ${range.label.toLowerCase()} — billed input vs output tokens (prompt-cache traffic is shown in its own KPI above; it would dwarf both series). Which series dominates depends on the workload.`}>
         <ResponsiveContainer width="100%" height={340}>
           <AreaChart data={points} margin={{ left: 4, right: 12, top: 8 }}>
             <CartesianGrid {...gridProps()} />
@@ -57,7 +86,7 @@ export function UsagePage() {
             <Area type="monotone" dataKey="outputTokens" name="Output tokens" stroke={role('output')} fill={role('output')} {...MARK.area} />
           </AreaChart>
         </ResponsiveContainer>
-        {points.length === 0 && <p className="muted">No data yet — once aggregation runs, points appear here.</p>}
+        {points.length === 0 && <EmptyState kind="empty" title={`No usage recorded in the ${range.label.toLowerCase()}`} detail="Points appear once the aggregator has processed invocation logs for this window." action={{ label: 'Show last 90 days', onClick: () => range.setWindow(90) }} />}
       </Panel>
 
       {quota && (

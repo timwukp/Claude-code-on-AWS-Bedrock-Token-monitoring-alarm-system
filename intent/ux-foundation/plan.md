@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** db018ea56d3de389b1d6249b42b594a786baf5fd
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #45 (feature-19), the merge base at PR time. The chain was
 first accepted against `9274c7f`, then `37ae499`, and **re-accepted** here after 3-way merges onto each
