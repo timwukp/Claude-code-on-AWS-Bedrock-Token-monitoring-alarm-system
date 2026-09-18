@@ -57,7 +57,7 @@ const METHODOLOGY = {
     'A percentage return on spend smaller than one engineer-hour per month — the ratio would be '
       + 'division noise, so the measured spend is shown without one.',
   ],
-  annualization: 'Rate-like terms scale by 365/window; one-time costs (training, J-curve) do not.',
+  annualization: 'Rate-like terms scale by 365/window; one-time costs (training, adoption dip — DORA\'s "J-curve") do not.',
 };
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {

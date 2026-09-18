@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import { api, Bands, ProjectRoiConfig, RoiMethodology, RoiProjectRow } from '../api/client';
 import { Kpi, Panel } from '../components/Layout';
+import { RoiModelDiagram } from '../components/RoiModelDiagram';
 import { fmtSignedUsd, fmtUsd, fmtUsdK } from '../lib/format';
 
 /**
@@ -113,6 +114,15 @@ export function RoiPage() {
             <li>{methodology.annualization}</li>
           </ul>
         )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '14px 0 10px', flexWrap: 'wrap' }}>
+          <span className="muted" style={{ fontSize: 13 }}>The model, with this project's numbers:</span>
+          <select value={estRef} onChange={(e) => setEstRef(e.target.value)} aria-label="Project shown in the model diagram"
+            style={{ padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)', color: 'var(--text)', fontSize: 13 }}>
+            {(rows ?? []).map((p) => <option key={p.projectId} value={p.projectId}>{p.name}</option>)}
+          </select>
+          <span className="muted" style={{ fontSize: 12 }}>solid = measured · dashed = assumed · faded = refused</span>
+        </div>
+        <RoiModelDiagram row={rows?.find((p) => p.projectId === estRef)} />
       </Panel>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
@@ -164,7 +174,7 @@ export function RoiPage() {
           { name: 'Stability Δ', usd: r.value.stabilityDelta.valueUsd, kind: 'value' },
           { name: 'AI spend', usd: -r.investment.aiSpend.valueUsd, kind: 'invest' },
           { name: 'Training', usd: -r.investment.training.valueUsd, kind: 'invest' },
-          { name: 'J-curve', usd: -r.investment.jCurve.valueUsd, kind: 'invest' },
+          { name: 'Adoption dip', usd: -r.investment.jCurve.valueUsd, kind: 'invest' },
         ];
         const drawerOpen = openDrawer === p.projectId;
         return (
