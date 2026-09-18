@@ -6,6 +6,29 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Changed — UX foundation: one visual system, a help panel, a dark plane
+- **Design tokens.** Type scale (11–28 px, four weights), spacing scale, semantic colours, chart
+  chrome and eight validated series slots, all in `styles.css`; every rule reads from them. The
+  content plane is now **dark by default**, unified with the sidebar; a light set is an explicit
+  opt-in (`<html data-theme="light">`), not OS-driven.
+- **Icons and navigation.** Hand-rolled inline SVG icons replace every emoji in the shell; the nav is
+  grouped **Spend / Governance / Delivery**; wordmark brand; the stray browser-default `Sign out`
+  outside the shell is gone. *Emoji were replaced for consistency — no source says they are
+  unacceptable; the two claims that Cloudscape forbids them were refuted in research.*
+- **KPI tiles.** `Kpi` now renders through `KpiTile` — label, one-line definition, value in
+  proportional figures, optional delta against a named period, sparkline, status chip, link — and a
+  card whose label has a help entry gains an ⓘ automatically. No page was edited for this.
+- **Help panel.** A right rail (≥ 1100 px) or modal (below) answering *What is this · Why it matters ·
+  How it's calculated · Caveats · Learn more* from one registry (`lib/help-content.ts`, 28 entries
+  covering every KPI on every page, content lifted from the former card captions and caveat
+  paragraphs). Keyboard-openable, Esc-closable, focus-restoring.
+- **Charts.** `charts/theme.ts` carries the palette (colour follows the entity — Opus is always slot 1,
+  human/AI cohorts are blue/orange — never the rank), hairline solid grid, flat 10 % area fills, thin
+  marks; the Usage chart adopts it here. The old DORA human/AI pair (`#2563eb` vs `#6366f1`) failed
+  the colour-vision check (normal-vision ΔE 6.6 against a floor of 15, protan 1.9) and is replaced.
+- **Empty states** component with status text and an action slot; `StatCard.tsx` (dead code) removed;
+  `/usage` alias and unknown-route redirect.
+- Research and audit behind all of the above: `docs/research-dashboard-ux.md`.
 ### Added — the ROI model as a picture, with the selected project's numbers in it
 - **`/roi` now draws its model** inside "How to read this page": three input columns (measured by
   this portal · configured assumptions · DORA's first-year model), the Value and Investment totals,

@@ -22,6 +22,7 @@ results. One report per feature (mapped to a GitHub issue / PR).
 | DORA copy density (one card, one measurement) | — | #43 | [feature-16](./feature-16-dora-copy-density.md) | PASS |
 | Athena attribution parity (Full view sees the profile tier) | — | #44 | [feature-17](./feature-17-athena-attribution-parity.md) | PASS |
 | Live ROI model diagram (measured · assumed · refused, per project) | — | #45 | [feature-19](./feature-19-roi-model-diagram.md) | PASS |
+| UX foundation (tokens, icons, tiles, help panel, dark theme) | — | TBD | [feature-20](./feature-20-ux-foundation.md) | PASS |
 
 Each report records: scope, unit-test results, build/synth gates, real-AWS validation evidence,
 any defect found+fixed during validation, and a verdict. Reports are written before opening the

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Navigate, Routes, Route, useLocation } from 'react-router-dom';
 import './styles.css';
 import { configureAuth, getUserEmail } from './auth/cognito';
 import { LoginGate } from './auth/LoginGate';
@@ -28,7 +28,8 @@ const PAGE_META: Record<string, { title: string; sub: string }> = {
 function Shell({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<string | null>(null);
   useEffect(() => { getUserEmail().then(setUser); }, []);
-  const meta = PAGE_META[window.location.pathname] ?? PAGE_META['/'];
+  const { pathname } = useLocation();
+  const meta = PAGE_META[pathname === '/usage' ? '/' : pathname] ?? PAGE_META['/'];
   return <Layout title={meta.title} subtitle={meta.sub} user={user}>{children}</Layout>;
 }
 
@@ -38,12 +39,14 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Shell><UsagePage /></Shell>} />
+          <Route path="/usage" element={<Shell><UsagePage /></Shell>} />
           <Route path="/costs" element={<Shell><CostsPage /></Shell>} />
           <Route path="/projects" element={<Shell><ProjectsPage /></Shell>} />
           <Route path="/governance" element={<Shell><GovernancePage /></Shell>} />
           <Route path="/anomalies" element={<Shell><AnomaliesPage /></Shell>} />
           <Route path="/dora" element={<Shell><DoraPage /></Shell>} />
           <Route path="/roi" element={<Shell><RoiPage /></Shell>} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </LoginGate>
