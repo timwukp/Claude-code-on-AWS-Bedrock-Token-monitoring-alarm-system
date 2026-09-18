@@ -39,9 +39,11 @@ export type Tier = 'Elite' | 'High' | 'Medium' | 'Low' | 'Unknown';
 export type AssistedBy = 'claude-code' | 'kiro' | 'amazon-q' | 'copilot' | null;
 export type SyncStatus = 'pending' | 'syncing' | 'ok' | 'rate-limited' | 'token-not-configured' | 'error';
 export interface MetricValue { value: number | null; tier: Tier; n: number }
+/** Deployment frequency also carries DORA's ordinal phrase for the rate; surfaces lead with it. */
+export interface DeployFreqValue extends MetricValue { band: string | null }
 export interface Split<T> { all: T; ai: T; human: T }
 export interface DoraMetrics {
-  deploymentFrequency: Split<MetricValue & { perDay: number | null; deployments: number }>;
+  deploymentFrequency: Split<DeployFreqValue & { perDay: number | null; deployments: number }>;
   leadTime: Split<MetricValue & { p95: number | null; mean: number | null; codingHours: number | null; reviewHours: number | null }>;
   changeFailureRate: Split<MetricValue & { reverts: number; hotfixes: number; incidents: number; failures: number }>;
   mttr: Split<MetricValue>;
@@ -60,9 +62,14 @@ export interface DoraPrRow {
 }
 export interface DoraOverviewRow {
   repo: string; status: SyncStatus; lastSyncedAt: string | null; mergedPrs: number; aiParticipationPct: number | null;
-  df: MetricValue; lt: MetricValue; cfr: MetricValue; mttr: MetricValue;
+  df: DeployFreqValue; lt: MetricValue; cfr: MetricValue; mttr: MetricValue;
 }
-export interface DoraDataSource { deploymentDefinition: string; notes: string[] }
+export interface DoraDataSource {
+  deploymentDefinition: string;
+  notes: string[];
+  /** Published 2024 change-fail-rate values, shown as reference marks since no tier is derivable. */
+  cfrReference?: { tier: Exclude<Tier, 'Unknown'>; pct: number }[];
+}
 // ---- ROI (#14) — mirrors backend/lambdas/api/roi-calc.ts + roi.ts ----
 export interface RoiComponent { valueUsd: number; formulaInputs: Record<string, number | string | null>; note: string }
 export interface Bands { p25: number; p50: number; p90: number }
@@ -95,7 +102,7 @@ export interface RegistryProject {
 }
 export interface DoraProjectRow {
   projectId: string; name: string; costCenter: string | null; repos: string[];
-  dora: { df: MetricValue; lt: MetricValue; cfr: MetricValue; mttr: MetricValue;
+  dora: { df: DeployFreqValue; lt: MetricValue; cfr: MetricValue; mttr: MetricValue;
           aiParticipationPct: number | null; mergedPrs: number } | null;
   tokens: number; estimatedUsd: number;
   usdPerDeployment: number | null; usdPerMergedPr: number | null; notes: string[];
