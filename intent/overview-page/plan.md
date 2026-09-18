@@ -3,10 +3,10 @@
 - **Spec:** ./spec.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Accepted-for:** c55ceb0ed5345bc43a801f1510bd40d80ae5fa9f
+- **Accepted-for:** 22081a45a41077c6f2f0125ce388fffb521d6717
 - **Status:** accepted
 
-`Accepted-for` is the tip of `main` after PR #50 — main was merged into this branch after #50 landed (a re-acceptance; first accepted against `4ea7eb8`). Numbered 23 because
+`Accepted-for` is the tip of `main` after PR #52 (feature-18) — main was merged into this branch after #50 and again after #52 landed (re-acceptances; first accepted against `4ea7eb8`). Numbered 23 because
 the other active session took 22 (`anomaly-key-shape`) and 18 stays reserved for `latency-observability`.
 Whichever of those lands second takes a small mechanical merge in `api-stack.ts`, `main.tsx`, `Layout.tsx`
 and `client.ts`; this chain keeps its additions in separate blocks.
@@ -31,8 +31,8 @@ and `client.ts`; this chain keeps its additions in separate blocks.
 11. `frontend/src/lib/help-content.ts` — `overview.spend/budget/anomalies/movers`.
 12. `frontend/src/styles.css` — `.delta-up`, `.delta-down`.
 
-Non-source riders: `.sdlc/active` (handover from `anomaly-key-shape`, which #50 shipped), `intent/anomaly-key-shape/*` →
-shipped, `intent/projects-roi-followups/*` → shipped (already on main via #50), `intent/overview-page/*`, `CHANGELOG.md`,
+Non-source riders: `.sdlc/active` (handover from `latency-observability`, which #52 shipped), `intent/latency-observability/*` →
+shipped, `intent/overview-page/*`, `CHANGELOG.md`,
 `docs/test-reports/feature-23-overview-page.md` plus its index row.
 
 ## Verification

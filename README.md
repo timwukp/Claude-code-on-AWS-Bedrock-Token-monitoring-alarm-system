@@ -59,6 +59,11 @@ implies; the magnitude depends on a given workload's cache-hit ratio.
   (two inputs, no revenue guesses), then a component breakdown over measured spend and delivery
   metrics, the −19%…+56% experimental bracket instead of an assumed multiplier, an explicit list
   of what the page refuses to compute, and a reference-class budget estimator for a new project
+- **Model-hop latency** — how long the model call itself takes, p50/p95/p99 for end-to-end and time
+  to first token, fleet-wide and per model. Drawn as the full request chain (IDE → gateway →
+  Bedrock → Guardrails → model) in which **only the hops we can actually measure carry a number**;
+  the rest are shown dark with what you would have to instrument to light them up. Latency is
+  reported as a service characteristic only — nothing on the page links it to productivity
 - Cognito sign-in; per-tenant isolation on every request
 
 ### Behind the scenes
@@ -80,7 +85,11 @@ implies; the magnitude depends on a given workload's cache-hit ratio.
   customer-owned labor assumptions; every term is disclosed and refusable (see
   [`docs/ROI_METHODOLOGY.md`](docs/ROI_METHODOLOGY.md)). A configurable per-request dollar
   threshold flags runaway agent loops onto the Anomalies feed
-- **API** — 22 REST endpoints behind a Cognito authorizer, least-privilege IAM per function
+- **Latency read** — a read-only Lambda querying CloudWatch `AWS/Bedrock` (`InvocationLatency`,
+  `TimeToFirstToken`) with native percentile statistics. It grants no table access at all, because
+  these metrics carry no tenant, project or user dimension — which is also why the view is
+  explicitly fleet-wide rather than per project
+- **API** — 23 REST endpoints behind a Cognito authorizer, least-privilege IAM per function
 - **Forensics** — parameterized, tenant-scoped Athena query templates
 - **Integration** — a request-metadata tagging helper for project/user attribution
 - **Audit** — CloudTrail trail; CloudWatch metrics & alarms

@@ -173,6 +173,27 @@ export class ApiStack extends cdk.Stack {
     tables.aggregates.grantReadData(roiFn);
     tables.dora.grantReadData(roiFn);
 
+    // Model-hop latency: reads CloudWatch AWS/Bedrock only — no table grants, since the metrics
+    // carry no tenant dimension and the endpoint returns nothing tenant-specific.
+    const latencyFn = new NodejsFunction(this, 'LatencyFn', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: lambdaEntry('api', 'latency.ts'),
+      projectRoot: BACKEND_ROOT,
+      depsLockFilePath: BACKEND_LOCK,
+      handler: 'handler',
+      memorySize: 512,
+      timeout: cdk.Duration.seconds(20),
+      tracing: lambda.Tracing.ACTIVE,
+      environment: commonEnv,
+      bundling: { minify: true, sourceMap: true },
+    });
+    latencyFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['cloudwatch:GetMetricData', 'cloudwatch:ListMetrics'],
+        resources: ['*'], // Neither action supports resource-level permissions.
+      }),
+    );
+
     // feature-23: Overview — spend vs prior period, daily series, movers; reads PROJDAY + registry.
     const overviewFn = new NodejsFunction(this, 'OverviewFn', {
       runtime: lambda.Runtime.NODEJS_20_X,
@@ -270,6 +291,7 @@ export class ApiStack extends cdk.Stack {
     const roiRes = v1.addResource('roi');
     roiRes.addResource('projects').addMethod('GET', roiInt, opts);
     roiRes.addResource('estimate').addMethod('GET', roiInt, opts);
+    v1.addResource('latency').addMethod('GET', new apigw.LambdaIntegration(latencyFn), opts);
     v1.addResource('overview').addMethod('GET', new apigw.LambdaIntegration(overviewFn), opts);
     v1.addResource('quotas').addMethod('GET', new apigw.LambdaIntegration(quotasFn), opts);
     v1.addResource('governance').addMethod('GET', new apigw.LambdaIntegration(governanceFn), opts);

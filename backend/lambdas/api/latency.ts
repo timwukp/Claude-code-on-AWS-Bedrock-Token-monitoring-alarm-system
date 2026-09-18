@@ -1,0 +1,296 @@
+/**
+ * Latency API — model-hop latency from CloudWatch, plus the observability status of every hop.
+ *
+ *   GET /v1/latency?window=1|7|30
+ *
+ * Scope and honesty, both stated in the payload so the UI cannot overstate them:
+ *  - CloudWatch `AWS/Bedrock` is **account-level**. It carries no project, user or tenant
+ *    dimension, so these numbers are a fleet view, not per-project. Per-project latency needs the
+ *    invocation logs (they do carry it, on streaming records) and is deliberately not in here.
+ *  - `TimeToFirstToken` is published for **streaming** invocations only, so its sample count is
+ *    lower than `InvocationLatency`'s. The difference is the honest coverage figure.
+ *  - The generation segment is `InvocationLatency − TimeToFirstToken` at the same percentile.
+ *    Percentiles are not additive, so it is returned with `derived: true` and must be labelled
+ *    indicative rather than measured.
+ *  - Only the Bedrock hop is observable from our own telemetry. The gateway, Guardrails and
+ *    IDE/CLI hops are reported as `unmeasured` with what would have to be instrumented.
+ */
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import {
+  CloudWatchClient,
+  GetMetricDataCommand,
+  ListMetricsCommand,
+  MetricDataQuery,
+} from '@aws-sdk/client-cloudwatch';
+import { badRequest, ok, serverError } from '../shared/response';
+import { getTenantId } from '../shared/tenant';
+
+const cw = new CloudWatchClient({});
+const NAMESPACE = 'AWS/Bedrock';
+const E2E = 'InvocationLatency';
+const TTFT = 'TimeToFirstToken';
+const WINDOWS = [1, 7, 30] as const;
+const PERCENTILES = ['p50', 'p95', 'p99'] as const;
+const MAX_MODELS = 12;
+
+export type Percentile = (typeof PERCENTILES)[number];
+
+export interface LatencyStat {
+  p50: number | null;
+  p95: number | null;
+  p99: number | null;
+  samples: number | null;
+  /**
+   * Set when CloudWatch returned the window as more than one period bucket, so each percentile is a
+   * sample-count-weighted mean of those buckets rather than one exact percentile over the window.
+   * Absent means the window came back as a single bucket and the percentile is exact.
+   */
+  approximated?: true;
+  derived?: true;
+}
+
+export interface LatencyRow {
+  modelId: string;
+  label: string;
+  e2e: LatencyStat;
+  ttft: LatencyStat;
+  generation: LatencyStat;
+}
+
+export type HopStatus = 'measured' | 'unmeasured';
+
+export interface Hop {
+  id: string;
+  label: string;
+  status: HopStatus;
+  /** Which field of a LatencyRow carries this hop's number, when measured. */
+  metric?: 'ttft' | 'generation';
+  note: string;
+  /** What the customer would have to instrument for an unmeasured hop. */
+  instrument?: string;
+}
+
+/**
+ * The end-to-end chain, with the observability status of each hop. Only the Bedrock hop is
+ * measurable from our own telemetry today; the rest are named so the gap is explicit rather than
+ * silently absent. Kept here (not in the page) so the claim lives with the data that backs it.
+ */
+export function hopModel(): Hop[] {
+  return [
+    {
+      id: 'client',
+      label: 'Developer IDE / CLI',
+      status: 'unmeasured',
+      note: 'Time spent in the agent before and after the model call, plus network and retries. This is the only hop that sees developer-perceived latency.',
+      instrument: "Claude Code OpenTelemetry export. The api_request event carries duration_ms and total_retry_duration_ms; per-request TTFT and task duration exist only in beta trace spans.",
+    },
+    {
+      id: 'gateway',
+      label: 'LLM gateway',
+      status: 'unmeasured',
+      note: 'Queue time and proxy overhead ahead of the Bedrock call.',
+      instrument: 'LiteLLM Prometheus histograms (total, upstream LLM API, gateway overhead, ASGI queue). Do not aggregate the spend-log response_time field: it means end-to-end for non-streaming calls and time-to-first-token for streaming ones.',
+    },
+    {
+      id: 'bedrock-ttft',
+      label: 'Bedrock API → first byte',
+      status: 'measured',
+      metric: 'ttft',
+      note: 'CloudWatch TimeToFirstToken. Published for streaming invocations only.',
+    },
+    {
+      id: 'bedrock-generation',
+      label: 'Model generation (streaming tail)',
+      status: 'measured',
+      metric: 'generation',
+      note: 'InvocationLatency minus TimeToFirstToken at the same percentile. Percentiles are not additive, so treat this segment as indicative.',
+    },
+    {
+      id: 'guardrails',
+      label: 'Bedrock Guardrails',
+      status: 'unmeasured',
+      note: 'Guardrail evaluation time is not broken out by CloudWatch, and AWS does not document whether InvocationLatency includes it.',
+      instrument: 'Call Converse with trace enabled and record guardrailProcessingLatency per assessment. Note that guardrails do not evaluate tool-use payloads.',
+    },
+  ];
+}
+
+const label = (modelId: string): string => modelId.replace(/^(us|eu|apac|global)\./, '');
+
+/** Percentile-wise difference, floored at 0. Null when either side is missing. */
+export function deriveGeneration(e2e: LatencyStat, ttft: LatencyStat): LatencyStat {
+  const diff = (a: number | null, b: number | null): number | null =>
+    a === null || b === null ? null : Math.max(0, a - b);
+  return {
+    p50: diff(e2e.p50, ttft.p50),
+    p95: diff(e2e.p95, ttft.p95),
+    p99: diff(e2e.p99, ttft.p99),
+    samples: ttft.samples,
+    // A segment derived from an approximated input is itself approximated; dropping the flag here
+    // would let the page present the weaker number as the firmer one.
+    ...(e2e.approximated || ttft.approximated ? { approximated: true as const } : {}),
+    derived: true,
+  };
+}
+
+/** One CloudWatch datapoint: the bucket's start timestamp and its value. */
+export interface Point {
+  ts: string;
+  v: number;
+}
+
+/**
+ * Fold every bucket CloudWatch returned into one stat.
+ *
+ * Asking for `Period == the whole window` does **not** guarantee a single datapoint: CloudWatch
+ * aligns buckets to its own boundaries, so a 30-day request came back as a 72,397-sample bucket
+ * plus an 8-sample sliver covering the last few minutes. Reading `Values[0]` under
+ * `ScanBy: TimestampDescending` therefore reported the sliver — 8 samples and a p95 three seconds
+ * off — as the whole month. Sample counts are summed; percentiles are weighted by the count of the
+ * bucket they came from, which is exact for one bucket and an approximation (flagged) for more.
+ * Buckets with no samples are ignored so an empty tail cannot drag a percentile down.
+ */
+export function combineBuckets(series: Map<string, Point[]>, prefix: string): LatencyStat {
+  const counts = series.get(`${prefix}_SampleCount`) ?? [];
+  const total = counts.reduce((sum, c) => sum + c.v, 0);
+  const contributing = counts.filter((c) => c.v > 0).length;
+
+  const weighted = (stat: Percentile): number | null => {
+    const points = series.get(`${prefix}_${stat}`) ?? [];
+    let acc = 0;
+    let weight = 0;
+    for (const p of points) {
+      const count = counts.find((c) => c.ts === p.ts)?.v ?? 0;
+      if (count > 0 && Number.isFinite(p.v)) {
+        acc += p.v * count;
+        weight += count;
+      }
+    }
+    return weight > 0 ? Math.round(acc / weight) : null;
+  };
+
+  return {
+    p50: weighted('p50'),
+    p95: weighted('p95'),
+    p99: weighted('p99'),
+    samples: total > 0 ? total : counts.length > 0 ? 0 : null,
+    ...(contributing > 1 ? { approximated: true as const } : {}),
+  };
+}
+
+/** One MetricDataQuery per (metric, statistic) pair, for the fleet or for one model. */
+function queriesFor(prefix: string, metricName: string, days: number, modelId?: string): MetricDataQuery[] {
+  const metric = {
+    Namespace: NAMESPACE,
+    MetricName: metricName,
+    ...(modelId ? { Dimensions: [{ Name: 'ModelId', Value: modelId }] } : {}),
+  };
+  const period = days * 86_400;
+  return [...PERCENTILES, 'SampleCount'].map((stat) => ({
+    Id: `${prefix}_${stat}`,
+    MetricStat: { Metric: metric, Period: period, Stat: stat },
+    ReturnData: true,
+  }));
+}
+
+async function listModelIds(): Promise<string[]> {
+  const res = await cw.send(new ListMetricsCommand({ Namespace: NAMESPACE, MetricName: E2E }));
+  const ids = (res.Metrics ?? [])
+    .map((m) => m.Dimensions?.find((d) => d.Name === 'ModelId')?.Value)
+    .filter((v): v is string => Boolean(v));
+  return [...new Set(ids)];
+}
+
+export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  try {
+    // Auth only — the tenant claim must be present, but CloudWatch data is account-wide and is
+    // labelled as such in the response rather than pretending to be tenant-scoped.
+    getTenantId(event);
+
+    const windowDays = Number(event.queryStringParameters?.window ?? 7);
+    if (!WINDOWS.includes(windowDays as (typeof WINDOWS)[number])) {
+      return badRequest(`window must be one of ${WINDOWS.join(', ')}`);
+    }
+
+    const end = new Date();
+    const start = new Date(end.getTime() - windowDays * 86_400_000);
+    const modelIds = (await listModelIds()).slice(0, MAX_MODELS);
+
+    const queries: MetricDataQuery[] = [
+      ...queriesFor('fleet_e2e', E2E, windowDays),
+      ...queriesFor('fleet_ttft', TTFT, windowDays),
+    ];
+    modelIds.forEach((id, i) => {
+      queries.push(...queriesFor(`m${i}_e2e`, E2E, windowDays, id));
+      queries.push(...queriesFor(`m${i}_ttft`, TTFT, windowDays, id));
+    });
+
+    const res = await cw.send(
+      new GetMetricDataCommand({
+        StartTime: start,
+        EndTime: end,
+        MetricDataQueries: queries,
+        ScanBy: 'TimestampDescending',
+      }),
+    );
+
+    // Keep every bucket. A window-length period can still be split across CloudWatch's own period
+    // boundaries, and the trailing sliver is tiny — see combineBuckets.
+    const series = new Map<string, Point[]>();
+    for (const r of res.MetricDataResults ?? []) {
+      if (!r.Id) continue;
+      const points = (r.Timestamps ?? []).map((ts, i) => ({
+        ts: new Date(ts).toISOString(),
+        v: (r.Values ?? [])[i],
+      }));
+      series.set(
+        r.Id,
+        points.filter((p) => typeof p.v === 'number' && Number.isFinite(p.v)),
+      );
+    }
+
+    const fleetE2e = combineBuckets(series, 'fleet_e2e');
+    const fleetTtft = combineBuckets(series, 'fleet_ttft');
+    const models: LatencyRow[] = modelIds
+      .map((modelId, i) => {
+        const e2e = combineBuckets(series, `m${i}_e2e`);
+        const ttft = combineBuckets(series, `m${i}_ttft`);
+        return { modelId, label: label(modelId), e2e, ttft, generation: deriveGeneration(e2e, ttft) };
+      })
+      .filter((r) => r.e2e.samples !== null && r.e2e.samples > 0)
+      .sort((a, b) => (b.e2e.p95 ?? 0) - (a.e2e.p95 ?? 0));
+
+    const streamingPct =
+      fleetE2e.samples && fleetTtft.samples ? Math.round((fleetTtft.samples / fleetE2e.samples) * 100) : null;
+
+    return ok({
+      window: windowDays,
+      generatedAt: end.toISOString(),
+      source: 'CloudWatch AWS/Bedrock (InvocationLatency, TimeToFirstToken)',
+      scope: 'aws-account',
+      scopeNote:
+        'Account-level. CloudWatch publishes no project, user or tenant dimension for these metrics, so this is a fleet view. Per-project latency requires the invocation logs.',
+      fleet: { e2e: fleetE2e, ttft: fleetTtft, generation: deriveGeneration(fleetE2e, fleetTtft) },
+      models,
+      hops: hopModel(),
+      coverage: {
+        e2eSamples: fleetE2e.samples,
+        ttftSamples: fleetTtft.samples,
+        streamingPct,
+        note:
+          streamingPct === null
+            ? 'No invocations in this window.'
+            : `${fleetTtft.samples} of ${fleetE2e.samples} invocations were streaming (${streamingPct}%); non-streaming calls publish no time-to-first-token.`,
+      },
+      percentileNote:
+        'CloudWatch computes each percentile inside its own period bucket. Where a window came back as more than one bucket the percentile is a sample-count-weighted mean of them and is flagged `approximated`; an unflagged percentile is exact for the window.',
+      caveat:
+        'Service-side latency of the model call. It says nothing about developer productivity — no evidence links the two.',
+    });
+  } catch (err) {
+    const message = (err as Error).message;
+    if (message.includes('tenant claim')) return badRequest(message);
+    console.error('latency: failed', err);
+    return serverError('Could not read latency metrics');
+  }
+};
