@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** 4ea7eb88c2907d0bd9b5a410c81a153803c7c5a0
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the current tip of `main`, which is this branch's merge base — the value the sdlc
 gate compares against `git merge-base origin/main HEAD`. This chain is stacked on nothing: the defect

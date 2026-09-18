@@ -6,6 +6,38 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Added — model-hop latency, with the chain drawn honestly rather than drawn complete
+- **`GET /v1/latency?window=1|7|30`** and a `/latency` page. p50/p95/p99 plus sample counts for
+  end-to-end `InvocationLatency` and `TimeToFirstToken`, fleet-wide and per `ModelId`, read from
+  CloudWatch `AWS/Bedrock`. Percentiles come from CloudWatch's own statistics rather than being
+  recomputed from datapoints we fetched.
+- **`LatencyFn` is granted `cloudwatch:GetMetricData` + `cloudwatch:ListMetrics` and nothing else** —
+  no table access of any kind, because these metrics carry no tenant, project or user dimension. That
+  same absence is why the response and the page both state the scope is account-level and fleet-wide;
+  per-project latency needs the invocation logs and is **not** built here.
+- **Only two of the five hops in the request chain are measurable, and the page says so structurally,
+  not in a footnote.** `hopModel()` is the single definition of the chain (developer IDE/CLI → LLM
+  gateway → Bedrock time-to-first-byte → Bedrock streaming → Guardrails) and of each hop's
+  observability. Measured hops carry a number and proportional width; unmeasured hops are drawn dark,
+  carry no number, and name what you would have to instrument (Claude Code OpenTelemetry export,
+  LiteLLM Prometheus histograms, Converse `trace.guardrailProcessingLatency`). A hop marked
+  `unmeasured` is forbidden from carrying a metric and a unit test asserts it, so sizing a dark hop
+  later would require deleting a test.
+- **The generation segment is `e2e − ttft` per percentile and is labelled `derived` everywhere it
+  appears.** Percentile arithmetic is not valid arithmetic; the shape is useful and the label is the
+  only thing keeping the number from being a fabrication.
+- **Percentiles say whether they are exact.** CloudWatch computes each percentile inside its own
+  period bucket, and a window-length period does not guarantee a single bucket back. Where several
+  come back they are collapsed to a sample-count-weighted mean and flagged `approximated`; an
+  unflagged value is exact for the window. Observed live: 7 days returns one bucket, 30 days does not.
+- **Streaming coverage is disclosed at the number**, because non-streaming calls publish no
+  time-to-first-token at all, so its sample count is legitimately lower than end-to-end's.
+- **No productivity claim anywhere on the page or in the payload.** The research behind this feature
+  found no surviving evidence linking per-request latency to developer output, so latency is reported
+  as a service characteristic only. Evidence: `docs/research-latency-measurement.md`.
+- 21 new cases in `backend/lambdas/api/latency.test.ts` over the three pure functions
+  (`deriveGeneration`, `combineBuckets`, `hopModel`). API endpoint count 22 → 23.
+
 ### Fixed — every security alert we had ever written was unreachable from the feed built to show it
 - **The anomalies table had one reader and two writers that disagreed about its primary key, on both
   halves.** `anomaly-response/index.ts` wrote `pk = TENANT#<tenant>#ANOMALY` with a bare

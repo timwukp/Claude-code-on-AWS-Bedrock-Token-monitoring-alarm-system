@@ -13,6 +13,7 @@ import { GovernancePage } from './pages/GovernancePage';
 import { AnomaliesPage } from './pages/AnomaliesPage';
 import { DoraPage } from './pages/DoraPage';
 import { RoiPage } from './pages/RoiPage';
+import { LatencyPage } from './pages/LatencyPage';
 
 configureAuth();
 
@@ -24,6 +25,9 @@ const PAGE_META: Record<string, { title: string; sub: string; windows?: readonly
   '/anomalies': { title: 'Anomalies & Alerts', sub: 'Automated detection and response feed', windows: [7, 30, 90, 'mtd'] },
   '/dora': { title: 'DORA Metrics', sub: 'Delivery performance per repo — humans + AI coding assistants', windows: [7, 30, 90] },
   '/roi': { title: 'AI ROI', sub: 'Break-even first — DORA ROI model over measured cost and delivery, disclosed assumptions, honest brackets', windows: [30, 90] },
+  // No `windows` key: the page owns its own picker, because the latency windows are 1/7/30 rather
+  // than the shell's 7/30/90/mtd, and it pairs them with a percentile control in the same toolbar.
+  '/latency': { title: 'Model-hop Latency', sub: 'Bedrock service time across the end-to-end chain — measured hops only, fleet-wide' },
 };
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -47,6 +51,7 @@ function App() {
           <Route path="/anomalies" element={<Shell><AnomaliesPage /></Shell>} />
           <Route path="/dora" element={<Shell><DoraPage /></Shell>} />
           <Route path="/roi" element={<Shell><RoiPage /></Shell>} />
+          <Route path="/latency" element={<Shell><LatencyPage /></Shell>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
