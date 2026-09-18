@@ -56,8 +56,11 @@ def guess_source(finding: dict, repo_root: str) -> str | None:
     cand = os.path.join(repo_root, hint)
     if hint and os.path.isfile(cand):
         return cand
-    # Fall back to keyword match on the page/summary against filenames.
-    words = re.findall(r"[a-z]{4,}", (finding.get("page", "") + " " + finding.get("summary", "")).lower())
+    # Fall back to keyword match. `suspected_source` is usually prose, not a path ("shared
+    # currency formatting helper in frontend"), so it feeds the keywords too — scoring only
+    # page+summary sends every /projects finding to projects.ts regardless of its subject.
+    text = " ".join((finding.get("page", ""), finding.get("summary", ""), hint)).lower()
+    words = set(re.findall(r"[a-z]{4,}", text))
     best, best_score = None, 0
     for d in SEARCH_DIRS:
         base = os.path.join(repo_root, d)
@@ -72,11 +75,25 @@ def guess_source(finding: dict, repo_root: str) -> str | None:
 
 
 def extract_diff(text: str) -> str | None:
+    """Pull the first unified diff out of the agent's reply.
+
+    Handles a fence the model never closed. A max-token stop truncates mid-reply, so the
+    closing ``` never arrives — requiring it would discard an otherwise-complete diff and
+    make stream_text's salvage path dead code for the one failure mode it exists for."""
     m = re.search(r"```(?:diff)?\s*(--- a/.*?)```", text, re.DOTALL)
     if m:
         return m.group(1).rstrip() + "\n"
-    if text.lstrip().startswith("--- a/"):
-        return text.rstrip() + "\n"
+    # Unterminated fence (truncated reply) — take everything from the first file header on.
+    m = re.search(r"(?:```(?:diff)?\s*)?(--- a/.*)", text, re.DOTALL)
+    if m:
+        body = m.group(1).rstrip()
+        # Drop a trailing partial hunk line the truncation cut mid-way: a unified diff line
+        # must start with ' ', '+', '-', '@' or '\'. Anything else at the tail is debris.
+        lines = body.split("\n")
+        while lines and not (lines[-1][:1] in (" ", "+", "-", "@", "\\") or lines[-1] == ""):
+            lines.pop()
+        body = "\n".join(lines).rstrip()
+        return body + "\n" if body.startswith("--- a/") else None
     return None
 
 
@@ -140,7 +157,12 @@ Here is the source that most likely contains the bug ({rel}):
 ```
 
 Root-cause it and output a MINIMAL unified diff that fixes it. The diff MUST apply against {rel}
-(use `--- a/{rel}` / `+++ b/{rel}` headers). Output analysis, then the diff in a ```diff block."""
+(use `--- a/{rel}` / `+++ b/{rel}` headers).
+
+Output the ```diff block FIRST, then your analysis after it. (Order matters: if you are cut off by
+a token limit, the diff must already be complete — analysis is the part that can be safely lost.)
+If {rel} is the wrong file, or the fix is architectural rather than a local edit, say so in one
+line and output NO diff instead of guessing."""
         try:
             resp = client.invoke_harness(
                 harnessArn=args.harness_arn,
@@ -166,7 +188,13 @@ Root-cause it and output a MINIMAL unified diff that fixes it. The diff MUST app
         f.write(f"## Bug-Fix Agent — {applied}/{len(findings)} finding(s) patched\n\n")
         f.write("\n\n".join(summaries) + "\n")
     print(f"\n— applied {applied}/{len(findings)} fixes; wrote {args.out}")
-    return 0 if applied else 2
+    # "Nothing applicable to patch" is a RESULT, not a tool failure. Exiting non-zero here runs
+    # under `bash -e` in the workflow, so it aborted the step before its own `git add` / "produced
+    # no applicable source patch" branch — making that branch dead code — and before the Comment
+    # on PR, stall-detector and fuse steps that own the red verdict and the actionable message.
+    # Redness for unfixable findings is the stall detector's job (two zero-progress rounds);
+    # reserve a non-zero exit for a genuine failure of this tool.
+    return 0
 
 
 if __name__ == "__main__":

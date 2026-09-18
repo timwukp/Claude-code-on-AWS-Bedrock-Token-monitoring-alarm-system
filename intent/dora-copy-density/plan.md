@@ -3,11 +3,17 @@
 - **Spec:** ./spec.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Accepted-for:** 9274c7f3364dad806a35002ae463f0f4823d4691
+- **Accepted-for:** 37ae499f358b38d54caa678ad6448736e4e5cad1
 - **Status:** accepted
 
-`Accepted-for` is the tip of `main` after PR #42 (canonical DORA labels) landed, which is this
-branch's merge base. Nothing is stacked: #39, #40, #41 and #42 are all merged.
+`Accepted-for` is the tip of `main` after PR #44 (Athena attribution parity, feature-17) landed,
+which is this branch's merge base once `main` is merged in. Nothing is stacked: #39, #40, #41, #42
+and #44 are all merged. The branch was originally cut from `9274c7f` (post-#42) and re-bound here
+after #44 merged, because the sdlc gate requires `Accepted-for` to equal the current merge base.
+
+Bookkeeping deliberately left out of this PR: `intent/athena-attribution-parity/*` still reads
+`accepted` on `main` even though #44 shipped it. Flipping it here would put files from another
+chain into this PR for no functional reason, so feature-18's PR closes it out.
 
 ## Files changed
 
