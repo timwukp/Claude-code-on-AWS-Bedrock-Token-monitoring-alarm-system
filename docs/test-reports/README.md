@@ -19,6 +19,7 @@ results. One report per feature (mapped to a GitHub issue / PR).
 | Project cost attribution × DORA join | — | #39 | [feature-13](./feature-13-project-cost-attribution.md) | PASS |
 | AI-coding ROI page (cost × DORA × manpower) | — | #40 | [feature-14](./feature-14-roi-page.md) | PASS |
 | Canonical DORA labels (say what is measured) | — | TBD | [feature-15](./feature-15-dora-canonical-labels.md) | PASS |
+| Athena attribution parity (Full view sees the profile tier) | — | TBD | [feature-17](./feature-17-athena-attribution-parity.md) | PASS |
 
 Each report records: scope, unit-test results, build/synth gates, real-AWS validation evidence,
 any defect found+fixed during validation, and a verdict. Reports are written before opening the
