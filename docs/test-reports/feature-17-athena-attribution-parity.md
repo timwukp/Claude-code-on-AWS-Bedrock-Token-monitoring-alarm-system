@@ -1,7 +1,7 @@
 # Feature 17 — Athena attribution parity (the Full project view sees the profile tier)
 
 - **Chain:** `intent/athena-attribution-parity/` · **Branch:** `fix/athena-attribution-parity`
-  off `main@9274c7f` · **PR:** TBD
+  off `main@9274c7f` · **PR:** #44
 - **Origin:** qa run on PR #43 — **F-1101 HIGH** (Full view 99.97% `untagged` vs 20 attributed
   projects in Fast) and **F-1102 LOW** (no thousands separator in currency). Both pre-date #43.
 - **Verdict:** PASS — see the live before/after and the residue accounting below.
