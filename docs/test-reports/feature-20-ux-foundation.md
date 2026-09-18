@@ -8,8 +8,9 @@
   the tile anatomy, the help panel, empty states, the chart theme and the dark plane. Four chains
   follow (time range · overview · ROI/Cost tables · settings/format).
 - **Date:** 2026-09-18
-- **Verdict:** PASS on gates and the local authenticated render; live validation is recorded below at
-  this PR's queue turn.
+- **Verdict:** PASS — gates, local authenticated render, CI (all six checks green) and the live dev
+  validation below. qa raised one HIGH that this PR caused and fixed in a follow-up commit (see Live
+  validation), and one LOW owned by feature-18.
 
 ## Three things this report has to say plainly
 
@@ -38,7 +39,7 @@
 | `frontend/src/lib/model-names.ts` | new — `parseModelId`, `mergeModelRows` |
 | `frontend/src/charts/theme.ts` | new — validated palette (dark + light), colour-per-entity map, grid/axis/tick/tooltip/legend props, mark specs |
 | `frontend/src/styles.css` | rewritten on tokens; dark default, `data-theme="light"` opt-in; `.kpi-*`, `.help-*`, `.empty-state`, Recharts chrome overrides; weight 650 retired; native controls inherit font |
-| `frontend/src/components/Layout.tsx` | grouped nav with icons (incl. a `Latency` slot for feature-18), wordmark, footer; mounts help; `Kpi` → `KpiTile` wrapper with label→help bridge; `Panel` `helpId` |
+| `frontend/src/components/Layout.tsx` | grouped nav with icons, wordmark, footer (the `timer` glyph is included for feature-18's Latency entry, which adds its own nav item together with its route); mounts help; `Kpi` → `KpiTile` wrapper with label→help bridge; `Panel` `helpId` |
 | `frontend/src/auth/LoginGate.tsx` | stray unstyled `Sign out` removed |
 | `frontend/src/main.tsx` | `useLocation`; `/usage` alias; `*` → `/` |
 | `frontend/src/pages/UsagePage.tsx` | chart adopts the theme (flat fills, solid hairline grid, entity colours); KPI accents follow the same entities |
@@ -76,8 +77,18 @@ focus returns to the ⓘ. Verified programmatically. Rail at 1440 px; modal with
 
 ## Live validation (dev)
 
-_To be filled at queue turn:_ served hash; all routes 0 console/page errors; `.kpi` counts equal the
-baseline (4/4/3/4/3/6/8); shell emoji 0; one Sign out; screenshots against the 2026-09-18 baseline set.
+- PR #46's qa run synced this branch's build to dev — served bundle `index-DK7unYvX.js`. Authenticated
+  Playwright pass (owner's session, 1440×900) on the served site: all seven routes 0 console/page
+  errors; `.kpi` counts 4/4/4/3/6/8/3 (Usage/Costs/Governance/Anomalies/DORA/ROI/Projects) equal the
+  baseline; shell emoji 0; ⓘ present on 24 tiles (0 on ROI, whose labels are project names); keyboard
+  flow verified live (Enter opens, focus inside, Esc closes, focus returns).
+- CI qa (8 pages, login PASS, 0 console errors, 0 failed requests; cross-page totals reconcile; earlier
+  findings F-1001 and F-201 confirmed fixed/holding; the #44 DORA crash not reproduced) raised:
+  - **F-1401 HIGH — caused by this PR, fixed here:** the nav carried a `Latency` entry ahead of the
+    route that feature-18 adds, so it redirected to `/`. The entry is removed in the follow-up commit;
+    feature-18 adds nav item and route together. The `timer` glyph stays for it.
+  - **F-1402 LOW — not this PR's:** `fmtTokens` prints `1260.91M` / `16298.32M` without separators
+    (recurrence of F-1201). `format.ts` is deliberately outside this chain; feature-18 owns the fix.
 
 ## Accessibility
 

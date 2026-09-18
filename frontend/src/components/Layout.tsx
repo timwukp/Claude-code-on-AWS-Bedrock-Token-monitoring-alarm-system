@@ -30,7 +30,6 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: '/dora', label: 'DORA metrics', icon: 'rocket' },
       { to: '/roi', label: 'AI ROI', icon: 'trend' },
-      { to: '/latency', label: 'Latency', icon: 'timer' },
     ],
   },
 ];
