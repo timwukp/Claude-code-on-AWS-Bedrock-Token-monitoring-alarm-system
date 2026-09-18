@@ -106,6 +106,7 @@ REST API with a Cognito authorizer. Routes (illustrative):
 | `GET /v1/projects/registry/defaults` · `PUT …` (admin) | org-wide ROI assumption defaults | `REGISTRY#META` item in `tums-tenants` |
 | `GET /v1/roi/projects?window=30\|90` | per-project ROI: component breakdown, break-even, unit economics, reference bands, kill-fast signal, refusals | `PROJDAY` rollups + `tums-dora` + registry assumptions |
 | `GET /v1/roi/estimate?reference=&prsPerMonth=` | reference-class budget band + projected break-even for a new project | 90-day history of the chosen reference project |
+| `GET /v1/latency?window=1\|7\|30` | model-hop latency: p50/p95/p99 end-to-end + time to first token, fleet and per model, plus the hop-observability model | CloudWatch `AWS/Bedrock` (`InvocationLatency`, `TimeToFirstToken`) |
 
 **Multi-tenancy**: every request is scoped by a `tenantId` claim in the JWT. Aggregates and
 Athena queries are filtered by tenant; tenant isolation is enforced in the API layer and in
@@ -159,6 +160,33 @@ IAM/Athena workgroup boundaries. See `docs/MULTI_TENANCY.md` (skeleton) for the 
 - **Glue Data Catalog** + **Athena** (OpenX JSON SerDe) make logs queryable. A curated Parquet
   layer (produced by the Fargate ETL) reduces scan cost.
 - **Retention** is governed by S3 lifecycle + optional Object Lock per the customer's audit policy.
+
+### 3.6 Latency read (CloudWatch metrics, no data plane of its own)
+
+`GET /v1/latency` is the only read path in the system that touches **no** table. It queries
+CloudWatch `GetMetricData` against the `AWS/Bedrock` namespace for `InvocationLatency` (the whole
+model call) and `TimeToFirstToken` (the streaming prefix), asking CloudWatch for `p50`/`p95`/`p99`
+and `SampleCount` directly rather than computing percentiles from datapoints we fetched. `ListMetrics`
+enumerates the `ModelId` dimension for the per-model table, capped at 12 series.
+
+Three design consequences worth stating, because each is a limit rather than a feature:
+
+- **No tenant dimension exists on these metrics**, so `LatencyFn`'s IAM is `cloudwatch:GetMetricData`
+  + `cloudwatch:ListMetrics` on `*` and nothing else, and the endpoint is honest that it reports an
+  account-level fleet view. Per-project latency is a different source entirely — the invocation logs
+  — and is not built.
+- **CloudWatch computes each percentile inside its own period bucket.** Asking for a period equal to
+  the whole window does not guarantee one bucket back. Where several come back, the response
+  collapses them to a sample-count-weighted mean and flags the value `approximated`; an unflagged
+  percentile is exact for the window. In practice a 7-day window returns one bucket and a 30-day
+  window does not.
+- **The observability of each hop is data, not page copy.** `hopModel()` in
+  `backend/lambdas/api/latency.ts` is the single definition of the five-hop chain (IDE/CLI → gateway
+  → Bedrock TTFB → Bedrock streaming → Guardrails) and of which two hops are measurable. The page
+  renders that array, so the claim lives with the data that backs it; a hop marked `unmeasured` is
+  structurally forbidden from carrying a metric, and the unit tests assert it. The generation segment
+  is `e2e − ttft` per percentile and is flagged `derived`, because percentile arithmetic is not valid
+  arithmetic and the label is the only thing keeping the number from being a fabrication.
 
 ---
 
