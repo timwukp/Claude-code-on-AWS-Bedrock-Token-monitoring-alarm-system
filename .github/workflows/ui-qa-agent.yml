@@ -28,7 +28,12 @@ permissions:
 env:
   AWS_REGION: us-east-1
   # Account ID comes from a repo secret (Settings → Secrets → Actions → AWS_ACCOUNT_ID),
-  # so no account number is committed to this public repo.
+  # so no account number is committed to this public repo — which is true, and was not
+  # enough. Being a secret masks it in the job LOG; it does not mask it in anything this
+  # workflow POSTs to the GitHub API. The agents interpolate it into S3 URIs and then
+  # narrate those URIs in their own output, so every string they produce is scrubbed by
+  # .github/scripts/redact.js before it can reach a comment body. Read that file before
+  # adding any step that publishes agent text.
   AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
   # Harness names come from repo variables (Settings → Secrets and variables → Actions → Variables),
   # so no environment-specific resource ids are committed to this public repo.
@@ -199,6 +204,11 @@ jobs:
         with:
           script: |
             const fs = require('fs');
+            // Every string this step interpolates is written by a remote agent, and a body
+            // POSTed from here never passes GitHub's log-masking filter. See
+            // .github/scripts/redact.js for the incident this guards against.
+            const { redact, findSecrets } =
+              require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/redact.js`);
             const read = (p) => fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '';
             let report = {};
             try { report = JSON.parse(read('qa-report.json')); } catch {}
@@ -216,15 +226,41 @@ jobs:
             const recBlock = rec.length
               ? `\n### 🔁 Prior findings re-verified\n| ID | Finding | Status |\n|---|---|---|\n${recRows}`
               : '';
-            const body = [
+            const header = [
               `## ${icon} UI QA Agent — ${findings.length} finding(s)`,
               `**Target:** \`${target}\` · **Overall:** ${report.overall || 'n/a'} · **Auto-fix rounds:** ${rounds}`,
               findings.length ? `\n| Severity | Page | Finding |\n|---|---|---|\n${rows}` : '\nNo blocking issues found. 🎉',
               recBlock,
+            ].join('\n');
+            const detail = [
               bugfix ? `\n<details><summary>🔧 Bug-Fix Agent</summary>\n\n${bugfix}\n</details>` : '',
               `\n<details><summary>Full agent output</summary>\n\n\`\`\`\n${read('qa-output.txt').slice(-3000)}\n\`\`\`\n</details>`,
-              `\n---\n*Powered by [AgentCore Harness](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness.html) — UI Test Agent + Bug-Fix Agent · screenshots in S3 \`pr-${prNum}/\`*`,
             ].join('\n');
+            const footer =
+              `\n---\n*Powered by [AgentCore Harness](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness.html) — UI Test Agent + Bug-Fix Agent · screenshots in S3 \`pr-${prNum}/\`*`;
+
+            // One choke point, then an assertion on the FINAL string. Calling a redactor
+            // is not the control; proving the posted body is clean is. Each fallback drops
+            // the dirtiest section rather than posting it, and the last one cannot be dirty
+            // because it interpolates nothing an agent wrote.
+            let body = redact(header + detail + footer);
+            let residue = findSecrets(body);
+            if (residue.length) {
+              core.warning(`Redaction left ${residue.map(r => r.label).join(', ')} in the ` +
+                `agent-output sections — withholding them from the PR comment.`);
+              body = redact(header) +
+                `\n\n> ⚠️ The agent-output sections were withheld: they still matched a ` +
+                `secret pattern after redaction. Read the (log-masked) job output instead.` +
+                footer;
+              residue = findSecrets(body);
+            }
+            if (residue.length) {
+              core.error(`Redaction left ${residue.map(r => r.label).join(', ')} in the ` +
+                `findings table itself — posting a header only.`);
+              body = `## ${icon} UI QA Agent — ${findings.length} finding(s)\n\n` +
+                `> ⚠️ This comment was reduced to its header: the agent's own text still ` +
+                `matched a secret pattern after redaction. Read the (log-masked) job output.`;
+            }
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner, repo: context.repo.repo, body,

@@ -200,8 +200,22 @@ jobs:
         with:
           script: |
             const fs = require('fs');
+            // The review is written by an LLM reading this repository and its environment, so
+            // it is untrusted output: it can echo any value it saw. A body POSTed from here
+            // never passes GitHub's log-masking filter — see .github/scripts/redact.js for the
+            // incident that established this. Scrub, then assert on the final string.
+            const { redact, findSecrets } =
+              require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/redact.js`);
             let review = 'Review not available.';
             try { review = fs.readFileSync('/tmp/sdlc-review.md', 'utf8'); } catch (e) {}
+            review = redact(review);
+            const residue = findSecrets(review);
+            if (residue.length) {
+              core.warning(`Redaction left ${residue.map(r => r.label).join(', ')} in the ` +
+                `SDLC review — withholding its text from the PR comment.`);
+              review = '> ⚠️ The review text was withheld: it still matched a secret pattern ' +
+                'after redaction. Read the (log-masked) job output instead.';
+            }
             const body = [
               '## 🤖 AI-Native SDLC review (advisory)',
               '',

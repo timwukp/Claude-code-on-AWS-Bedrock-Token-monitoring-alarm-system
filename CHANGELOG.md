@@ -6,6 +6,24 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Security — the QA agents' own output no longer reaches a PR comment unscrubbed
+- **A workflow-authored comment is not covered by GitHub's secret masking.** Masking scrubs the
+  runner's *log stream*; a body that `actions/github-script` builds in JavaScript and hands to
+  `issues.createComment` goes straight to the REST API and never passes that filter. The UI QA agent
+  narrates its own uploads (`published report to s3://token-monitor-qa-reports-<id>/pr-43/…`), the
+  workflow embedded that narration verbatim in a "Full agent output" block, and this repository is
+  public — so the account id was published on every QA run while the job log, where the same string
+  appeared correctly as `token-monitor-qa-reports-***`, made it look contained. 40 comments across
+  nine pull requests were affected; each has been deleted and reposted with the value masked.
+- **New `.github/scripts/redact.js`, and both comment sinks now go through it.** One shared pattern
+  list (account ids, access keys, secret keys, GitHub tokens, Anthropic keys, JWTs), AWS's published
+  example accounts deliberately exempt. `ui-qa-agent.yml` scrubs the QA and bug-fix agents' output;
+  `sdlc-gate.yml` scrubs the LLM-authored advisory review, which is the same class of untrusted text.
+- **The control is the assertion, not the call.** Each step re-checks the *final* body with
+  `findSecrets()` and, if anything survived, drops the agent-authored sections rather than posting
+  them — falling back last to a header that interpolates nothing an agent wrote. A redactor that is
+  merely invoked is one nobody notices has stopped working.
+
 ### Changed — UX foundation: one visual system, a help panel, a dark plane
 - **Design tokens.** Type scale (11–28 px, four weights), spacing scale, semantic colours, chart
   chrome and eight validated series slots, all in `styles.css`; every rule reads from them. The
