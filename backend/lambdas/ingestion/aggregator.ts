@@ -11,6 +11,7 @@ import { computeModelCost, normalizeModelId } from '../api/cost-calc';
 import {
   PROFILE_PK, ProfileCacheItem, loadAttributionMaps, listProfiles, putProfile,
 } from '../shared/project-registry';
+import { anomalyPk, anomalySk } from '../shared/anomaly-key';
 
 const s3 = new S3Client({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -299,10 +300,11 @@ function priceRecordUsd(modelId: string, input: number, output: number, cacheRea
 }
 
 /**
- * Surface runaway requests on the existing Anomalies feed (#14). NOTE the key shape follows the
- * READER (api/anomalies.ts: pk=TENANT#<t>, begins_with(sk,'ANOMALY#')) — the anomaly-response
- * writer uses pk=TENANT#<t>#ANOMALY, which that reader can never return (pre-existing mismatch,
- * documented in the feature-14 test report). Deterministic sk (requestId) → idempotent re-puts.
+ * Surface runaway requests on the existing Anomalies feed (#14). Keys come from
+ * shared/anomaly-key, which is now the single definition for both writers and the reader — the
+ * mismatch this comment used to document (anomaly-response wrote a partition api/anomalies.ts never
+ * queried) is fixed there rather than worked around here. The requestId discriminator keeps the sort
+ * key deterministic, so a re-processed batch re-puts the same item instead of duplicating the alert.
  */
 async function writeRunawayAnomalies(hits: RunawayHit[]): Promise<void> {
   if (!ANOMALIES_TABLE || hits.length === 0) return;
@@ -311,8 +313,8 @@ async function writeRunawayAnomalies(hits: RunawayHit[]): Promise<void> {
       await ddb.send(new PutCommand({
         TableName: ANOMALIES_TABLE,
         Item: {
-          pk: `TENANT#${h.tenant}`,
-          sk: `ANOMALY#${h.timestamp}#ai-spend-runaway#${h.requestId}`,
+          pk: anomalyPk(h.tenant),
+          sk: anomalySk(h.timestamp, 'ai-spend-runaway', h.requestId),
           severity: 'WARNING',
           type: 'ai-spend-runaway',
           message: `Single request ${h.requestId} cost ~$${h.estimatedUsd.toFixed(2)} (model ${h.modelId}, project ${h.projectId}) — exceeds the $${RUNAWAY_THRESHOLD_USD} per-request threshold. Justified long task or runaway loop? Review the session.`,

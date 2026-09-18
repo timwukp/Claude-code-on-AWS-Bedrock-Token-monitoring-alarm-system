@@ -3,6 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { IAMClient, AttachRolePolicyCommand, AttachUserPolicyCommand } from '@aws-sdk/client-iam';
 import { decideContainment } from './containment';
+import { anomalyPk, anomalySk } from '../shared/anomaly-key';
 
 const sns = new SNSClient({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -106,13 +107,15 @@ async function raise(
   }));
 
   if (!ANOMALIES_TABLE) return;
-  // sk sorts newest-first when queried with ScanIndexForward:false; suffix keeps it unique.
-  const sk = `${eventTime}#${details.type}#${details.sourceIp}`;
+  // Keys come from shared/anomaly-key so they match what GET /v1/anomalies queries. They did not
+  // before: this wrote pk=TENANT#<t>#ANOMALY with an unprefixed sk, which that reader's
+  // `pk = :pk AND begins_with(sk, 'ANOMALY#')` could never return — so these security alerts were
+  // written and then invisible on the feed built to show them.
   await ddb.send(new PutCommand({
     TableName: ANOMALIES_TABLE,
     Item: {
-      pk: `TENANT#${tenant}#ANOMALY`,
-      sk,
+      pk: anomalyPk(tenant),
+      sk: anomalySk(eventTime, details.type, details.sourceIp),
       severity,
       type: details.type,
       message: details.message,

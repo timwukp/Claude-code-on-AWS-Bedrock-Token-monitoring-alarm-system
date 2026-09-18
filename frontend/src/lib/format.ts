@@ -8,8 +8,22 @@
 export const fmtUsd = (n: number): string =>
   `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export const fmtTokens = (n: number): string =>
-  n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2)}M` : n >= 1_000 ? `${(n / 1_000).toFixed(1)}k` : String(n);
+/** Token counts: "842" / "12.3k" / "9.38M" / "16.22B" / "1.04T".
+ *
+ * Scaling runs to T, not just M (qa F-1201 and five later recurrences: a cache-read total rendered
+ * as "16215.23M" — four digits of mantissa, no separator). Stopping at any one unit only moves that
+ * bug three orders up and waits, so every tier a cumulative counter can reach is covered. The
+ * locale is pinned for the same reason `fmtUsd` pins it — the rest of the page states figures in
+ * en-US form, so a browser default would disagree with itself. */
+export const fmtTokens = (n: number): string => {
+  const scaled = (v: number, unit: string): string =>
+    `${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${unit}`;
+  if (n >= 1e12) return scaled(n / 1e12, 'T');
+  if (n >= 1_000_000_000) return scaled(n / 1_000_000_000, 'B');
+  if (n >= 1_000_000) return scaled(n / 1_000_000, 'M');
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+};
 
 /** Axis-tick variant: hides the origin label — a lone '0' floating under a chart reads as a
  * stray character (recurring QA finding); standard practice is to omit the origin tick. */
