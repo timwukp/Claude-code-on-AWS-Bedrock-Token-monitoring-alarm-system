@@ -79,7 +79,7 @@ describe('computeRoi', () => {
     const r = roi(agg({ mergedPrs: 0, deployments: 0, cfrPct: null, mttrHours: null, weeklyMergedPrs: [] }), assume());
     expect(r.roiPct).toBeNull();
     expect(r.paybackMonths).toBeNull();
-    expect(r.refusals.join(' ')).toMatch(/nothing shipped in this window/);
+    expect(r.refusals.join(' ')).toMatch(/nothing shipped in this window from this project/);
     expect(r.value.timeSaved.valueUsd).toBeGreaterThan(0); // the component is still disclosed
     expect(r.investment.aiSpend.valueUsd).toBeGreaterThan(0);
     expect(r.breakEven.hoursPerMonth).not.toBeNull();
