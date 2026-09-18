@@ -3,6 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { ok, serverError } from '../shared/response';
 import { getTenantId } from '../shared/tenant';
+import { ANOMALY_SK_PREFIX, anomalyPk } from '../shared/anomaly-key';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = process.env.ANOMALIES_TABLE!;
@@ -19,7 +20,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       new QueryCommand({
         TableName: TABLE,
         KeyConditionExpression: 'pk = :pk AND begins_with(sk, :skPrefix)',
-        ExpressionAttributeValues: { ':pk': `TENANT#${tenantId}`, ':skPrefix': 'ANOMALY#' },
+        // Built from shared/anomaly-key, the same module every writer uses — a literal here is how
+        // the anomaly-response writer's keys came to be unreadable by this query.
+        ExpressionAttributeValues: { ':pk': anomalyPk(tenantId), ':skPrefix': ANOMALY_SK_PREFIX },
         ScanIndexForward: false, // newest first
         Limit: 100,
       }),
