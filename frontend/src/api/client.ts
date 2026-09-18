@@ -128,7 +128,18 @@ export interface LatencyStat {
   /** Computed as e2e − ttft. Percentiles are not additive, so this is indicative only. */
   derived?: true;
 }
-export interface LatencyRow { modelId: string; label: string; e2e: LatencyStat; ttft: LatencyStat; generation: LatencyStat }
+export interface LatencyRow {
+  modelId: string;
+  label: string;
+  /** Set when `modelId` was an application inference profile id, not a model id. */
+  via?: 'inference-profile';
+  profileName?: string;
+  /** Absent when the profile fans out to several models — the API refuses to pick one. */
+  resolvedModel?: string;
+  e2e: LatencyStat;
+  ttft: LatencyStat;
+  generation: LatencyStat;
+}
 export interface LatencyHop {
   id: string; label: string; status: 'measured' | 'unmeasured';
   metric?: 'ttft' | 'generation'; note: string; instrument?: string;
