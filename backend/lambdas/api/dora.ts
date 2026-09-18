@@ -5,7 +5,7 @@
  *   POST   /v1/dora/repos            {repo}        [admin] register a repo and kick a sync
  *   DELETE /v1/dora/repos/{owner}/{name}           [admin] remove a repo and all its data
  *   POST   /v1/dora/repos/{owner}/{name}/sync      [admin] sync now (async collector invoke)
- *   GET    /v1/dora/metrics?repo=&window=          4 DORA metrics (all / AI / human) + timeline
+ *   GET    /v1/dora/metrics?repo=&window=          the 4 measurable DORA metrics (all / AI / human) + timeline
  *   GET    /v1/dora/overview?window=               one row per repo, for the comparison table
  *
  * "Deployment" = PR merged to the default branch (none of the tracked repos use the GitHub
@@ -19,7 +19,7 @@ import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { accepted, badRequest, created, forbidden, notFound, ok, serverError } from '../shared/response';
 import { getTenantId } from '../shared/tenant';
 import { isAdmin } from '../shared/admin';
-import { CFR_BANDS_2024, computeDora, DoraMetrics, MetricValue } from '../dora/dora-calc';
+import { BANDS_2024_REFERENCE, CFR_BANDS_2024, computeDora, DoraMetrics, MetricValue } from '../dora/dora-calc';
 import { newRepoItem } from '../dora/collector';
 import { GhRepo, GithubHttpError, createGithubClient } from '../dora/github-client';
 import { loadGithubToken } from '../dora/secret';
@@ -68,7 +68,10 @@ export interface OverviewRow {
   lastSyncedAt: string | null;
   mergedPrs: number;
   aiParticipationPct: number | null;
-  /** `band` is DORA's ordinal deployment-frequency phrase; the table leads with it. */
+  /**
+   * `band` is DORA's ordinal deployment-frequency phrase, carried for the definitions disclosure.
+   * The table itself shows the measured rate — see `DATA_SOURCE.notes`.
+   */
   df: MetricValue & { band: string | null };
   lt: MetricValue;
   cfr: MetricValue;
@@ -76,28 +79,44 @@ export interface OverviewRow {
 }
 
 /**
- * What the page must disclose about its own measurements. Every claim here is checkable against
- * `docs/research-dora-presentation.md`; the tier note in particular is DORA's own caveat, not a
- * softened version of it.
+ * What the page must disclose about its own measurements — one claim per note, so a surface can
+ * render them as a list without a reader having to separate a definition from a measurement.
+ * Checkable against `docs/research-dora-presentation.md` and `docs/research-dora-card-copy.md`;
+ * where the two disagree the latter is later and wins.
  */
 const DATA_SOURCE = {
+  /**
+   * One dora.dev surface, cited by URL. DORA's own surfaces disagree with each other about these
+   * labels — its definitions guide, its Quick Check result cards and that tool's question objects
+   * ship three different label sets — so attributing our wording to "DORA" generically would be
+   * unfalsifiable (`docs/research-dora-card-copy.md` §2).
+   */
+  canonicalSource: 'https://dora.dev/guides/dora-metrics/',
   deploymentDefinition:
     'A PR merged to the default branch counts as one deployment. This is a PROXY: DORA counts '
     + 'deployments that reach production, and its own reference tooling warns that deriving '
     + 'deployment metrics from merge events skews them.',
   notes: [
-    'DORA has had five metrics since 2024. Deployment rework rate (deployments that were unplanned fixes) needs a signal we do not collect, so it is absent rather than estimated.',
-    'Deployment frequency is reported as DORA\'s ordinal band (e.g. "between once per day and once per week"); the per-day rate is the supporting arithmetic. A rate of exactly 1/day is assigned to the hour-to-day band.',
-    'Lead time = first commit on the PR → merge (median). Coding = first commit → PR opened; review = PR opened → merge. DORA\'s window starts at the same point but ends in production, so this is the first part of it.',
-    'Change failures = PRs titled/labelled revert or hotfix (or on hotfix/patch branches) + issues labelled bug/incident. Anything not named that way is not counted, so "0" means nothing matched the detectors, not that nothing broke.',
+    'DORA has had five metrics since 2024, not four.',
+    'Deployment rework rate is not collected: it needs a signal marking a deployment as planned or corrective, and nothing in this pipeline records one.',
+    'Deployment frequency is reported as the measured rate. The 2024 bands are dated reference only — DORA\'s current instrument scores software delivery performance on a continuous scale against an industry mean and uses no band as a label.',
+    'Where DORA\'s ordinal phrase is shown, a rate of exactly 1/day is assigned to the hour-to-day band; the published buckets leave that seam open.',
+    'Change lead time = first commit on the PR → merge (median). Coding = first commit → PR opened; review = PR opened → merge.',
+    'DORA\'s change lead time starts at the same commit but ends in production, so this measures the first part of its window.',
+    'Change failures = PRs titled/labelled revert or hotfix (or on hotfix/patch branches) + issues labelled bug/incident.',
+    'A change fail rate of 0% means nothing matched those detectors, not that nothing broke.',
     'Recovery time = median of hotfix PR open→merge and incident issue open→close. It is NOT DORA\'s "failed deployment recovery time", which counts only impairments caused by a change reaching production.',
-    'AI-assisted = a Co-Authored-By AI trailer on any commit, a bot author, or a Claude Code / Kiro / Amazon Q / Copilot marker in the PR body.',
     'Incident issues cannot be attributed to a PR, so they count only in the "All" cohort.',
-    'Tier badges are the 2024 State of DevOps bands. DORA applies them per application or service, calls them annual survey benchmarks rather than grades, and the 2025 report replaced them with team archetypes — so treat them as a reference point, not a maturity level.',
-    'No tier is shown for change failure rate: the 2024 values are non-monotonic across the bands (Elite 5%, High 20%, Medium 10%, Low 40%), because the levels are clusters over all metrics at once and cannot be derived from one metric alone.',
+    'AI-assisted = a Co-Authored-By AI trailer on any commit, a bot author, or a Claude Code / Kiro / Amazon Q / Copilot marker in the PR body.',
+    'No DORA metric covers AI-authored share, so the AI-assisted figure is this product\'s own measure of pull requests carrying an AI co-author trailer — not a claim about how much code an assistant wrote.',
+    'The 2024 bands are the State of DevOps performance levels. DORA applies them per application or service as annual survey benchmarks rather than grades, and the 2025 report replaced them with team archetypes.',
+    'No band is derivable for change fail rate: the 2024 values are non-monotonic across the levels (Elite 5%, High 20%, Medium 10%, Low 40%), because the levels are clusters over all metrics at once.',
+    'No benchmark is shown against these numbers. The defensible comparison is a percentile against the benchmark distribution, and that distribution is not published in a form this product can use.',
   ],
-  /** Reference marks for change failure rate, since a tier is not derivable from it. */
+  /** Reference marks for change fail rate, since a band is not derivable from it. */
   cfrReference: CFR_BANDS_2024,
+  /** The 2024 boundaries in words, for the definitions disclosure. Excludes change fail rate. */
+  bandReference: BANDS_2024_REFERENCE,
 };
 
 export const toSummary = (r: RepoItem): RepoSummary => ({
