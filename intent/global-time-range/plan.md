@@ -26,7 +26,7 @@ this branch is rebased and `Accepted-for` re-bound — a re-acceptance, stated i
 9. `frontend/src/pages/GovernancePage.tsx` — `EmptyState` for loading/error.
 10. `frontend/src/styles.css` — picker and caption rules.
 
-Non-source riders: `.sdlc/active` (handover from `ux-foundation`), `intent/global-time-range/*`,
+Non-source riders: `.sdlc/active` (handover from `ux-foundation`), `intent/ux-foundation/*` → shipped (my own predecessor; the other session flips its two in feature-18), `intent/global-time-range/*`,
 `CHANGELOG.md`, `docs/test-reports/feature-21-global-time-range.md` plus its index row. Predecessor
 chains are left as they are on `main`.
 
