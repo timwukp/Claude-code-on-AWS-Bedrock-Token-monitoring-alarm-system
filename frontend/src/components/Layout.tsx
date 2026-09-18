@@ -5,6 +5,8 @@ import { HelpId, helpIdForLabel } from '../lib/help-content';
 import { HelpButton, HelpPanel, HelpProvider } from './HelpPanel';
 import { Icon, IconName } from './Icon';
 import { KpiTile } from './KpiTile';
+import { TimeRangePicker } from './TimeRangePicker';
+import type { Window } from '../lib/time-range';
 
 type NavItem = { to: string; label: string; icon: IconName; end?: boolean };
 type NavGroup = { heading: string; items: NavItem[] };
@@ -35,8 +37,10 @@ const NAV_GROUPS: NavGroup[] = [
 ];
 
 /** App shell: dark sidebar with grouped navigation, top bar, content area, and the help rail. */
-export function Layout({ title, subtitle, user, children }: {
-  title: string; subtitle?: string; user?: string | null; children: ReactNode;
+export function Layout({ title, subtitle, user, windows, fixedCaption, children }: {
+  title: string; subtitle?: string; user?: string | null;
+  /** Windows the current page can honour; `[]` = fixed period (caption only); omit = no picker. */
+  windows?: readonly Window[]; fixedCaption?: string; children: ReactNode;
 }) {
   return (
     <HelpProvider>
@@ -79,6 +83,7 @@ export function Layout({ title, subtitle, user, children }: {
               <h1>{title}</h1>
               {subtitle && <div className="sub">{subtitle}</div>}
             </div>
+            {windows && <TimeRangePicker supported={windows} fixedCaption={fixedCaption} />}
           </header>
           <div className="content">{children}</div>
         </div>

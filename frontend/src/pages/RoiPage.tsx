@@ -7,6 +7,8 @@ import { api, Bands, ProjectRoiConfig, RoiMethodology, RoiProjectRow } from '../
 import { Kpi, Panel } from '../components/Layout';
 import { RoiModelDiagram } from '../components/RoiModelDiagram';
 import { fmtSignedUsd, fmtUsd, fmtUsdK } from '../lib/format';
+import { chrome, gridProps, MARK, role, series, tooltipProps, xAxisProps, yAxisProps } from '../charts/theme';
+import { useTimeRange } from '../lib/time-range';
 
 /**
  * AI-coding ROI (#14) — DORA's published ROI model over this portal's measured data
@@ -32,7 +34,8 @@ function bandText(b: Bands | null, fmt: (n: number) => string, weeks?: number): 
 }
 
 export function RoiPage() {
-  const [windowDays, setWindowDays] = useState<30 | 90>(90);
+  const range = useTimeRange([30, 90]);
+  const windowDays = range.window as 30 | 90;
   const [rows, setRows] = useState<RoiProjectRow[] | null>(null);
   const [methodology, setMethodology] = useState<RoiMethodology | null>(null);
   const [orgDefaults, setOrgDefaults] = useState<ProjectRoiConfig>({});
@@ -126,12 +129,7 @@ export function RoiPage() {
       </Panel>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
-        <div className="seg" aria-label="Window">
-          {([30, 90] as const).map((w) => (
-            <button key={w} className={windowDays === w ? 'active' : ''} onClick={() => setWindowDays(w)}>{w} days</button>
-          ))}
-        </div>
-        <span className="muted" style={{ fontSize: 12 }}>7-day ROI is deliberately unavailable — annualizing one week is indefensible.</span>
+        <span className="muted" style={{ fontSize: 12 }}>{range.label} · 7-day ROI is deliberately unavailable — annualizing one week is indefensible.</span>
         {adminMsg && <span className="muted" style={{ fontSize: 13 }}>{adminMsg}</span>}
         <button className="btn-sm" onClick={() => setRefreshKey((k) => k + 1)} style={{ marginLeft: 'auto' }}>Refresh</button>
       </div>
@@ -183,14 +181,14 @@ export function RoiPage() {
                  desc={`Annualized from ${r.window} days (×${r.annualizationFactor}) · assumptions: ${p.assumptionsSource}${r.paybackMonths != null ? ` · payback ~${r.paybackMonths} months` : ''}${p.killFast.flagged ? ' · ⚠ review recommended' : ''}`}>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={waterfall} margin={{ left: 12, right: 12, top: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
-                <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} />
-                <YAxis tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={false} tickFormatter={(n: number) => fmtUsdK(n)} width={64} />
-                <Tooltip contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 13 }} formatter={(v: number) => fmtSignedUsd(v)} />
-                <ReferenceLine y={0} stroke="#94a3b8" />
-                <Bar dataKey="usd" name="annual USD">
+                <CartesianGrid {...gridProps()} />
+                <XAxis dataKey="name" {...xAxisProps()} minTickGap={0} />
+                <YAxis {...yAxisProps((n: number) => fmtUsdK(n))} width={64} />
+                <Tooltip {...tooltipProps()} formatter={(v: number) => fmtSignedUsd(v)} />
+                <ReferenceLine y={0} stroke={chrome().axis} />
+                <Bar dataKey="usd" name="annual USD" {...MARK.bar} radius={[4, 4, 4, 4]}>
                   {waterfall.map((w, i) => (
-                    <Cell key={i} fill={w.usd >= 0 ? (w.kind === 'value' ? '#16a34a' : '#94a3b8') : '#dc2626'} />
+                    <Cell key={i} fill={w.usd >= 0 ? (w.kind === 'value' ? role('positive') : role('subtotal')) : role('negative')} />
                   ))}
                 </Bar>
               </BarChart>
@@ -259,17 +257,17 @@ export function RoiPage() {
                desc="Bubble = |ROI%| where a composite was computable; projects whose ROI is refused plot at the base size. Red = review recommended (2 consecutive out-of-sample hot-cold weeks). A signal, never a gate.">
           <ResponsiveContainer width="100%" height={300}>
             <ScatterChart margin={{ left: 12, right: 20, top: 10, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
-              <XAxis type="number" dataKey="x" name="monthly spend" tickFormatter={(n: number) => fmtUsdK(n)} tick={{ fontSize: 12, fill: '#64748b' }} />
-              <YAxis type="number" dataKey="y" name="merged PRs" tick={{ fontSize: 12, fill: '#64748b' }} allowDecimals={false} />
+              <CartesianGrid {...gridProps()} vertical />
+              <XAxis type="number" dataKey="x" name="monthly spend" tickFormatter={(n: number) => fmtUsdK(n)} {...xAxisProps()} />
+              <YAxis type="number" dataKey="y" name="merged PRs" {...yAxisProps()} allowDecimals={false} />
               <ZAxis type="number" dataKey="z" range={[80, 500]} />
-              <Tooltip contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 13 }}
+              <Tooltip {...tooltipProps()}
                        formatter={(v: number, n: string) => n === 'monthly spend' ? fmtUsd(v) : v}
                        labelFormatter={() => ''} />
               <Scatter data={withSpend.map((p) => ({
                 x: p.monthlySpendUsd, y: p.mergedPrs, z: Math.abs(p.roi.roiPct ?? 0) + 20, name: p.name, flagged: p.killFast.flagged,
               }))}>
-                {withSpend.map((p, i) => <Cell key={i} fill={p.killFast.flagged ? '#dc2626' : '#6366f1'} fillOpacity={0.7} />)}
+                {withSpend.map((p, i) => <Cell key={i} fill={p.killFast.flagged ? role('negative') : series()[6]} fillOpacity={0.7} stroke={chrome().surface} strokeWidth={2} />)}
               </Scatter>
             </ScatterChart>
           </ResponsiveContainer>

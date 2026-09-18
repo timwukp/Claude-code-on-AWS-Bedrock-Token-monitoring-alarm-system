@@ -159,6 +159,12 @@ a { color: var(--primary-fg); }
 .topbar .sub { font-size: var(--fs-base); color: var(--text-dim); margin-top: 2px; }
 .content { padding: var(--sp-6); max-width: 1280px; width: 100%; }
 
+/* ---------- Global time range (top bar) ---------- */
+.range-picker { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.range-caption { font-size: var(--fs-sm); color: var(--text-dim); white-space: nowrap; }
+.seg.seg-sm button { padding: 4px var(--sp-3); font-size: var(--fs-sm); }
+.seg button:disabled { color: var(--text-dim); opacity: 0.45; cursor: not-allowed; }
+
 /* ---------- KPI tiles ---------- */
 .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--sp-4); margin-bottom: var(--sp-5); }
 .kpi {

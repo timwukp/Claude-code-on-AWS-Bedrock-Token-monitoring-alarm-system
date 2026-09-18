@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { Kpi, Panel } from '../components/Layout';
+import { EmptyState } from '../components/EmptyState';
 import { fmtUsd } from '../lib/format';
 
 /**
@@ -17,8 +18,8 @@ export function GovernancePage() {
     api.governance().then(setData).catch((e) => setError(String(e))).finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="empty"><span className="spinner" /></div>;
-  if (error) return <div className="empty"><div className="big">⚠️</div>Failed to load: {error}</div>;
+  if (loading) return <EmptyState kind="loading" title="Loading budget status…" />;
+  if (error) return <EmptyState kind="error" title="Budget status could not be loaded" detail={error} action={{ label: 'Retry', onClick: () => location.reload() }} />;
 
   const b = data?.budget;
   const e = data?.enforcement ?? {};

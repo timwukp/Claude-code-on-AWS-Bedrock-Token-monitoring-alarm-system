@@ -6,6 +6,19 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Changed — one time range for the whole portal
+- **A single 7 / 30 / 90 days / month-to-date control in the top bar**, carried in the URL (`?window=`)
+  so a link reproduces the view. Usage, DORA, ROI and Anomalies follow it; every page states the range
+  it is actually showing. Pages that cannot honour a window coerce to the nearest one they can and say
+  so ("month to date not available here"); Cost, Projects and Governance show their fixed period as a
+  caption instead of a control.
+- **Usage** now has 30/90-day and month-to-date views (daily buckets past two weeks). **Anomalies**
+  filters its feed to the range and its empty state offers a way out (widen the window, or go to the
+  guardrails) instead of an emoji.
+- **DORA and ROI charts on the validated theme**: human/AI cohorts in blue/orange (the old pair failed
+  the colour-vision check), the ROI waterfall on the diverging pair, hairline solid grids, one
+  chrome definition instead of four copies.
+- No API or computed-value change.
 ### Security — the QA agents' own output no longer reaches a PR comment unscrubbed
 - **A workflow-authored comment is not covered by GitHub's secret masking.** Masking scrubs the
   runner's *log stream*; a body that `actions/github-script` builds in JavaScript and hands to
