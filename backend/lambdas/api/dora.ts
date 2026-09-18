@@ -334,7 +334,7 @@ async function overview(event: APIGatewayProxyEvent): Promise<APIGatewayProxyRes
       lastSyncedAt: r.lastSyncedAt ?? null,
       mergedPrs: m.sample.mergedPrs,
       aiParticipationPct: m.aiParticipationPct,
-      df: { ...m.deploymentFrequency.all, band: m.deploymentFrequency.all.band },
+      df: { ...pick(m.deploymentFrequency.all), band: m.deploymentFrequency.all.band },
       lt: pick(m.leadTime.all),
       cfr: pick(m.changeFailRate.all),
       mttr: pick(m.mttr.all),

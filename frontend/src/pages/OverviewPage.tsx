@@ -11,14 +11,10 @@ import { useTimeRange, Window } from '../lib/time-range';
  * The landing page: four headline tiles and "what changed", each linking to the page that owns the
  * detail. Spend and movers come from /v1/overview (PROJDAY, priced with the Cost page's rate card, so
  * the three pages reconcile); budget from AWS Budgets; anomalies filtered client-side to the window;
- * the delivery headline is a median across tracked repositories.
+ * the delivery headline is the organisation total — merges to main per week summed across synced
+ * repositories — so it is directly comparable with the per-repository rows on the DORA page.
  */
 
-const median = (xs: number[]): number | null => {
-  if (!xs.length) return null;
-  const s = [...xs].sort((a, b) => a - b); const m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-};
 const detectedAt = (a: any): string => String(a.detectedAt ?? (typeof a.sk === 'string' ? a.sk.replace(/^ANOMALY#/, '').slice(0, 24) : ''));
 const doraWindow = (w: Window): 7 | 30 | 90 => (w === 'mtd' ? 30 : w);
 
@@ -56,8 +52,9 @@ export function OverviewPage() {
   const compare = ov ? `vs ${ov.window.priorFrom.slice(5)} – ${ov.window.priorTo.slice(5)}` : `vs prior ${range.label.toLowerCase().replace('last ', '')}`;
   const bState = budgetState(budget);
   const dfValues = (repos ?? []).map((r) => r.df.value).filter((v): v is number => typeof v === 'number');
-  const dfMedian = median(dfValues);
+  const dfTotal = dfValues.length ? dfValues.reduce((a, b) => a + b, 0) : null;
   const syncedRepos = (repos ?? []).filter((r) => r.status === 'ok').length;
+  const topRepo = (repos ?? []).filter((r) => typeof r.df.value === 'number').sort((a, b) => (b.df.value ?? 0) - (a.df.value ?? 0))[0];
 
   return (
     <>
@@ -85,10 +82,10 @@ export function OverviewPage() {
           definition={`${range.label.toLowerCase()} · spend-runaway guard + Cost Anomaly Detection`} />
 
         <KpiTile label="Deployment frequency" helpId="dora.deployment-frequency" link={{ to: '/dora', label: 'DORA' }}
-          state={doraErr ? 'error' : repos === null ? 'loading' : dfMedian == null ? 'empty' : 'ready'}
+          state={doraErr ? 'error' : repos === null ? 'loading' : dfTotal == null ? 'empty' : 'ready'}
           stateText={doraErr ? 'DORA data unavailable' : 'no synced repositories'}
-          value={dfMedian != null ? `${dfMedian.toFixed(1)} / week` : ''}
-          definition={`median across ${syncedRepos} synced ${syncedRepos === 1 ? 'repository' : 'repositories'} · merges to main, last ${doraWindow(range.window)} days${range.window === 'mtd' ? ' (DORA has no month-to-date view)' : ''}`}
+          value={dfTotal != null ? `${dfTotal.toFixed(1)} / week` : ''}
+          definition={`merges to main across ${syncedRepos} synced ${syncedRepos === 1 ? 'repository' : 'repositories'}, last ${doraWindow(range.window)} days${topRepo ? ` · busiest: ${topRepo.repo.split('/').pop()} at ${(topRepo.df.value ?? 0).toFixed(1)} / week` : ''}${range.window === 'mtd' ? ' (DORA has no month-to-date view)' : ''}`}
           chip={<span className="badge neutral">proxy</span>} />
       </div>
 

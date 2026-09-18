@@ -48,11 +48,19 @@
 ## Local authenticated render (live dev API, endpoint not yet deployed)
 | Route | Result |
 |---|---|
-| `/` | h1 "Overview"; nav Overview · Usage · Cost · By project · Budgets & guardrails · Anomalies · DORA metrics · AI ROI; Budget `$0.00` "On track" (forecast $15.34); Anomalies 0 "none detected"; Deployment frequency `0.6 / week` median across 6 synced repositories; Spend tile in explicit error state; movers panel shows an error `EmptyState` with Retry |
+| `/` | h1 "Overview"; nav Overview · Usage · Cost · By project · Budgets & guardrails · Anomalies · DORA metrics · AI ROI; Budget `$0.00` "On track" (forecast $15.34); Anomalies 0 "none detected"; Deployment frequency = org total merges/week across 6 synced repositories with the busiest repo named (first cut showed a *median* of 0.6/week beside DORA's 6.3/week for the selected repo — both correct, not reconcilable by a reader; qa flagged it and the headline was changed to the total); Spend tile in explicit error state; movers panel shows an error `EmptyState` with Retry |
 | `/?window=7` | Deployment frequency `0.9 / week`, captions follow the range |
 | `/usage` | the former landing page, unchanged (4 KPIs) |
 | `/nope` | redirects to `/` (Overview) |
 | console / page errors | only the failed `/v1/overview` fetches (expected until deploy) |
+
+## qa on this PR
+- **HIGH Overview data fails to load** — expected until the API deploy (see verdict); the tile and panel degrade as designed.
+- **HIGH /latency** — feature-18's, expected.
+- **MEDIUM Deployment frequency 0.6 vs 6.3** — a real presentation flaw (median across repos beside a single-repo headline); fixed by switching the tile to the org total and naming the busiest repo.
+- **LOW Anomalies "Show last 90 days" stale at 90** — feature-21's `AnomaliesPage.tsx`, outside this plan; queued for the next follow-ups chain.
+- **LOW Projects 2-cent drift** — disclosed in-page since #49.
+- The Bug-Fix agent pushed an out-of-scope edit to `dora.ts` (swapping `pick()` for a spread — unrelated to the finding); reverted to `main`'s version, bot commit kept in history.
 
 ## Live validation (dev)
 _At API deploy:_ direct invoke of `OverviewFn` for `window=30`; assert `spend.currentUsd` equals Σ Projects
