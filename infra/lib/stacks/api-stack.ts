@@ -189,8 +189,15 @@ export class ApiStack extends cdk.Stack {
     });
     latencyFn.addToRolePolicy(
       new iam.PolicyStatement({
-        actions: ['cloudwatch:GetMetricData', 'cloudwatch:ListMetrics'],
-        resources: ['*'], // Neither action supports resource-level permissions.
+        actions: [
+          'cloudwatch:GetMetricData',
+          'cloudwatch:ListMetrics',
+          // CloudWatch reports profile-routed traffic under the inference-profile id, so the id has
+          // to be resolved back to a model name for the by-model table to be readable. Read-only,
+          // and the handler degrades to raw ids if it is denied.
+          'bedrock:ListInferenceProfiles',
+        ],
+        resources: ['*'], // None of these actions supports resource-level permissions.
       }),
     );
 
