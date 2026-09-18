@@ -1,11 +1,12 @@
 # Feature 21 — Global time range (one control, URL-synced, every page states its period)
 
 - **Chain:** `intent/global-time-range/` · **Branch:** `feat/global-time-range` off `main@518553f`
-  (post-#46), rebased onto `95e9eca` (post-#47) · **PR:** TBD
+  (post-#46), rebased onto `95e9eca` (post-#47) · **PR:** #48
 - **Origin:** `docs/research-dashboard-ux.md` defect 6 — every page used a different time window with
   no shared control, so cross-page totals disagreed and each page explained why in prose.
 - **Date:** 2026-09-18
-- **Verdict:** PASS on gates and the local authenticated render; live validation recorded at queue turn.
+- **Verdict:** PASS — gates, local authenticated render, CI (all six checks green on `e5b0e30`) and the live
+  dev validation below.
 
 ## Two things this report has to say plainly
 
@@ -60,7 +61,18 @@ No API or computed-value change.
 
 ## Live validation (dev)
 
-_At queue turn:_ same pass against the served bundle after qa deploys the branch; served hash recorded here.
+- PR #48's qa run synced this branch's build to dev — served bundle `index--Xm2Gtjm.js` (contains the
+  coercion caption strings). The same nine-scenario pass as above, run against the served site with the
+  owner's session: identical results, 0 console/page errors, every navigation reached `networkidle`.
+- CI qa (8 pages, login PASS) raised nothing attributable to this PR. Its Bug-Fix agent did push one
+  auto-fix round (`dd1883f`) that changed `ProjectsPage.tsx` — outside this chain — which made the sdlc
+  gate fail with "PR spans two intents"; reverted in `e5b0e30` (file restored byte-for-byte to `main`,
+  the bot commit kept in history) and the finding (F-1703, Projects header vs Athena rows) handed to a
+  follow-up chain off `main`. The re-run patched 0/2 and pushed nothing.
+- Findings carried elsewhere: `/latency` unreachable (expected until feature-18 lands its route);
+  `fmtTokens` ≥ 1000M separators (feature-18); Projects Fast-vs-Full divergence (feature-17 follow-up);
+  ROI diagram refusal text clipped mid-sentence in the DOM (feature-19 component — to be given a full-text
+  fallback in feature-23's ROI rework).
 
 ## Accessibility
 
