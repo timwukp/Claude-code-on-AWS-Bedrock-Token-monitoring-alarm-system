@@ -118,6 +118,29 @@ export interface DoraProjectRow {
   usdPerDeployment: number | null; usdPerMergedPr: number | null; notes: string[];
 }
 
+/** Windows the latency endpoint accepts. Narrower than `Window`: annualising is not the question
+ *  here, and CloudWatch's percentile buckets get coarse well before 90 days. */
+export type LatencyWindow = 1 | 7 | 30;
+export interface LatencyStat {
+  p50: number | null; p95: number | null; p99: number | null; samples: number | null;
+  /** Percentile is a sample-weighted mean of several CloudWatch buckets, not exact for the window. */
+  approximated?: true;
+  /** Computed as e2e − ttft. Percentiles are not additive, so this is indicative only. */
+  derived?: true;
+}
+export interface LatencyRow { modelId: string; label: string; e2e: LatencyStat; ttft: LatencyStat; generation: LatencyStat }
+export interface LatencyHop {
+  id: string; label: string; status: 'measured' | 'unmeasured';
+  metric?: 'ttft' | 'generation'; note: string; instrument?: string;
+}
+export interface LatencyResponse {
+  window: number; generatedAt: string; source: string; scope: string; scopeNote: string;
+  fleet: { e2e: LatencyStat; ttft: LatencyStat; generation: LatencyStat };
+  models: LatencyRow[]; hops: LatencyHop[];
+  coverage: { e2eSamples: number | null; ttftSamples: number | null; streamingPct: number | null; note: string };
+  percentileNote: string; caveat: string;
+}
+
 const repoPath = (repo: string) => repo.split('/').map(encodeURIComponent).join('/');
 
 export const api = {
@@ -154,6 +177,7 @@ export const api = {
     request<{ defaults: ProjectRoiConfig }>('v1/projects/registry/defaults', { method: 'PUT', body: JSON.stringify({ defaults }) }),
   doraOverview: (window: DoraWindow) =>
     request<{ window: number; repos: DoraOverviewRow[]; dataSource: DoraDataSource }>(`v1/dora/overview?window=${window}`),
+  latency: (window: LatencyWindow) => request<LatencyResponse>(`v1/latency?window=${window}`),
   usage: (from?: string, to?: string) =>
     request<{ points: UsagePoint[] }>(
       `v1/usage${from || to ? `?from=${from ?? ''}&to=${to ?? ''}` : ''}`,
