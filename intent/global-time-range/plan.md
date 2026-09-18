@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** 95e9ecab463f99448199fb8642318522cec0c8e9
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #47, the merge base at PR time (first accepted against `518553f`, re-accepted here). The agreed
 queue puts the other session's `latency-observability` (feature-18) ahead of this chain; when it lands

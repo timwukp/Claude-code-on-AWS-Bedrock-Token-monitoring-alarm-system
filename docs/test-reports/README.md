@@ -24,6 +24,7 @@ results. One report per feature (mapped to a GitHub issue / PR).
 | Live ROI model diagram (measured · assumed · refused, per project) | — | #45 | [feature-19](./feature-19-roi-model-diagram.md) | PASS |
 | UX foundation (tokens, icons, tiles, help panel, dark theme) | — | #46 | [feature-20](./feature-20-ux-foundation.md) | PASS |
 | Global time range (one control, URL-synced, every page states its period) | — | #48 | [feature-21](./feature-21-global-time-range.md) | PASS |
+| Projects / ROI follow-ups (F-1706 cent drift, F-1707 refusal scope) | — | TBD | [feature-21b](./feature-21b-projects-roi-followups.md) | PASS |
 
 Each report records: scope, unit-test results, build/synth gates, real-AWS validation evidence,
 any defect found+fixed during validation, and a verdict. Reports are written before opening the
