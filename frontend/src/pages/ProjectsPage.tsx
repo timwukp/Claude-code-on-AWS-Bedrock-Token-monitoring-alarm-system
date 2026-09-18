@@ -21,13 +21,22 @@ function mergeProjectRows(rows: any[]): any[] {
   return [...m.values()].sort((a, b) => b.tokens - a.tokens);
 }
 
-/** Athena result rows → table rows (row 0 is the header). */
-function mapAthenaProjectRows(rows: any[]): any[] {
+/** Athena result rows → table rows (row 0 is the header).
+ *
+ * `names` relabels a row the SQL could only identify by project id: the AIP attribution tier
+ * yields the id (the project_mapping CSV is keyed by requestMetadata project_id, not by profile),
+ * while Fast shows registry names. Without this, one project reads as "Agent Skills Best Practice"
+ * in Fast and "agent-skills" in Full. Applied before the merge so both tiers' rows for a project
+ * collapse into one row rather than sitting side by side under two labels. */
+function mapAthenaProjectRows(rows: any[], names?: Map<string, { name: string; costCenter: string }>): any[] {
   return rows.slice(1).map((r) => {
     const c = r?.Data ?? [];
+    const label = c[0]?.VarCharValue ?? 'untagged';
+    const hit = names?.get(label);
+    const cc = c[1]?.VarCharValue ?? '—';
     return {
-      projectName: c[0]?.VarCharValue ?? 'untagged',
-      costCenter: c[1]?.VarCharValue ?? '—',
+      projectName: hit?.name ?? label,
+      costCenter: cc !== '—' ? cc : (hit?.costCenter ?? '—'),
       users: Number(c[2]?.VarCharValue ?? 0),
       tokens: Number(c[3]?.VarCharValue ?? 0),
       estimatedUsd: Math.round(Number(c[4]?.VarCharValue ?? 0) * 1e6) / 1e6,
@@ -87,8 +96,13 @@ export function ProjectsPage() {
             return {
               tokens: r.totalTokens != null ? Number(r.totalTokens) : null,
               usd: r.totalEstimatedUsd != null ? Number(r.totalEstimatedUsd) : null,
+              // Registry names, reused to relabel AIP-attributed Athena rows (see
+              // mapAthenaProjectRows). This response is already being fetched for the totals.
+              names: new Map((r.projects ?? []).map((p: any) => [
+                String(p.projectId), { name: String(p.projectName ?? p.projectId), costCenter: String(p.costCenter ?? '—') },
+              ])),
             };
-          }).catch(() => ({ tokens: null, usd: null })),
+          }).catch(() => ({ tokens: null, usd: null, names: new Map<string, { name: string; costCenter: string }>() })),
         ]);
         // Athena latency is genuinely variable (measured 18s to several minutes under queue
         // contention). Polling for up to 10 minutes with a visible elapsed timer is honest;
@@ -105,7 +119,7 @@ export function ProjectsPage() {
             // the SQL resolves application-inference-profile ARNs to their underlying model via
             // the registry cache, so both pipelines price identically (F-501 root cause). No
             // proportional scaling — any residual is real and is disclosed in the KPI footer.
-            setRows(mergeProjectRows(mapAthenaProjectRows(res.rows ?? [])));
+            setRows(mergeProjectRows(mapAthenaProjectRows(res.rows ?? [], fastTotals.names)));
             setServedFrom('athena (async, per-model pricing)');
             setApiTotalTokens(fastTotals.tokens);
             setApiTotalUsd(fastTotals.usd);
@@ -185,7 +199,7 @@ export function ProjectsPage() {
       </div>
 
       <Panel title="Usage by project"
-             desc="Attribution precedence per call: ① the project's application inference profile — the call is ROUTED through it, so the invocation log records the profile's ARN as modelId and the aggregator resolves its tums-project tag (config-routed, IAM-enforceable, zero per-call effort); ② requestMetadata.project_id set by the app; ③ identity hint for single-project principals; ④ untagged. Fast = managed DynamoDB rollups (full attribution, incl. the one-time historical treatment). Full = async Athena over the immutable raw logs — live and call-time truth, so it can run slightly ahead of the 15-minute rollups and keeps pre-profile history 'untagged' by design.">
+             desc="Attribution precedence per call: ① the project's application inference profile — the call is ROUTED through it, so the invocation log records the profile's ARN as modelId and the aggregator resolves its tums-project tag (config-routed, IAM-enforceable, zero per-call effort); ② requestMetadata.project_id set by the app; ③ identity hint for single-project principals; ④ untagged. Fast = managed DynamoDB rollups (all four tiers, incl. the one-time historical treatment). Full = async Athena over the immutable raw logs — live, call-time truth, so it can run slightly ahead of the 15-minute rollups. Full resolves tiers ① and ②; it cannot resolve ③, and pre-profile history stays 'untagged' there, because an identity hint and the historical treatment exist only as rollup state and no raw-log field carries them. So expect a larger 'untagged' share in Full — that gap is those two tiers, not lost usage.">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
           <div style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
             {(['fast', 'full'] as const).map((s) => (
