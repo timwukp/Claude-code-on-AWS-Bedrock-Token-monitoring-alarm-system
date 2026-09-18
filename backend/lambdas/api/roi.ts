@@ -50,7 +50,7 @@ const METHODOLOGY = {
     'Survey- or perception-based time savings (METR: devs believed +20% while measured −19%).',
     'A single cross-project productivity multiplier (DORA 2025: AI amplifies existing strengths/weaknesses).',
     'Causal AI-vs-human deltas from observational PR cohorts — run a holdout for causal claims.',
-    'A composite ROI for a window that shipped nothing — with no merged PRs and no deployments '
+    'A composite ROI for a window in which the project\'s linked repositories shipped nothing — no merged PRs and no deployments '
       + 'the value side is assumption-only, so only the measured spend and break-even are shown.',
     'A composite ROI for a project with no staffing of its own configured — borrowing a shared '
       + 'teamSize would claim one team\'s saving once per project. Set it in the drawer below.',

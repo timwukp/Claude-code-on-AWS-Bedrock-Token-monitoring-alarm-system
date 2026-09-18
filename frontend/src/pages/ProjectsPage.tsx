@@ -181,9 +181,12 @@ export function ProjectsPage() {
   // KPIs prefer the authoritative per-model rollup totals (same numbers as the Cost page);
   // the rows' own sums are kept separately so any residual is disclosed, not hidden (F-401).
   const rowsTokens = rows.reduce((s, r) => s + (Number(r.tokens) || 0), 0);
-  const rowsCost   = rows.reduce((s, r) => s + (Number(r.estimatedUsd) || 0), 0);
+  // Sum the rows as a reader would — each value rounded to the cent first — so the disclosed
+  // residual is the one they can reproduce from the table, not an invisible sub-cent drift (F-1706).
+  const rowsCost   = Math.round(rows.reduce((s, r) => s + Math.round((Number(r.estimatedUsd) || 0) * 100), 0)) / 100;
   const totalTokens = apiTotalTokens ?? rowsTokens;
   const totalCost   = apiTotalUsd ?? rowsCost;
+  const centDrift   = apiTotalUsd != null ? Math.round(Math.abs(apiTotalUsd - rowsCost) * 100) / 100 : 0;
 
   return (
     <>
@@ -195,7 +198,9 @@ export function ProjectsPage() {
                ? (source === 'full'
                    ? `Athena rows ${fmtUsd(rowsCost)} vs rollups ${fmtUsd(apiTotalUsd)}${rollupsAsOf ? ` (as of ${rollupsAsOf.slice(11, 16)} UTC)` : ''} — Athena reads raw logs live; rollups refresh every 15 min, so the ${fmtUsd(Math.abs(rowsCost - apiTotalUsd))} difference is traffic since the last rollup`
                    : `rows sum ${fmtUsd(rowsCost)} vs model rollups ${fmtUsd(apiTotalUsd)} — residual ${fmtUsd(Math.abs(apiTotalUsd - rowsCost))} predates per-project tracking`)
-               : `per-model rates — same rate card as the Cost page${rollupsAsOf ? ` · rollups as of ${rollupsAsOf.slice(11, 16)} UTC` : ''}`} />
+               : centDrift > 0
+                 ? `per-model rates — same rate card as the Cost page · rows are shown to the cent, so their sum (${fmtUsd(rowsCost)}) can differ from this total by a few cents${rollupsAsOf ? ` · rollups as of ${rollupsAsOf.slice(11, 16)} UTC` : ''}`
+                 : `per-model rates — same rate card as the Cost page${rollupsAsOf ? ` · rollups as of ${rollupsAsOf.slice(11, 16)} UTC` : ''}`} />
       </div>
 
       <Panel title="Usage by project"

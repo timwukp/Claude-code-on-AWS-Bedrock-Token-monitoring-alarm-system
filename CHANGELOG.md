@@ -35,6 +35,15 @@ are grouped by development milestone rather than strict semver releases.
   of mantissa with no thousands separator.
 - No change to anomaly detection, to the `/v1/anomalies` contract, or to any table, index or GSI.
 
+### Fixed — two qa findings that kept recurring across PRs
+- **By Project (Fast):** the "Total est. cost" foot now discloses that rows are shown to the cent, so
+  their sum can differ from the authoritative rollup total by a few cents (F-1706). The header value
+  is unchanged.
+- **AI ROI:** the "nothing shipped in this window" refusal now says *from this project's linked
+  repositories* — DORA's page shows one selected repository, ROI counts the project's own repos, and
+  the sentence never said so (F-1707). On the model diagram the reason is no longer only a clipped
+  line: the full sentence is printed under the legend and carried as an SVG title.
+
 ### Changed — one time range for the whole portal
 - **A single 7 / 30 / 90 days / month-to-date control in the top bar**, carried in the URL (`?window=`)
   so a link reproduces the view. Usage, DORA, ROI and Anomalies follow it; every page states the range

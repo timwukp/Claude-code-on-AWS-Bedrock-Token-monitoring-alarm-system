@@ -164,8 +164,15 @@ export function RoiModelDiagram({ row }: { row?: RoiProjectRow }) {
       <text x={672} y={362} fontSize={22} fontWeight={700} fill="var(--text)">{roiText}</text>
       <text x={672} y={382} fontSize={10.5} fontStyle={rRoi ? 'italic' : undefined} fill={rRoi ? 'var(--danger)' : 'var(--text-dim)'}>
         {rRoi ? (rRoi.length > 46 ? rRoi.slice(0, 45) + '…' : rRoi) : paybackText}
+        {rRoi && <title>{rRoi}</title>}
       </text>
-      <text x={672} y={398} fontSize={10.5} fill="var(--text-dim)">{beText.length > 48 ? beText.slice(0, 47) + '…' : beText}</text>
+      <text x={672} y={398} fontSize={10.5} fill="var(--text-dim)">{beText.length > 48 ? beText.slice(0, 47) + '…' : beText}<title>{beText}</title></text>
+      {/* A clipped reason is never the only copy: the full sentence is printed under the diagram. */}
+      {rRoi && (
+        <text x={20} y={452} fontSize={10.5} fontStyle="italic" fill="var(--danger)">
+          Why ROI is not computed here: {rRoi.length > 150 ? rRoi.slice(0, 149) + '…' : rRoi}
+        </text>
+      )}
 
       {/* legend + provenance */}
       <g fontSize={10.5} fill="var(--text-dim)">

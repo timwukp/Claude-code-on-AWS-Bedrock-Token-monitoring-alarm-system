@@ -1,7 +1,7 @@
 # Feature 22 — Anomaly table key-shape drift (one key definition, and the rows already written)
 
-- **Chain:** `intent/anomaly-key-shape/` · base `main@de81fb7` (the chain's `Accepted-for`, and its
-  merge base) · **PR:** #50
+- **Chain:** `intent/anomaly-key-shape/` · base `main@4ea7eb8` (post-#49; the chain's `Accepted-for`,
+  and its merge base — first cut at `de81fb7` and re-cut, see below) · **PR:** #50
 - **Origin:** the anomalies feed had never shown an alert, and nothing reported that. Read as
   "no anomalies detected". The `fmtTokens` rider closes **F-1201**, a QA finding that had recurred
   five further times and belonged to no other open plan.
@@ -127,6 +127,28 @@ conforming". Both affected tenants are IAM user principals; they are not named h
   one more legacy-shape row. That is self-healing — re-running the migration's dry run reports it and
   `--apply` repairs it — but it means `0 to rewrite` is a statement about now, not a guarantee, and it
   should be re-checked immediately after the deploy.
+
+## `main` was merged in, and every gate above was re-run on the new base
+
+The first push was built on `de81fb7` (post-#48). #49 landed while this was in review and edited three
+of the same meta files — `.sdlc/active`, `CHANGELOG.md` and this index — so the pull request became
+**conflicting**, and a conflicting PR has no mergeable ref for GitHub to build: **not one check ran, and
+none could.** `main` was merged in to resolve it, taking main's copies of those three files and
+re-applying the handover, the changelog block and the index row on top. A rebase would have been
+tidier history but would have rewritten commits already published under an open PR, so it was not done;
+because the merge makes `4ea7eb8` an ancestor, the merge base — and so the `Accepted-for` binding the
+gate checks — lands there either way.
+
+Two consequences worth stating rather than leaving to be discovered:
+
+- **The chain retired by this handover changed.** #49 shipped `global-time-range` itself, so
+  `.sdlc/active` now moves from `projects-roi-followups`, and it is that chain's three files that go to
+  `shipped` — all three together, since the gate reads the ladder and flipping only `intent.md` fails
+  as "a stage was skipped".
+- **No source file conflicted.** #49 touched none of the seven this change edits, verified by comparing
+  each file's blob at `de81fb7` and `4ea7eb8`. The gates were still re-run in full on the new base
+  rather than assumed to carry over — including the `178 / 19` figure for main alone, which #49 left
+  unchanged despite editing `roi-calc.test.ts`.
 
 ## Leak scan
 

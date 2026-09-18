@@ -276,9 +276,10 @@ export function computeRoi(agg: RoiWindowAggregates, a: RoiAssumptions, opts: Ro
   if (investmentTotal <= 0) refusals.push('ROI not computed: total investment is zero.');
   else if (noShippedOutput) {
     refusals.push(
-      'ROI not computed: nothing shipped in this window (no merged PRs, no deployments), so no '
-      + 'delivery evidence supports a return — only the measured spend and the break-even '
-      + 'threshold below are shown.',
+      'ROI not computed: nothing shipped in this window from this project\'s linked repositories '
+      + '(no merged PRs, no deployments) — other repositories may have shipped, but only this '
+      + 'project\'s own delivery counts here — so no delivery evidence supports a return; only the '
+      + 'measured spend and the break-even threshold below are shown.',
     );
   } else if (immaterialSpend) {
     refusals.push(

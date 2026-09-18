@@ -3,13 +3,21 @@
 - **Spec:** ./spec.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Accepted-for:** de81fb784c1da662ef4ab27721d58d3682946c79
+- **Accepted-for:** 4ea7eb88c2907d0bd9b5a410c81a153803c7c5a0
 - **Status:** accepted
 
 `Accepted-for` is the current tip of `main`, which is this branch's merge base — the value the sdlc
 gate compares against `git merge-base origin/main HEAD`. This chain is stacked on nothing: the defect
 pre-dates every open branch and lives in files no other open plan names, so it lands on its own chain
 off `main`.
+
+The branch was cut at `de81fb7` (post-#48); #49 then landed and edited three of the same meta files —
+`.sdlc/active`, `CHANGELOG.md` and the test-report index — leaving the pull request conflicting, and a
+conflicting PR has no mergeable ref for GitHub to build, so not one check could start. `main` was
+therefore **merged in** rather than the branch rebased: history already published under an open PR is
+not rewritten. That makes `4ea7eb8` an ancestor, so it is now both the merge base and this chain's
+`Accepted-for`. #49 also retired `global-time-range` itself, so the chain this one hands over from is
+`projects-roi-followups`.
 
 ## Files changed
 
@@ -54,9 +62,10 @@ off `main`.
    line of this chain in the frontend; it touches no component and no API type.
 
 ### Non-source riders
-`.sdlc/active` → `anomaly-key-shape` (pointer handover) · `intent/anomaly-key-shape/*` (this chain) ·
-`CHANGELOG.md` · `docs/test-reports/feature-22-anomaly-key-shape.md` plus its index row in
-`docs/test-reports/README.md`.
+`.sdlc/active` → `anomaly-key-shape` (pointer handover) · `intent/projects-roi-followups/*` → shipped
+(all three files together — the gate reads the ladder, so retiring only `intent.md` fails as "a stage
+was skipped") · `intent/anomaly-key-shape/*` (this chain) · `CHANGELOG.md` ·
+`docs/test-reports/feature-22-anomaly-key-shape.md` plus its index row in `docs/test-reports/README.md`.
 
 ## Commit order
 
