@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Bar, BarChart, CartesianGrid, Cell, LineChart, Line, ReferenceLine, ResponsiveContainer,
   Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis,
@@ -6,6 +7,7 @@ import {
 import { api, Bands, ProjectRoiConfig, RoiMethodology, RoiProjectRow } from '../api/client';
 import { Kpi, Panel } from '../components/Layout';
 import { RoiModelDiagram } from '../components/RoiModelDiagram';
+import { EmptyState } from '../components/EmptyState';
 import { fmtSignedUsd, fmtUsd, fmtUsdK } from '../lib/format';
 import { chrome, gridProps, MARK, role, series, tooltipProps, xAxisProps, yAxisProps } from '../charts/theme';
 import { useTimeRange } from '../lib/time-range';
@@ -33,6 +35,27 @@ function bandText(b: Bands | null, fmt: (n: number) => string, weeks?: number): 
   return weeks == null ? '—' : `needs 4+ weeks of history (has ${weeks})`;
 }
 
+type SortKey = 'name' | 'monthlySpendUsd' | 'breakEven' | 'valueUsd' | 'investmentUsd' | 'roiPct';
+function sortValue(p: RoiProjectRow, k: SortKey): number {
+  switch (k) {
+    case 'name': return p.name.toLowerCase().charCodeAt(0) + (p.name.toLowerCase().charCodeAt(1) || 0) / 1000;
+    case 'monthlySpendUsd': return p.monthlySpendUsd;
+    case 'breakEven': return p.roi.breakEven.hoursPerMonth ?? -1;
+    case 'valueUsd': return p.roi.value.totalUsd;
+    case 'investmentUsd': return p.roi.investment.totalUsd;
+    case 'roiPct': return p.roi.roiPct ?? -1e9;
+  }
+}
+const shortRefusal = (p: RoiProjectRow): string => {
+  const r = p.roi.refusals.find((x) => x.toLowerCase().startsWith('roi not computed'));
+  if (!r) return 'not computable';
+  const why = r.replace(/^[^:]*:\s*/, '');
+  return why.startsWith('nothing shipped') ? 'nothing shipped (this project\'s repos)'
+    : why.startsWith('annualized investment is smaller') ? 'spend too small to rate'
+    : why.startsWith('this project has no staffing') ? 'needs its own team size'
+    : why.startsWith('total investment is zero') ? 'no investment' : 'not computable';
+};
+
 export function RoiPage() {
   const range = useTimeRange([30, 90]);
   const windowDays = range.window as 30 | 90;
@@ -47,8 +70,12 @@ export function RoiPage() {
   const [drawerForm, setDrawerForm] = useState<Record<string, string>>({});
   const [adminMsg, setAdminMsg] = useState<string | null>(null);
 
-  // Forward estimator state.
-  const [estRef, setEstRef] = useState('');
+  // One "current project" for the whole page — table row, detail panel, model diagram and
+  // estimator reference — carried in the URL so a link reproduces the view.
+  const [params, setParams] = useSearchParams();
+  const [estRef, setEstRefState] = useState('');
+  const setEstRef = (id: string) => { setEstRefState(id); setParams((q) => { q.set('project', id); return q; }, { replace: true }); };
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'monthlySpendUsd', dir: -1 });
   const [estPrs, setEstPrs] = useState('8');
   const [estOut, setEstOut] = useState<Awaited<ReturnType<typeof api.roiEstimate>> | null>(null);
   const [estErr, setEstErr] = useState<string | null>(null);
@@ -61,13 +88,18 @@ export function RoiPage() {
         if (cancelled) return;
         setRows(r.projects); setMethodology(r.methodology); setOrgDefaults(r.orgDefaults); setIsAdmin(r.isAdmin);
         setError(null);
-        if (!estRef && r.projects.length) setEstRef(r.projects[0].projectId);
+        if (!estRef && r.projects.length) setEstRefState(params.get('project') && r.projects.some((p) => p.projectId === params.get('project')) ? String(params.get('project')) : r.projects[0].projectId);
       })
       .catch((e) => { if (!cancelled) setError(String(e)); });
     return () => { cancelled = true; };
   }, [windowDays, refreshKey]);
 
   const withSpend = useMemo(() => (rows ?? []).filter((p) => p.monthlySpendUsd > 0 || p.mergedPrs > 0), [rows]);
+  const sorted = useMemo(() => [...withSpend].sort((a, b) => sort.dir * (sortValue(a, sort.key) - sortValue(b, sort.key))), [withSpend, sort]);
+  const selected = useMemo(() => withSpend.find((p) => p.projectId === estRef) ?? withSpend[0], [withSpend, estRef]);
+  const toggleSort = (key: SortKey) => setSort((s) => (s.key === key ? { key, dir: (s.dir * -1) as 1 | -1 } : { key, dir: -1 }));
+  const sortCaret = (key: SortKey) => (sort.key === key ? (sort.dir === -1 ? ' ▾' : ' ▴') : '');
+  const ariaSort = (key: SortKey): 'ascending' | 'descending' | 'none' => (sort.key === key ? (sort.dir === -1 ? 'descending' : 'ascending') : 'none');
 
   const saveAssumptions = async (p: RoiProjectRow) => {
     const roi: Record<string, unknown> = {};
@@ -163,9 +195,48 @@ export function RoiPage() {
         </p>
       </Panel>
 
-      {/* ---- ROI component cards ---- */}
-      {withSpend.map((p) => {
-        const r = p.roi;
+      {/* ---- one table, one detail chart (was: one panel + waterfall per project) ---- */}
+      <Panel title="Projects — ROI components" helpId="roi.break-even"
+             desc={`${withSpend.length} projects with spend or merges in the ${range.label.toLowerCase()} · click a row for its waterfall, refusals and assumptions · sort by any column`}>
+        {withSpend.length === 0 ? (
+          <EmptyState kind="empty" title={`No project spend or merges in the ${range.label.toLowerCase()}`} detail="Projects appear once usage is attributed to them or their linked repositories merge a PR." action={{ label: 'How attribution works', to: '/projects' }} />
+        ) : (
+          <table className="data roi-table">
+            <thead>
+              <tr>
+                <th aria-sort={ariaSort('name')}><button className="th-sort" onClick={() => toggleSort('name')}>Project{sortCaret('name')}</button></th>
+                <th className="num" aria-sort={ariaSort('monthlySpendUsd')}><button className="th-sort" onClick={() => toggleSort('monthlySpendUsd')}>Spend / mo{sortCaret('monthlySpendUsd')}</button></th>
+                <th className="num" aria-sort={ariaSort('breakEven')}><button className="th-sort" onClick={() => toggleSort('breakEven')}>Break-even h / mo{sortCaret('breakEven')}</button></th>
+                <th>Evidence</th>
+                <th className="num" aria-sort={ariaSort('valueUsd')}><button className="th-sort" onClick={() => toggleSort('valueUsd')}>Value / yr{sortCaret('valueUsd')}</button></th>
+                <th className="num" aria-sort={ariaSort('investmentUsd')}><button className="th-sort" onClick={() => toggleSort('investmentUsd')}>Investment / yr{sortCaret('investmentUsd')}</button></th>
+                <th className="num" aria-sort={ariaSort('roiPct')}><button className="th-sort" onClick={() => toggleSort('roiPct')}>ROI{sortCaret('roiPct')}</button></th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((p) => {
+                const r = p.roi; const be = r.breakEven; const v = VERDICT_BADGE[be.verdict]; const isSel = selected?.projectId === p.projectId;
+                return (
+                  <tr key={p.projectId} className={isSel ? 'row-selected' : 'row-clickable'} onClick={() => setEstRef(p.projectId)}
+                      tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEstRef(p.projectId); } }}
+                      aria-selected={isSel} aria-label={`Select ${p.name}`}>
+                    <td>{p.name}{p.killFast.flagged && <span className="badge warning" style={{ marginLeft: 6 }}>review</span>}</td>
+                    <td className="num">{fmtUsd(p.monthlySpendUsd)}</td>
+                    <td className="num">{be.hoursPerMonth != null ? `${be.hoursPerMonth.toFixed(1)}${be.pctOfCapacity != null ? ` · ${be.pctOfCapacity.toFixed(1)}%` : ''}` : '—'}</td>
+                    <td><span className={`badge ${v.cls}`}>{v.text}</span></td>
+                    <td className="num">{fmtSignedUsd(r.value.totalUsd)}</td>
+                    <td className="num">{fmtUsd(r.investment.totalUsd)}</td>
+                    <td className="num">{r.roiPct != null ? <strong>{r.roiPct > 0 ? '+' : ''}{r.roiPct}%</strong> : <span className="muted" title={r.refusals.join(' ')}>{shortRefusal(p)}</span>}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </Panel>
+
+      {selected && (() => {
+        const p = selected; const r = p.roi;
         const waterfall = [
           { name: 'Time saved', usd: r.value.timeSaved.valueUsd, kind: 'value' },
           { name: 'Throughput', usd: r.value.throughput.valueUsd, kind: 'value' },
@@ -249,7 +320,7 @@ export function RoiPage() {
             )}
           </Panel>
         );
-      })}
+      })()}
 
       {/* ---- portfolio quadrant (kill-fast view) ---- */}
       {withSpend.length > 1 && (

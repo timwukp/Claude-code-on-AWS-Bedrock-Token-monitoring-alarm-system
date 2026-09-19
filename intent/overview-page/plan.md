@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** 22081a45a41077c6f2f0125ce388fffb521d6717
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #52 (feature-18) — main was merged into this branch after #50 and again after #52 landed (re-acceptances; first accepted against `4ea7eb8`). Numbered 23 because
 the other active session took 22 (`anomaly-key-shape`) and 18 stays reserved for `latency-observability`.
