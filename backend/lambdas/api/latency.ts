@@ -22,10 +22,12 @@ import {
   ListMetricsCommand,
   MetricDataQuery,
 } from '@aws-sdk/client-cloudwatch';
+import { BedrockClient, ListInferenceProfilesCommand } from '@aws-sdk/client-bedrock';
 import { badRequest, ok, serverError } from '../shared/response';
 import { getTenantId } from '../shared/tenant';
 
 const cw = new CloudWatchClient({});
+const bedrock = new BedrockClient({});
 const NAMESPACE = 'AWS/Bedrock';
 const E2E = 'InvocationLatency';
 const TTFT = 'TimeToFirstToken';
@@ -50,8 +52,15 @@ export interface LatencyStat {
 }
 
 export interface LatencyRow {
+  /** Exactly what CloudWatch's `ModelId` dimension held — a model id, or an inference-profile id. */
   modelId: string;
+  /** Display name. For profile-routed rows this is the model behind the profile — see resolveLabel. */
   label: string;
+  /** Set when `modelId` was an application inference profile rather than a model id. */
+  via?: 'inference-profile';
+  profileName?: string;
+  /** The foundation model the profile routes to. Absent when the profile fans out to several. */
+  resolvedModel?: string;
   e2e: LatencyStat;
   ttft: LatencyStat;
   generation: LatencyStat;
@@ -115,7 +124,47 @@ export function hopModel(): Hop[] {
   ];
 }
 
-const label = (modelId: string): string => modelId.replace(/^(us|eu|apac|global)\./, '');
+const stripRegion = (modelId: string): string => modelId.replace(/^(us|eu|apac|global)\./, '');
+
+/**
+ * An application inference profile as far as this endpoint cares: its id (which is what CloudWatch
+ * puts in the `ModelId` dimension for profile-routed traffic), its name, and the distinct
+ * foundation models it routes to.
+ */
+export interface ProfileRef {
+  id: string;
+  name?: string;
+  models: string[];
+}
+
+/**
+ * CloudWatch reports profile-routed invocations under the profile's **id** — an opaque 12-character
+ * string — so a by-model table built straight off the dimension shows rows a reader cannot identify.
+ * This resolves the id back to the model it routes to.
+ *
+ * It refuses to guess in the one case where guessing would be a fabrication: a profile that fans out
+ * to more than one distinct foundation model cannot be attributed to any single one of them, so the
+ * label falls back to the profile's own name and the model field is left unset. A profile we cannot
+ * find at all (deleted since, or the list call failed) keeps its raw id rather than inventing a name.
+ */
+export function resolveLabel(
+  modelId: string,
+  profiles: Map<string, ProfileRef>,
+): { label: string; via?: 'inference-profile'; profileName?: string; resolvedModel?: string } {
+  const p = profiles.get(modelId);
+  if (!p) return { label: stripRegion(modelId) };
+  const distinct = [...new Set(p.models)];
+  const named = p.name ?? p.id;
+  if (distinct.length !== 1) {
+    return { label: named, via: 'inference-profile', profileName: p.name };
+  }
+  return {
+    label: stripRegion(distinct[0]),
+    via: 'inference-profile',
+    profileName: p.name,
+    resolvedModel: distinct[0],
+  };
+}
 
 /** Percentile-wise difference, floored at 0. Null when either side is missing. */
 export function deriveGeneration(e2e: LatencyStat, ttft: LatencyStat): LatencyStat {
@@ -201,6 +250,37 @@ async function listModelIds(): Promise<string[]> {
   return [...new Set(ids)];
 }
 
+/**
+ * Application inference profiles, keyed by id. Best-effort on purpose: if the call is denied or
+ * fails, profile-routed rows keep their raw ids and the rest of the payload is unaffected — a
+ * labelling aid must not be able to take the endpoint down.
+ */
+async function listProfiles(): Promise<Map<string, ProfileRef>> {
+  const out = new Map<string, ProfileRef>();
+  try {
+    let nextToken: string | undefined;
+    do {
+      const res = await bedrock.send(
+        new ListInferenceProfilesCommand({ typeEquals: 'APPLICATION', maxResults: 100, nextToken }),
+      );
+      for (const p of res.inferenceProfileSummaries ?? []) {
+        if (!p.inferenceProfileId) continue;
+        out.set(p.inferenceProfileId, {
+          id: p.inferenceProfileId,
+          name: p.inferenceProfileName,
+          models: (p.models ?? [])
+            .map((m) => m.modelArn?.split('/').pop())
+            .filter((v): v is string => Boolean(v)),
+        });
+      }
+      nextToken = res.nextToken;
+    } while (nextToken);
+  } catch {
+    return out;
+  }
+  return out;
+}
+
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     // Auth only — the tenant claim must be present, but CloudWatch data is account-wide and is
@@ -214,7 +294,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const end = new Date();
     const start = new Date(end.getTime() - windowDays * 86_400_000);
-    const modelIds = (await listModelIds()).slice(0, MAX_MODELS);
+    const [allModelIds, profiles] = await Promise.all([listModelIds(), listProfiles()]);
+    const modelIds = allModelIds.slice(0, MAX_MODELS);
 
     const queries: MetricDataQuery[] = [
       ...queriesFor('fleet_e2e', E2E, windowDays),
@@ -255,7 +336,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       .map((modelId, i) => {
         const e2e = combineBuckets(series, `m${i}_e2e`);
         const ttft = combineBuckets(series, `m${i}_ttft`);
-        return { modelId, label: label(modelId), e2e, ttft, generation: deriveGeneration(e2e, ttft) };
+        return {
+          modelId,
+          ...resolveLabel(modelId, profiles),
+          e2e,
+          ttft,
+          generation: deriveGeneration(e2e, ttft),
+        };
       })
       .filter((r) => r.e2e.samples !== null && r.e2e.samples > 0)
       .sort((a, b) => (b.e2e.p95 ?? 0) - (a.e2e.p95 ?? 0));
