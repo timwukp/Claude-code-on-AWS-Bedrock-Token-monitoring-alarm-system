@@ -242,6 +242,17 @@ table.data tr:last-child td { border-bottom: none; }
 table.data tr:hover td { background: var(--surface-2); }
 .mono { font-family: 'SF Mono', 'Roboto Mono', monospace; font-size: var(--fs-base); }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
+/* Sortable headers and selectable rows */
+.th-sort { background: none; border: none; padding: 0; margin: 0; color: inherit; font: inherit; text-transform: inherit; letter-spacing: inherit; cursor: pointer; }
+.th-sort:hover { color: var(--text); }
+table.data tr.row-clickable { cursor: pointer; }
+table.data tr.row-clickable:focus-visible td { box-shadow: inset 2px 0 0 var(--primary); }
+table.data tr.row-selected td { background: var(--primary-weak); }
+table.data tr.row-selected td:first-child { box-shadow: inset 3px 0 0 var(--primary); }
+table.data tfoot .total-row td { border-top: 1px solid var(--border); border-bottom: none; font-weight: var(--fw-medium); background: var(--surface-2); }
+.model-name { display: flex; align-items: center; gap: var(--sp-2); font-weight: var(--fw-medium); color: var(--text); }
+.model-id { font-size: var(--fs-xs); margin-top: 2px; }
+.region-chip { font-size: 10px; padding: 0 6px; text-transform: uppercase; letter-spacing: 0.04em; }
 .delta-up { color: var(--danger); }
 .delta-down { color: var(--success); }
 
