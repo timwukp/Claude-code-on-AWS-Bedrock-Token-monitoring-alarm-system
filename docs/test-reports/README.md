@@ -26,6 +26,7 @@ results. One report per feature (mapped to a GitHub issue / PR).
 | Global time range (one control, URL-synced, every page states its period) | — | #48 | [feature-21](./feature-21-global-time-range.md) | PASS |
 | Anomaly table key-shape drift (one key definition + one-off row repair) | — | #50 | [feature-22](./feature-22-anomaly-key-shape.md) | PASS |
 | Model-hop latency (measured hops only, fleet scope stated) | — | TBD | [feature-18](./feature-18-latency-observability.md) | PASS |
+| Model-hop latency — inference-profile ids resolved to model names (qa F-PR52-002) | — | TBD | [feature-18b](./feature-18b-latency-profile-labels.md) | PASS |
 | Projects / ROI follow-ups (F-1706 cent drift, F-1707 refusal scope) | — | #49 | [feature-21b](./feature-21b-projects-roi-followups.md) | PASS |
 | Overview landing page + `/v1/overview` (spend vs prior period, budget status, anomalies, delivery) | — | TBD | [feature-23](./feature-23-overview-page.md) | PASS |
 
