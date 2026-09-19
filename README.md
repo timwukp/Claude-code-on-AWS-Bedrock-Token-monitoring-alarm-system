@@ -86,8 +86,7 @@ implies; the magnitude depends on a given workload's cache-hit ratio.
   [`docs/ROI_METHODOLOGY.md`](docs/ROI_METHODOLOGY.md)). A configurable per-request dollar
   threshold flags runaway agent loops onto the Anomalies feed
 - **Latency read** — a read-only Lambda querying CloudWatch `AWS/Bedrock` (`InvocationLatency`,
-  `TimeToFirstToken`) with native percentile statistics, plus `bedrock:ListInferenceProfiles` to turn
-  the profile ids CloudWatch reports back into model names. It grants no table access at all, because
+  `TimeToFirstToken`) with native percentile statistics. It grants no table access at all, because
   these metrics carry no tenant, project or user dimension — which is also why the view is
   explicitly fleet-wide rather than per project
 - **API** — 23 REST endpoints behind a Cognito authorizer, least-privilege IAM per function

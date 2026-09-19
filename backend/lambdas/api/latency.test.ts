@@ -1,12 +1,4 @@
-import {
-  combineBuckets,
-  deriveGeneration,
-  hopModel,
-  LatencyStat,
-  Point,
-  ProfileRef,
-  resolveLabel,
-} from './latency';
+import { combineBuckets, deriveGeneration, hopModel, LatencyStat, Point } from './latency';
 
 const stat = (p50: number | null, p95: number | null, p99: number | null, samples: number | null): LatencyStat =>
   ({ p50, p95, p99, samples });
@@ -221,64 +213,5 @@ describe('hopModel', () => {
     const a = hopModel();
     a[0].label = 'mutated';
     expect(hopModel()[0].label).not.toBe('mutated');
-  });
-});
-
-describe('resolveLabel', () => {
-  const profiles = (...refs: ProfileRef[]): Map<string, ProfileRef> =>
-    new Map(refs.map((r) => [r.id, r]));
-
-  it('leaves a foundation model id alone apart from the region prefix', () => {
-    expect(resolveLabel('us.anthropic.claude-sonnet-4-6', new Map())).toEqual({
-      label: 'anthropic.claude-sonnet-4-6',
-    });
-  });
-
-  it('resolves an inference-profile id to the model it routes to', () => {
-    // This is the defect qa found: CloudWatch reports profile-routed traffic under the profile id,
-    // so the table showed opaque 12-character strings as if they were model names.
-    const m = profiles({ id: 'c5xf7omvk87g', name: 'team-a-sonnet', models: ['anthropic.claude-sonnet-4-6'] });
-    expect(resolveLabel('c5xf7omvk87g', m)).toEqual({
-      label: 'anthropic.claude-sonnet-4-6',
-      via: 'inference-profile',
-      profileName: 'team-a-sonnet',
-      resolvedModel: 'anthropic.claude-sonnet-4-6',
-    });
-  });
-
-  it('collapses a profile that lists the same model once per region', () => {
-    const m = profiles({
-      id: 'yxhaeann9pmz',
-      name: 'team-b-nova',
-      models: ['amazon.nova-lite-v1:0', 'amazon.nova-lite-v1:0', 'amazon.nova-lite-v1:0'],
-    });
-    expect(resolveLabel('yxhaeann9pmz', m).label).toBe('amazon.nova-lite-v1:0');
-  });
-
-  it('refuses to name a single model for a profile that fans out to several', () => {
-    // Picking the first would be a fabrication: the latency in the row is a mix of both models.
-    const m = profiles({ id: 'multi01', name: 'team-c-mixed', models: ['model.a', 'model.b'] });
-    const r = resolveLabel('multi01', m);
-    expect(r.label).toBe('team-c-mixed');
-    expect(r.resolvedModel).toBeUndefined();
-    expect(r.via).toBe('inference-profile');
-  });
-
-  it('falls back to the profile id when a multi-model profile has no name', () => {
-    const m = profiles({ id: 'multi02', models: ['model.a', 'model.b'] });
-    expect(resolveLabel('multi02', m).label).toBe('multi02');
-  });
-
-  it('keeps an unknown id verbatim rather than inventing a name', () => {
-    // A profile deleted since the metrics were published, or a failed/denied list call, must not
-    // turn into a guess — the raw id at least tells the reader what CloudWatch actually reported.
-    const r = resolveLabel('gone9999abcd', profiles({ id: 'other', models: ['model.a'] }));
-    expect(r).toEqual({ label: 'gone9999abcd' });
-    expect(r.via).toBeUndefined();
-  });
-
-  it('strips the region prefix off the resolved model too', () => {
-    const m = profiles({ id: 'p1', name: 'p', models: ['eu.anthropic.claude-haiku-4-5-20251001-v1:0'] });
-    expect(resolveLabel('p1', m).label).toBe('anthropic.claude-haiku-4-5-20251001-v1:0');
   });
 });

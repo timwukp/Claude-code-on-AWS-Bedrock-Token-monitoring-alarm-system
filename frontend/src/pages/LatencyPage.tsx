@@ -179,18 +179,8 @@ export function LatencyPage() {
     for (const m of data?.models ?? []) counts.set(m.label, (counts.get(m.label) ?? 0) + 1);
     return new Set([...counts].filter(([, n]) => n > 1).map(([l]) => l));
   }, [data]);
-  // What distinguishes two same-named rows: for profile-routed traffic the profile itself, since
-  // that is the actual route, and otherwise the region prefix.
-  const routeOf = (m: LatencyRow): string =>
-    m.via === 'inference-profile' ? (m.profileName ?? m.modelId) : scopeOf(m.modelId);
   const nameOf = (m: LatencyRow): string =>
-    ambiguous.has(m.label) ? `${m.label} · ${routeOf(m)}` : m.label;
-  // Profile names are deployment-chosen and can be long; the picker buttons sit in a row, so they
-  // get a clipped form with the full value on hover rather than a name we invented.
-  const shortRoute = (m: LatencyRow): string => {
-    const r = routeOf(m);
-    return r.length > 16 ? `${r.slice(0, 15)}…` : r;
-  };
+    ambiguous.has(m.label) ? `${m.label} · ${scopeOf(m.modelId)}` : m.label;
   const segments = useMemo(
     () => (data && view ? layout(data.hops, view, percentile) : []),
     [data, view, percentile],
@@ -225,12 +215,8 @@ export function LatencyPage() {
         <div className="seg" aria-label="Model">
           <button className={modelId === '' ? 'active' : ''} onClick={() => setModelId('')}>All models</button>
           {data.models.slice(0, 4).map((m) => (
-            <button
-              key={m.modelId}
-              className={modelId === m.modelId ? 'active' : ''}
-              title={ambiguous.has(m.label) ? `${m.label} · ${routeOf(m)}` : m.label}
-              onClick={() => setModelId(m.modelId)}>
-              {m.label.split('.').pop()}{ambiguous.has(m.label) ? ` · ${shortRoute(m)}` : ''}
+            <button key={m.modelId} className={modelId === m.modelId ? 'active' : ''} onClick={() => setModelId(m.modelId)}>
+              {m.label.split('.').pop()}{ambiguous.has(m.label) ? ` · ${scopeOf(m.modelId)}` : ''}
             </button>
           ))}
         </div>
@@ -289,21 +275,7 @@ export function LatencyPage() {
           <tbody>
             {data.models.map((m) => (
               <tr key={m.modelId}>
-                <td>
-                  {nameOf(m)}
-                  {m.via === 'inference-profile' && (
-                    <span
-                      className="badge"
-                      style={{ marginLeft: 6 }}
-                      title={
-                        m.resolvedModel
-                          ? `CloudWatch reported this series under inference profile ${m.modelId}; resolved to ${m.resolvedModel}.`
-                          : `Inference profile ${m.modelId} routes to more than one model, so this row is not attributable to a single one.`
-                      }>
-                      {m.resolvedModel ? 'via profile' : 'multi-model profile'}
-                    </span>
-                  )}
-                </td>
+                <td>{nameOf(m)}</td>
                 <td className="num">{m.e2e.samples ?? 0}</td>
                 <td className="num">{fmtMs(m.ttft.p50)}</td>
                 <td className="num">{fmtMs(m.ttft.p95)}</td>

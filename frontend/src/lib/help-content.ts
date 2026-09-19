@@ -21,6 +21,38 @@ const ROI_DOC = { label: 'ROI methodology (this repo)', href: 'https://github.co
 const ATTR_DOC = { label: 'Attribution method (this repo)', href: 'https://github.com/timwukp/Claude-code-on-AWS-Bedrock-Token-monitoring-alarm-system/blob/main/docs/ATTRIBUTION.md' };
 
 export const HELP = {
+  // ---------- Overview ----------
+  'overview.spend': {
+    title: 'Spend',
+    what: 'Estimated Bedrock spend for the selected window, and how it compares with the equal-length period just before it.',
+    why: 'The first question a reader has — are we spending more or less than before — answered against a named comparison period, not a vague trend.',
+    how: 'Daily per-project × model rollups priced with the same rate card as the Cost page, summed over the window; the delta compares with the immediately preceding period of the same length (month-to-date compares with the same elapsed days of the previous month).',
+    caveats: [
+      'A token-based estimate: credits, refunds, private pricing and rounding make the AWS bill differ. The Governance tile shows what AWS Budgets has billed.',
+      'When per-project rollups start inside the prior period the tile says “partial history”: the comparison is against an incomplete baseline.',
+    ],
+  },
+  'overview.budget': {
+    title: 'Budget',
+    what: 'Month-to-date billed spend against the AWS Budgets limit for Amazon Bedrock, with the forecast and a status.',
+    why: 'It is the number that becomes the invoice, and the threshold the guardrails act on.',
+    how: 'AWS Budgets CalculatedSpend (actual and forecast) vs the budget limit. Status: On track · Forecast over budget · Over budget · No billing data (the account is not billed directly, e.g. under a payer account) · Setup required (no budget configured).',
+    caveats: ['Billing data can lag up to 24 hours; the forecast needs several days of month-to-date data before AWS populates it.'],
+  },
+  'overview.anomalies': {
+    title: 'Anomalies',
+    what: 'Detections in the selected window from the aggregator’s spend-runaway guard and Cost Anomaly Detection.',
+    why: 'A quiet feed is good news only if the detectors are configured; the tile says which kind of detections it counts.',
+    how: 'Detections are filtered client-side by their detection time; CRITICAL ones are called out separately.',
+  },
+  'overview.movers': {
+    title: 'What changed',
+    what: 'The projects whose spend moved most, in dollars, against the prior equal-length period.',
+    why: 'A total can be flat while two projects swap places; the movers show where the change actually happened.',
+    how: 'Per-project spend for both periods from the same daily rollups as the Spend tile; ranked by absolute dollar change; a project with no prior spend shows “—” for the percentage instead of an infinite value.',
+    caveats: ['“untagged” is usage no attribution tier could place — see the By project page for the four tiers.'],
+  },
+
   // ---------- Usage ----------
   'usage.input-tokens': {
     title: 'Input tokens',

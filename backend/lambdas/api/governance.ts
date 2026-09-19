@@ -30,6 +30,10 @@ export const handler = async (_event: APIGatewayProxyEvent): Promise<APIGatewayP
           actualUsd: num(b?.CalculatedSpend?.ActualSpend?.Amount),
           forecastedUsd: num(b?.CalculatedSpend?.ForecastedSpend?.Amount),
           timeUnit: b?.TimeUnit,
+          // Additive: lets the UI tell "no billing data on this account" from a genuine $0 (the
+          // numeric fields above keep their type so older frontends on the shared dev env stay safe).
+          billingDataAvailable: b?.CalculatedSpend?.ActualSpend?.Amount != null,
+          forecastAvailable: b?.CalculatedSpend?.ForecastedSpend?.Amount != null,
         };
         if (budget.limitUsd > 0) {
           budget.actualPct = Math.round((budget.actualUsd / budget.limitUsd) * 1000) / 10;

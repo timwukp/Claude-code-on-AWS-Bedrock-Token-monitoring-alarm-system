@@ -3,12 +3,13 @@
 - **Spec:** ./spec.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Accepted-for:** 22081a45a41077c6f2f0125ce388fffb521d6717
+- **Accepted-for:** 7c67e8bc9b1089acdb3b5d432d61053fd6586601
 - **Status:** accepted
 
-`Accepted-for` is bound to `22081a45` — the tip of `main` after #52 (feature-18) merged, and this
-branch's merge base. #52 merged while this fix was being built, which is why it is a follow-up branch
-rather than another commit on that PR.
+`Accepted-for` is bound to `7c67e8bc` — the tip of `main` after #51 (feature-23) merged, which is this
+branch's merge base once that PR is merged in. It was originally cut against `22081a45` (the tip after
+#52, the feature this corrects, landed); #51 merged while this PR was in review, so main was merged
+into the branch and the binding re-cut. Two rebindings, both recorded rather than rewritten away.
 
 ## Files changed
 
@@ -47,12 +48,13 @@ claim) · `docs/test-reports/feature-18b-latency-profile-labels.md` + its index 
 
 ## Chain handover
 
-`.sdlc/active` on `main` at `22081a45` names `latency-observability`. This branch points it at
-`latency-profile-labels` and **deliberately does not retire `latency-observability`**: PR #51
-(concurrent, already built and green) carries that retirement, and flipping the same three artifacts
-in two open PRs would conflict for no gain. The gate requires only that the active chain be fully
-accepted and cover every changed source file; it does not require the previous chain to be retired in
-the same PR. Coordinated with that session directly.
+This branch points `.sdlc/active` at `latency-profile-labels` and **retires nothing**: PR #51
+carried the `latency-observability` retirement, which is now on `main` (that chain reads `shipped`
+there), and flipping the same three artifacts in two open PRs would have conflicted for no gain. The
+gate requires only that the active chain be fully accepted and cover every changed source file; it
+does not require the previous chain to be retired in the same PR. Coordinated with that session while
+both PRs were open, and the division held — the only files that did conflict on #51's merge were the
+five shared riders, resolved by merging `main` in rather than force-pushing.
 
 ## Verification
 
@@ -71,11 +73,12 @@ the same PR. Coordinated with that session directly.
 
 ## Risks
 
-- **A concurrent Api deploy from another branch would remove the new grant.** The dev environment has
-  one Api stack, so deploying it from a tree cut before this change reverts the policy. It degrades
-  to raw ids rather than failing, which makes it silent — flagged to the concurrent session, which
-  agreed not to deploy Api until this lands.
-- **`.sdlc/active` is a single mutable pointer** and #51 is open against the same value; whichever
-  lands second re-derives. The gate emits this as a note on every handover, by design.
+- **An Api deploy from any tree cut before this change removes the new grant.** The dev environment
+  has one Api stack, so deploying it from `main` reverts the policy. It degrades to raw ids rather
+  than failing, which makes it silent. #51 agreed not to deploy Api while both PRs were open; from
+  its merge until this lands, `main`'s Api tree no longer carries the grant, so the live state must be
+  re-asserted after any deploy from `main`.
+- **`.sdlc/active` is a single mutable pointer.** #51 was open against the same value and landed
+  first, so this branch re-derives from `overview-page`. The gate emits that as a note, by design.
 - **Profile names are customer-chosen strings** rendered verbatim in the table. Nothing about them is
   committed to the repo, and no fixture in this change uses a real one.
