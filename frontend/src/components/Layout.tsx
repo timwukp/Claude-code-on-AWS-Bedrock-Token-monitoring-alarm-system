@@ -13,9 +13,15 @@ type NavGroup = { heading: string; items: NavItem[] };
 
 const NAV_GROUPS: NavGroup[] = [
   {
+    heading: 'Overview',
+    items: [
+      { to: '/', label: 'Overview', icon: 'overview', end: true },
+    ],
+  },
+  {
     heading: 'Spend',
     items: [
-      { to: '/', label: 'Usage', icon: 'usage', end: true },
+      { to: '/usage', label: 'Usage', icon: 'usage' },
       { to: '/costs', label: 'Cost', icon: 'cost' },
       { to: '/projects', label: 'By project', icon: 'project' },
     ],

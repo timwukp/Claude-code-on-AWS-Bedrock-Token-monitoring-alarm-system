@@ -6,6 +6,7 @@ import { configureAuth, getUserEmail } from './auth/cognito';
 import { LoginGate } from './auth/LoginGate';
 import { Layout } from './components/Layout';
 import type { Window } from './lib/time-range';
+import { OverviewPage } from './pages/OverviewPage';
 import { UsagePage } from './pages/UsagePage';
 import { CostsPage } from './pages/CostsPage';
 import { ProjectsPage } from './pages/ProjectsPage';
@@ -18,7 +19,8 @@ import { LatencyPage } from './pages/LatencyPage';
 configureAuth();
 
 const PAGE_META: Record<string, { title: string; sub: string; windows?: readonly Window[]; fixedCaption?: string }> = {
-  '/': { title: 'Token Usage', sub: 'Consumption across models and time', windows: [7, 30, 90, 'mtd'] },
+  '/': { title: 'Overview', sub: 'Spend, budget, anomalies and delivery at a glance — each tile links to its page', windows: [7, 30, 90, 'mtd'] },
+  '/usage': { title: 'Token Usage', sub: 'Consumption across models and time', windows: [7, 30, 90, 'mtd'] },
   '/costs': { title: 'Estimated Cost', sub: 'Spend by model, derived from token usage', windows: [], fixedCaption: 'All time · token-based estimate' },
   '/projects': { title: 'Usage by Project', sub: 'Attribution via inference profiles, request metadata and the project registry', windows: [], fixedCaption: 'All time · rollups' },
   '/governance': { title: 'Cost Governance', sub: 'Budget status and enforcement guardrails', windows: [], fixedCaption: 'Month to date · AWS Budgets period' },
@@ -34,7 +36,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<string | null>(null);
   useEffect(() => { getUserEmail().then(setUser); }, []);
   const { pathname } = useLocation();
-  const meta = PAGE_META[pathname === '/usage' ? '/' : pathname] ?? PAGE_META['/'];
+  const meta = PAGE_META[pathname] ?? PAGE_META['/'];
   return <Layout title={meta.title} subtitle={meta.sub} user={user} windows={meta.windows} fixedCaption={meta.fixedCaption}>{children}</Layout>;
 }
 
@@ -43,7 +45,7 @@ function App() {
     <LoginGate>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Shell><UsagePage /></Shell>} />
+          <Route path="/" element={<Shell><OverviewPage /></Shell>} />
           <Route path="/usage" element={<Shell><UsagePage /></Shell>} />
           <Route path="/costs" element={<Shell><CostsPage /></Shell>} />
           <Route path="/projects" element={<Shell><ProjectsPage /></Shell>} />

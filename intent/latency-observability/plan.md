@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** c55ceb0ed5345bc43a801f1510bd40d80ae5fa9f
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` was left unbound while this chain sat last in an agreed queue (#43 → feature-19 →
 feature-20 → this), because the base did not exist yet; the sdlc gate fails closed on an unbound
