@@ -256,12 +256,12 @@ export function DoraPage() {
                   throughput and stability. Recovery time sits under stability: three of DORA's
                   four first-party surfaces put it there, including its live instrument, even
                   though the definitions guide files it under throughput. */}
-              <Panel title="Software delivery throughput" desc={`How much change reaches ${selected.defaultBranch}, and how long it takes to get there`}>
+              <Panel title="Software delivery throughput" desc={`${selected.repo} only — how much change reaches ${selected.defaultBranch}, and how long it takes to get there`}>
                 <div className="kpi-grid" style={{ marginBottom: 0 }}>
                   <Kpi label="Deployment frequency" chip={<Chip text="proxy" />}
                        value={m.deploymentFrequency.all.n === 0 ? '—' : perWeek(m.deploymentFrequency.all.value)}
                        foot={m.deploymentFrequency.all.n === 0 ? noMerges
-                         : `${m.deploymentFrequency.all.n} merges to ${selected.defaultBranch} · ${windowDays} days`} />
+                         : `${m.deploymentFrequency.all.n} merges to ${selected.repo}:${selected.defaultBranch} · ${windowDays} days`} />
                   <Kpi label="Change lead time" chip={<Chip text="partial" />} value={fmtHours(m.leadTime.all.value)}
                        foot={m.leadTime.all.n === 0 ? noMerges
                          : `median first commit → merge · ${m.leadTime.all.n} changes`} />
