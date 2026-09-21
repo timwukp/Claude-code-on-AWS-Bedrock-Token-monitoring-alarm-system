@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
@@ -116,9 +116,6 @@ export function DoraPage() {
 
   const [refreshKey, setRefreshKey] = useState(0);
   const [pollCount, setPollCount] = useState(0);
-  const [newRepo, setNewRepo] = useState('');
-  const [adminBusy, setAdminBusy] = useState(false);
-  const [adminMsg, setAdminMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   // Selected repo: URL param if it is tracked, else the first tracked repo.
   const selected = useMemo(() => {
@@ -174,22 +171,6 @@ export function DoraPage() {
 
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
 
-  const runAdmin = async (label: string, fn: () => Promise<unknown>) => {
-    setAdminBusy(true); setAdminMsg(null);
-    try { await fn(); setAdminMsg({ kind: 'ok', text: `${label} — done` }); refresh(); }
-    catch (e) { setAdminMsg({ kind: 'err', text: String(e).replace(/^Error: /, '') }); }
-    finally { setAdminBusy(false); }
-  };
-  const addRepo = () => {
-    const v = newRepo.trim();
-    if (!v) return;
-    runAdmin(`Added ${v}`, async () => { await api.doraAddRepo(v); setNewRepo(''); setRepo(v); });
-  };
-  const removeRepo = (repo: string) => {
-    if (!window.confirm(`Remove ${repo} and all its collected data from the dashboard?`)) return;
-    runAdmin(`Removed ${repo}`, () => api.doraDeleteRepo(repo));
-  };
-  const syncRepo = (repo: string) => runAdmin(`Sync queued for ${repo}`, () => api.doraSyncRepo(repo));
 
   // ---------- render ----------
   if (repos === null && !reposError) return <div className="empty"><span className="spinner" /></div>;
@@ -246,7 +227,7 @@ export function DoraPage() {
         <div className="empty">
           <div className="big">📦</div>
           No repositories tracked yet.<br />
-          <span className="muted">{isAdmin ? 'Add one below to start collecting DORA metrics.' : 'Ask an administrator to add a repository.'}</span>
+          <span className="muted">{isAdmin ? 'Add one in Settings to start collecting DORA metrics.' : 'Ask an administrator to add a repository.'}</span>
         </div>
       )}
 
@@ -463,41 +444,15 @@ export function DoraPage() {
           <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>
             Cost is a token-based estimate (same rate card as the Cost page). The deployment proxy is
             a PR merged to the default branch, so $ / merge is also $ / deployment proxy today.
-            Manage projects on the By Project page.
+            Manage projects and repositories in Settings.
           </p>
         </Panel>
       )}
 
-      {/* ---- admin ---- */}
       {isAdmin && (
-        <Panel title="Manage tracked repositories" desc="Admin group only — add a public GitHub repository, trigger a sync, or remove one">
-          <div className="inline-form" style={{ marginBottom: 14 }}>
-            <input value={newRepo} onChange={(e) => setNewRepo(e.target.value)} placeholder="owner/name  (e.g. timwukp/agent-skills-best-practice)"
-                   onKeyDown={(e) => { if (e.key === 'Enter') addRepo(); }} disabled={adminBusy} aria-label="Repository to add" />
-            <button className="btn-primary" onClick={addRepo} disabled={adminBusy || !newRepo.trim()}>Add repository</button>
-            {adminMsg && <span className={adminMsg.kind === 'err' ? 'error-text' : 'muted'} style={{ marginTop: 0, fontSize: 13 }}>{adminMsg.text}</span>}
-          </div>
-          {repos && repos.length > 0 && (
-            <table className="data">
-              <thead><tr><th>Repository</th><th>Default branch</th><th>Added by</th><th>Last sync</th><th>Status</th><th></th></tr></thead>
-              <tbody>
-                {repos.map((r) => (
-                  <tr key={r.repo}>
-                    <td><strong>{r.repo}</strong></td>
-                    <td className="mono">{r.defaultBranch}</td>
-                    <td className="muted">{r.addedBy}</td>
-                    <td className="muted" title={r.lastSyncedAt ?? ''}>{fmtAgo(r.lastSyncedAt)}</td>
-                    <td><span className={`badge ${STATUS_BADGE[r.status].cls}`} title={r.error ?? ''}>{STATUS_BADGE[r.status].text}</span></td>
-                    <td className="num" style={{ whiteSpace: 'nowrap' }}>
-                      <button className="btn-sm" onClick={() => syncRepo(r.repo)} disabled={adminBusy || isBusy(r.status)}>Sync now</button>{' '}
-                      <button className="btn-sm danger" onClick={() => removeRepo(r.repo)} disabled={adminBusy}>Remove</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </Panel>
+        <p className="muted" style={{ fontSize: 12 }}>
+          Tracked repositories (add, sync, remove) are managed in <Link to="/settings">Settings</Link>.
+        </p>
       )}
 
       {/* Everything that used to sit on a card face, in one place a reader can open by keyboard.

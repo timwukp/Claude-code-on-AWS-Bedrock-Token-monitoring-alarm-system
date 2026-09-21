@@ -4,7 +4,7 @@ import {
 } from 'recharts';
 import { api, UsagePoint } from '../api/client';
 import { Kpi, Panel } from '../components/Layout';
-import { fmtTokens, fmtAxisTokens } from '../lib/format';
+import { fmtInt, fmtTokens, fmtAxisTokens } from '../lib/format';
 import { gridProps, legendProps, MARK, role, tooltipProps, xAxisProps, yAxisProps } from '../charts/theme';
 import { EmptyState } from '../components/EmptyState';
 import { useTimeRange } from '../lib/time-range';
@@ -70,7 +70,7 @@ export function UsagePage() {
         <Kpi label="Output tokens" value={fmtTokens(totalOut)} accent={role('output')} foot={`${range.label.toLowerCase()} (${daily ? 'daily' : 'hourly'} buckets)`} />
         <Kpi label="Prompt-cache tokens" value={fmtTokens(totalCache)} accent={role('cache')}
              foot="reads + writes — quota counts these as input; billing discounts them" />
-        <Kpi label="Invocations" value={totalCalls.toLocaleString()} accent="var(--accent-amber)" foot="API calls" />
+        <Kpi label="Invocations" value={fmtInt(totalCalls)} accent="var(--accent-amber)" foot="API calls" />
       </div>
 
       <Panel title="Token consumption over time"
