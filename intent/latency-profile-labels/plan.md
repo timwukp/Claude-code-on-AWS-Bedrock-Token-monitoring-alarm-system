@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** 7c67e8bc9b1089acdb3b5d432d61053fd6586601
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is bound to `7c67e8bc` — the tip of `main` after #51 (feature-23) merged, which is this
 branch's merge base once that PR is merged in. It was originally cut against `22081a45` (the tip after

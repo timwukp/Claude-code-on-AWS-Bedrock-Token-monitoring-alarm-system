@@ -6,6 +6,19 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Changed — one table and one chart on AI ROI; a readable Cost table
+- **AI ROI:** the eighteen stacked per-project waterfalls (9 800 px) are replaced by one sortable table
+  — project · spend/mo · break-even · evidence · value/yr · investment/yr · ROI or a short reason — and
+  **one** detail panel for the selected project (waterfall, refusals, unit economics, assumptions).
+  Selection lives in the URL (`?project=`) and is shared with the model diagram and the estimator.
+- **Cost:** regional variants of a model (`us.` / `global.` / bare) merge into one row with region chips;
+  friendly names with the raw ids as a secondary line; tokens in compact figures; units in headers;
+  sortable columns with `aria-sort`; a totals row; rows under one cent folded behind a toggle; an
+  "All time" footer naming the shared rate card. Still all-time from `/v1/costs` — windowing follows
+  once `/v1/overview` is deployed and verified.
+- **Anomalies:** at the 90-day window the empty state offers the guardrails page instead of a dead
+  "Show last 90 days" button (qa F-PR51 LOW).
+
 ### Added — an Overview landing page, and the endpoint that makes it honest
 - **`/` is now an Overview**: four tiles — Spend (window total, delta against the *named* prior equal
   period, sparkline), Budget (month-to-date billed vs limit with a status: On track · Forecast over ·

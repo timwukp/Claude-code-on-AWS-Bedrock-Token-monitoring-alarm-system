@@ -44,9 +44,9 @@ export function AnomaliesPage() {
           <EmptyState kind="empty" icon="check"
             title={`No anomalies detected in the ${range.label.toLowerCase()}`}
             detail={olderCount > 0
-              ? `${olderCount} older detection${olderCount === 1 ? '' : 's'} exist outside this window.`
+              ? `${olderCount} older detection${olderCount === 1 ? '' : 's'} exist outside this window${range.window === 90 ? ' — beyond 90 days; the feed keeps the newest 100 detections overall' : ''}.`
               : 'Detectors are the aggregator’s spend-runaway guard and Cost Anomaly Detection; a detection appears here within minutes of firing.'}
-            action={olderCount > 0 ? { label: 'Show last 90 days', onClick: () => range.setWindow(90) } : { label: 'View budget guardrails', to: '/governance' }} />
+            action={olderCount > 0 && range.window !== 90 ? { label: 'Show last 90 days', onClick: () => range.setWindow(90) } : { label: 'View budget guardrails', to: '/governance' }} />
         ) : (
           <table className="data">
             <thead>
