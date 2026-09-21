@@ -1,6 +1,6 @@
 # Feature 24 — ROI + Cost tables (one table + one chart; merged model rows, totals, folded noise)
 
-- **Chain:** `intent/roi-cost-tables/` · **Branch:** `feat/roi-cost-tables` off `main@7c67e8b` (post-#51) · **PR:** TBD
+- **Chain:** `intent/roi-cost-tables/` · **Branch:** `feat/roi-cost-tables` off `main@7c67e8b` (post-#51), rebased onto `8693ff4` (post-#53) · **PR:** #54
 - **Origin:** `docs/research-dashboard-ux.md` defects 7–9 (ROI 18 stacked charts; Cost raw ids, split
   variants, `$0.00` noise, no totals) and qa F-PR51 LOW (Anomalies dead widen button at 90 days).
 - **Date:** 2026-09-19

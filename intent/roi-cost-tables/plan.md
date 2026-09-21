@@ -3,21 +3,21 @@
 - **Spec:** ./spec.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Accepted-for:** 7c67e8bc9b1089acdb3b5d432d61053fd6586601
+- **Accepted-for:** 8693ff42cbde17ff17236029f0a7a085908efb13
 - **Status:** accepted
 
-`Accepted-for` is the tip of `main` after PR #51 (feature-23), the merge base at branch time. The other
-session's #53 (`fix/latency-profile-labels`) is in flight; whichever lands second takes the `.sdlc/active` /
-CHANGELOG / index merge.
+`Accepted-for` is the tip of `main` after PR #53 — main was merged into this branch after #53 landed (a
+re-acceptance; first accepted against `7c67e8b`).
 
 ## Files changed
 1. `frontend/src/pages/RoiPage.tsx` — URL-synced selection; sortable projects table; one detail panel replaces the per-project panels.
 2. `frontend/src/pages/CostsPage.tsx` — merged model rows, friendly names + raw ids, sortable headers, zero-cost toggle, totals row, footer.
 3. `frontend/src/pages/AnomaliesPage.tsx` — empty-state action at the 90-day window.
 4. `frontend/src/styles.css` — sortable header, selectable row, totals row, model cell styles.
+5. `frontend/src/pages/OverviewPage.tsx` — **correction to feature-23** (qa F-PR53-102): `df.value` is merges per *day*; the
+   Deployment-frequency tile summed daily rates and labelled them per week (≈7× under). Now × 7, matching `DoraPage.tsx`.
 
-Non-source riders: `.sdlc/active` (handover from `overview-page`), `intent/overview-page/*` → shipped (my
-own predecessor), `intent/roi-cost-tables/*`, `CHANGELOG.md`, `docs/test-reports/feature-24-roi-cost-tables.md`
+Non-source riders: `.sdlc/active` (handover from `latency-profile-labels`, which #53 shipped), `intent/latency-profile-labels/*` → shipped, `intent/overview-page/*` → shipped (my own predecessor), `intent/roi-cost-tables/*`, `CHANGELOG.md`, `docs/test-reports/feature-24-roi-cost-tables.md`
 plus its index row.
 
 ## Verification

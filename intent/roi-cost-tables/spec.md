@@ -36,7 +36,12 @@
 When `range.window === 90` the empty-state action is "View budget guardrails" and the detail says the
 older detections are beyond 90 days (the feed keeps the newest 100 overall).
 
-### 4. `styles.css`
+### 4. `OverviewPage.tsx` (correction to feature-23)
+The Deployment-frequency tile multiplies the summed per-repo daily rate by 7 before printing `/ week`, and
+the "busiest" repo figure likewise — the same conversion `DoraPage.tsx` applies. Unit bug found by qa
+(F-PR53-102) and confirmed against `dora-calc.ts`.
+
+### 5. `styles.css`
 `.th-sort`, `tr.row-clickable`, `tr.row-selected`, `tfoot .total-row`, `.model-name`, `.model-id`,
 `.region-chip`.
 

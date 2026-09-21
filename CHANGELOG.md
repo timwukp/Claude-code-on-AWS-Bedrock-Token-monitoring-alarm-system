@@ -34,6 +34,26 @@ are grouped by development milestone rather than strict semver releases.
 - **`/v1/governance`** gains `billingDataAvailable` / `forecastAvailable` (additive) so "$0 because the
   account is not billed directly" is distinguishable from a real $0.
 - No existing number or field changes.
+### Fixed — a latency row that named an inference profile instead of a model
+- **CloudWatch reports profile-routed invocations under the inference-profile id**, so the by-model
+  table shipped in the previous entry rendered rows as opaque twelve-character strings
+  (`c5xf7omvk87g`) as if those were model names. The UI qa agent caught it on the feature's own PR.
+  `resolveLabel()` now maps the id back to the model behind the profile via
+  `bedrock:ListInferenceProfiles`, and the row carries `via: 'inference-profile'` plus the profile
+  name and the resolved model, so the page shows what was resolved rather than implying the dimension
+  said it.
+- **It refuses to guess in the two cases where guessing would be a fabrication.** A profile that fans
+  out to several distinct models keeps the profile's own name and claims no model — the latency in that
+  row is a mixture, so naming one of them would be wrong, and a unit test asserts `resolvedModel` stays
+  absent. A profile that cannot be found keeps the raw id, which is at least literally what CloudWatch
+  reported.
+- **The list call is best-effort by requirement.** Denial, throttle or transport failure degrades to
+  raw ids and leaves every other field untouched: a labelling aid must not be able to fail a metrics
+  read. `LatencyFn`'s IAM therefore gains exactly one action, `bedrock:ListInferenceProfiles` — still
+  no table grant of any kind.
+- Same disambiguator fix on the page: two rows for one model (reached directly and through a profile)
+  are separated by their actual route instead of both being reported as `direct`.
+
 ### Added — model-hop latency, with the chain drawn honestly rather than drawn complete
 - **`GET /v1/latency?window=1|7|30`** and a `/latency` page. p50/p95/p99 plus sample counts for
   end-to-end `InvocationLatency` and `TimeToFirstToken`, fleet-wide and per `ModelId`, read from

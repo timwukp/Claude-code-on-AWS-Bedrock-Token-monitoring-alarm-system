@@ -17,9 +17,10 @@ Two pages fail the same test — can a reader compare things without scrolling �
   bare ids — in raw monospace identifiers, 15 of them `$0.00`, with the cache-savings column printed
   in green (text wearing a data colour), and no totals row against which the KPI above can be checked.
 
-Both were defects 7–9 of the 2026-09-18 audit (`docs/research-dashboard-ux.md`). A third, small one
-rode in from qa on #51: the Anomalies empty state offered "Show last 90 days" when the window already
-was 90 days.
+Both were defects 7–9 of the 2026-09-18 audit (`docs/research-dashboard-ux.md`). Two small ones rode in
+from qa: the Anomalies empty state offered "Show last 90 days" when the window already was 90 days
+(#51), and the new Overview Deployment-frequency tile summed **per-day** rates and printed them as
+per week — a ≈7× under-report (F-PR53-102 on #53, diagnosed by the other session against `dora-calc.ts`).
 
 ## Evidence
 
