@@ -3,14 +3,17 @@
 - **Spec:** ./spec.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Accepted-for:** 2a9630cad20a9437afa3a5d7eb122bc9bddaaec0
+- **Accepted-for:** b4398241ef76f17aa85f2d70436a82bfd347988c
 - **Status:** accepted
 
-`Accepted-for` is bound to `2a9630ca` — the tip of `main` after #54 (feature-24) merged, which is this
-branch's merge base. The work was first staged against `8693ff42` (the tip after #53); #54 merged
-while it was in progress, so it was re-staged on the new tip. That re-stage was verified rather than
-assumed: `compare/8693ff42...2a9630ca` changes 18 files and **none** of the six this branch edits, so
-the edits carried across unchanged.
+`Accepted-for` is bound to `b4398241` — the tip of `main` after #55 (feature-25) merged, which is this
+branch's merge base once main is merged in. The work was first staged against `8693ff42` (post-#53),
+re-staged on `2a9630ca` when #54 merged mid-work, and re-bound again when #55 merged while this PR was
+in review. Each re-stage was verified by diffing main-vs-main for the files this branch edits; the
+third one found one real overlap — `ProjectsPage.tsx`, where #55's bot round bound "Projects tracked"
+to the rollup count in Full view. That binding is kept; this branch's per-tile source labels sit on
+top of it and say why the header count differs from the Athena row count below. Three rebindings,
+all recorded rather than rewritten away.
 
 ## Files changed
 
@@ -61,11 +64,11 @@ the edits carried across unchanged.
 7. `CHANGELOG.md` — one entry.
 8. `docs/test-reports/feature-26-qa-loop-honesty.md` + its row in `docs/test-reports/README.md`.
 9. `intent/qa-loop-honesty/{intent,spec,plan}.md` (this chain); `.sdlc/active` → `qa-loop-honesty`;
-   `intent/roi-cost-tables/*` → `shipped` (landed as #54).
+   `intent/settings-and-format/*` → `shipped` (landed as #55; `roi-cost-tables` was already flipped by #55).
 
 ## Commit order
 
-1. `docs(sdlc)`: this chain + `.sdlc/active` handover + `roi-cost-tables` → shipped.
+1. `docs(sdlc)`: this chain + `.sdlc/active` handover + the previous chain → shipped.
 2. `fix(ci)`: `ci-agent/qa_agent.py`, `ci-agent/bugfix_agent.py`,
    `.github/workflows/ui-qa-agent.yml`.
 3. `fix(frontend)`: `frontend/src/pages/ProjectsPage.tsx`, `frontend/src/pages/LatencyPage.tsx`.

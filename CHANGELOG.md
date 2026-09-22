@@ -32,6 +32,14 @@ are grouped by development milestone rather than strict semver releases.
 - **Latency:** the fleet tiles say the first-byte sample set is *contained in* the end-to-end one and
   that the two do not add up. Adding them is the arithmetic error the QA agent itself made.
 
+### Changed — administration moves to Settings
+- **New `/settings` page (admin group)** with the project registry and the DORA tracked-repository list,
+  lifted from the By project and DORA pages with identical behaviour; non-admins see an explicit
+  "Administrator access required" state. The two monitoring pages shed their admin forms (By project
+  2 908 → 1 456 px, DORA 6 429 → 5 727 px) and point admins to Settings. Settings sits in the sidebar footer.
+- `fmtInt` pins en-US grouping for plain counts; the Usage Invocations KPI was the last figure formatted
+  with an unpinned `toLocaleString()`.
+
 ### Changed — one table and one chart on AI ROI; a readable Cost table
 - **AI ROI:** the eighteen stacked per-project waterfalls (9 800 px) are replaced by one sortable table
   — project · spend/mo · break-even · evidence · value/yr · investment/yr · ROI or a short reason — and

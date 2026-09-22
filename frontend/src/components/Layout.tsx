@@ -72,6 +72,10 @@ export function Layout({ title, subtitle, user, windows, fixedCaption, children 
             ))}
           </nav>
           <div className="sidebar-footer">
+            <NavLink to="/settings" className={({ isActive }) => 'nav-link nav-link-footer' + (isActive ? ' active' : '')}>
+              <Icon name="settings" size={17} className="ico" />
+              <span>Settings</span>
+            </NavLink>
             {user && (
               <div className="user" title={user}>
                 <Icon name="user" size={15} />

@@ -30,6 +30,7 @@ export const HELP = {
     caveats: [
       'A token-based estimate: credits, refunds, private pricing and rounding make the AWS bill differ. The Governance tile shows what AWS Budgets has billed.',
       'When per-project rollups start inside the prior period the tile says “partial history”: the comparison is against an incomplete baseline.',
+      'The token figure is input + output + cache-read tokens from the per-project rollups. The Usage page also counts prompt-cache *writes*, so its total for the same window is larger by exactly that amount.',
     ],
   },
   'overview.budget': {
@@ -198,7 +199,7 @@ export const HELP = {
     title: 'Deployment frequency',
     what: 'How often changes reach the default branch.',
     why: 'One of DORA’s two throughput measures; higher generally means smaller, safer batches.',
-    how: 'Proxy: merges to main per week over the window. DORA counts deployments to production; this portal sees merges, so the chip says `proxy`.',
+    how: 'Proxy: merges to main per week over the window. DORA counts deployments to production; this portal sees merges, so the chip says `proxy`. On the Overview the figure is all synced repositories combined; on the DORA page it is the one selected repository — the two are not meant to match.',
     caveats: ['No ordinal band or archetype is shown: DORA’s live instrument reports a continuous score, not Elite/High/Medium/Low labels.'],
     docs: DORA_GUIDE,
     labels: ['Deployment frequency'],

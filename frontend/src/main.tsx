@@ -15,6 +15,7 @@ import { AnomaliesPage } from './pages/AnomaliesPage';
 import { DoraPage } from './pages/DoraPage';
 import { RoiPage } from './pages/RoiPage';
 import { LatencyPage } from './pages/LatencyPage';
+import { SettingsPage } from './pages/SettingsPage';
 
 configureAuth();
 
@@ -29,6 +30,7 @@ const PAGE_META: Record<string, { title: string; sub: string; windows?: readonly
   '/roi': { title: 'AI ROI', sub: 'Break-even first — DORA ROI model over measured cost and delivery, disclosed assumptions, honest brackets', windows: [30, 90] },
   // No `windows` key: the page owns its own picker, because the latency windows are 1/7/30 rather
   // than the shell's 7/30/90/mtd, and it pairs them with a percentile control in the same toolbar.
+  '/settings': { title: 'Settings', sub: 'Project registry and DORA repositories — admin group only' },
   '/latency': { title: 'Model-hop Latency', sub: 'Bedrock service time across the end-to-end chain — measured hops only, fleet-wide' },
 };
 
@@ -54,6 +56,7 @@ function App() {
           <Route path="/dora" element={<Shell><DoraPage /></Shell>} />
           <Route path="/roi" element={<Shell><RoiPage /></Shell>} />
           <Route path="/latency" element={<Shell><LatencyPage /></Shell>} />
+          <Route path="/settings" element={<Shell><SettingsPage /></Shell>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

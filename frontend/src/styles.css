@@ -137,6 +137,7 @@ a { color: var(--primary-fg); }
 .nav-link:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
 
 .sidebar-footer { margin-top: auto; padding: var(--sp-3); border-top: 1px solid rgba(148,163,184,0.15); }
+.nav-link-footer { margin-bottom: var(--sp-2); }
 .sidebar-footer .user { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-base);
   color: var(--sidebar-fg); margin-bottom: var(--sp-2); min-width: 0; }
 .sidebar-footer .user-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
