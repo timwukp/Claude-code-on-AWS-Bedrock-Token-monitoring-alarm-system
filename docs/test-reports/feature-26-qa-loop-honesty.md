@@ -102,6 +102,22 @@ public, so a raw `qa-output.txt` would publish the account id. Verified locally 
 result was empty. Its third suggestion — "fix the remaining blocking finding in this PR" — was
 declined: the finding lives in #55's files, is fixed there, and is not in this plan.
 
+### Run 5 — after merging main `b439824` (post-#55) into the branch
+| ID | Finding | Status |
+|---|---|---|
+| F-PR56R3-001 | Overview tokens vs Usage (cache-write classes) | ✅ **FIXED** — #55's definition note is in the bundle |
+| F-PR56R3-002 | Overview 10.5/wk vs DORA 6.3/wk | ✅ **FIXED** — both pages now state their scope; values reconcile |
+| F-PR56R3-004 | Settings nav link | ✅ **FIXED** — `/settings` exists on main now |
+| F-PR56R3-003 → F-PR56R4-001 | `/anomalies`: 2 detections older than 90 days are advertised but unviewable | ❌ STILL_FAILING, **LOW** |
+
+Result: `overall: FAIL` with **one LOW** finding, no blocking findings, bot not invoked (LOW never is), so
+the check is **red under `QA_RED_ON: FAIL`** and would be green under `BLOCKING`. This is the precise
+consequence the plan's first risk names. The finding is the sixth report of the `/anomalies` window
+lineage; `AnomaliesPage.tsx` is not in this plan and the fix (an "all retained" view or a listing of
+the out-of-window detections) needs the shared time-range lib, so it is its own chain, not a rider.
+**Decision for the owner:** merge with the red LOW and open the `/anomalies` chain; or switch the knob
+to `BLOCKING`; or add `AnomaliesPage.tsx` to this plan. The report records whichever is chosen.
+
 ### What this shows about the loop
 - The red is **correct** and it is **not actionable by this PR** for four of the five findings. That is the
   trade the owner chose with `QA_RED_ON: FAIL`: the check tells the truth and the triage lives here in
