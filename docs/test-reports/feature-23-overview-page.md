@@ -63,9 +63,18 @@
 - The Bug-Fix agent pushed an out-of-scope edit to `dora.ts` (swapping `pick()` for a spread — unrelated to the finding); reverted to `main`'s version, bot commit kept in history.
 
 ## Live validation (dev)
-_At API deploy:_ direct invoke of `OverviewFn` for `window=30`; assert `spend.currentUsd` equals Σ Projects
-(Fast) for the same 30 days to the cent, `deltaPct` null or finite, `daily` has 30 entries, `coverage`
-consistent with `firstDayWithData`; served bundle hash; Spend tile and movers populated; 0 console errors.
+- **Api deployed from `main@8693ff4` on 2026-09-19 (owner-approved, after #53 so the latency grant was
+  preserved).** CDK diff was exactly: + `OverviewFn` (+ role/policy), + `/v1/overview` resource/GET/OPTIONS,
+  ~ `GovernanceFn` (code), ~ Api stage; no `LatencyFn` change. Post-deploy, `LatencyFn`'s role still carries
+  `bedrock:ListInferenceProfiles`.
+- **Direct invoke, `window=30`:** HTTP 200; window 2026-08-21 → 09-19 vs prior 07-22 → 08-20; spend
+  `$3,280.78` vs `$10,702.74` (`deltaPct −69.35`); 30 daily points; 8 `byModel` rows; 8 movers (top: Agent
+  Terminal −$3,075.72, −99.8%); `coverage { firstDayWithData: 2026-07-22, partial: false }` — the rollups
+  reach back to July, so the comparison is against a full baseline; `rollupsAsOf` fresh.
+- **Browser (owner's session, 2026-09-21, feature-25 build against the deployed Api):** Overview renders live
+  — Spend `$2,340.82`, ▼ −80% vs 07-24 – 08-22, sparkline; Budget `$0.00` "On track" of $1,000; Anomalies 0;
+  Deployment frequency `10.3 / week` across 6 repositories (after the per-day×7 correction shipped in #54);
+  eight movers with signed change; 0 console/page errors.
 
 ## Leak scan
 `grep -nE '[0-9]{12}|AKIA|arn:aws'`: no matches.

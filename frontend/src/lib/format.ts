@@ -25,6 +25,9 @@ export const fmtTokens = (n: number): string => {
   return String(n);
 };
 
+/** Plain integer with en-US grouping: 71,282 (counts that are not token volumes). */
+export const fmtInt = (n: number): string => Math.round(n).toLocaleString('en-US');
+
 /** Axis-tick variant: hides the origin label — a lone '0' floating under a chart reads as a
  * stray character (recurring QA finding); standard practice is to omit the origin tick. */
 export const fmtAxisTokens = (n: number): string => (n === 0 ? '' : fmtTokens(n));

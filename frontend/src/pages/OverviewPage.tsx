@@ -66,7 +66,7 @@ export function OverviewPage() {
           value={ov ? fmtUsd(ov.spend.currentUsd) : ''}
           delta={ov && ov.spend.deltaPct != null ? { value: ov.spend.deltaPct, unit: 'pct', compareLabel: compare, goodDirection: 'down' } : undefined}
           sparkline={ov?.spend.daily.map((d) => d.usd)}
-          definition={ov ? `${range.label.toLowerCase()} · ${fmtTokens(ov.spend.tokens)} tokens · token-based estimate${ov.spend.deltaPct == null && ov.spend.priorUsd === 0 ? ' · no prior-period data to compare' : ''}` : undefined}
+          definition={ov ? `${range.label.toLowerCase()} · ${fmtTokens(ov.spend.tokens)} input + output + cache-read tokens · token-based estimate${ov.spend.deltaPct == null && ov.spend.priorUsd === 0 ? ' · no prior-period data to compare' : ''}` : undefined}
           status={ov?.coverage.partial ? { tone: 'neutral', text: 'partial history' } : undefined} />
 
         <KpiTile label="Budget" helpId="overview.budget" link={{ to: '/governance', label: 'Governance' }}
@@ -87,8 +87,8 @@ export function OverviewPage() {
           state={doraErr ? 'error' : repos === null ? 'loading' : dfTotal == null ? 'empty' : 'ready'}
           stateText={doraErr ? 'DORA data unavailable' : 'no synced repositories'}
           value={dfTotal != null ? `${dfTotal.toFixed(1)} / week` : ''}
-          definition={`merges to main across ${syncedRepos} synced ${syncedRepos === 1 ? 'repository' : 'repositories'}, last ${doraWindow(range.window)} days${topRepo ? ` · busiest: ${topRepo.repo.split('/').pop()} at ${((topRepo.df.value ?? 0) * 7).toFixed(1)} / week` : ''}${range.window === 'mtd' ? ' (DORA has no month-to-date view)' : ''}`}
-          chip={<span className="badge neutral">proxy</span>} />
+          definition={`all ${syncedRepos} synced ${syncedRepos === 1 ? 'repository' : 'repositories'} combined — the DORA page shows one repository at a time · merges to main, last ${doraWindow(range.window)} days${topRepo ? ` · busiest: ${topRepo.repo.split('/').pop()} at ${((topRepo.df.value ?? 0) * 7).toFixed(1)} / week` : ''}${range.window === 'mtd' ? ' (DORA has no month-to-date view)' : ''}`}
+          chip={<><span className="badge neutral">all repos</span> <span className="badge neutral">proxy</span></>} />
       </div>
 
       <Panel title="What changed" helpId="overview.movers"
