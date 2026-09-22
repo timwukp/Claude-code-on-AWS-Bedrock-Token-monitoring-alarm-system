@@ -1,6 +1,6 @@
 # Feature 26 — QA loop honesty (the check colour matches the report; the bot stays inside the plan)
 
-- **Chain:** `intent/qa-loop-honesty/` · **Branch:** `fix/qa-loop-honesty` off `main@2a9630c` (post-#54) · **PR:** TBD
+- **Chain:** `intent/qa-loop-honesty/` · **Branch:** `fix/qa-loop-honesty` off `main@2a9630c` (post-#54) · **PR:** #56
 - **Origin:** owner decision 2026-09-21 on three bot rules, plus qa F-PR53-104 (`/projects` header mixes
   sources) and the `/latency` sample-count wording that let qa invent F-PR53-001.
 - **Date:** 2026-09-22
