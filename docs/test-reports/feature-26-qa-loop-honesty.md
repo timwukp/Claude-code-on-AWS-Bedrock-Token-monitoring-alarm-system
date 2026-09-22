@@ -115,8 +115,11 @@ the check is **red under `QA_RED_ON: FAIL`** and would be green under `BLOCKING`
 consequence the plan's first risk names. The finding is the sixth report of the `/anomalies` window
 lineage; `AnomaliesPage.tsx` is not in this plan and the fix (an "all retained" view or a listing of
 the out-of-window detections) needs the shared time-range lib, so it is its own chain, not a rider.
-**Decision for the owner:** merge with the red LOW and open the `/anomalies` chain; or switch the knob
-to `BLOCKING`; or add `AnomaliesPage.tsx` to this plan. The report records whichever is chosen.
+**Owner decision (2026-09-22): merge with the red LOW; the `/anomalies` lineage gets its own intent
+chain.** `QA_RED_ON` stays `FAIL`. So the first PR to land under the new rule lands with a red `qa`
+check whose report says exactly one LOW finding, none of it this PR's — which is the intended reading:
+the colour is the report's verdict, and the merge decision is the owner's, made with that verdict
+visible instead of hidden behind a green check.
 
 ### What this shows about the loop
 - The red is **correct** and it is **not actionable by this PR** for four of the five findings. That is the
