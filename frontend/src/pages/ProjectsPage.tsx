@@ -51,6 +51,7 @@ export function ProjectsPage() {
   const [servedFrom, setServedFrom] = useState<string>('');
   const [apiTotalTokens, setApiTotalTokens] = useState<number | null>(null);
   const [apiTotalUsd, setApiTotalUsd] = useState<number | null>(null);
+  const [apiProjectCount, setApiProjectCount] = useState<number | null>(null);
   const [rollupsAsOf, setRollupsAsOf] = useState<string | null>(null);
   const [apiTotalCost, setApiTotalCost]     = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +66,7 @@ export function ProjectsPage() {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setApiProjectCount(null);
     if (source === 'fast') {
       api.projects('fast')
         .then((r) => {
@@ -120,6 +122,7 @@ export function ProjectsPage() {
             setServedFrom('athena (async, per-model pricing)');
             setApiTotalTokens(fastTotals.tokens);
             setApiTotalUsd(fastTotals.usd);
+            setApiProjectCount(fastTotals.names.size > 0 ? fastTotals.names.size : null);
             setLoading(false);
             return;
           }
@@ -161,7 +164,7 @@ export function ProjectsPage() {
   return (
     <>
       <div className="kpi-grid">
-        <Kpi label="Projects tracked" value={String(rows.length)} accent="var(--primary)" />
+        <Kpi label="Projects tracked" value={String(apiProjectCount ?? rows.length)} accent="var(--primary)" />
         <Kpi label="Total tokens" value={fmtTokens(totalTokens)} accent="var(--accent-blue)" />
         <Kpi label="Total est. cost" value={fmtUsd(totalCost)} accent="var(--accent-green)"
              foot={apiTotalUsd != null && Math.abs(apiTotalUsd - rowsCost) > 0.5
