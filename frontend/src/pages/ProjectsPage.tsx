@@ -214,7 +214,7 @@ export function ProjectsPage() {
              chip={srcChip(apiTotalUsd != null ? 'rollups' : rowSource)}
              foot={apiTotalUsd != null && Math.abs(apiTotalUsd - rowsCost) > 0.5
                ? (source === 'full'
-                   ? `Athena rows ${fmtUsd(rowsCost)} vs rollups ${fmtUsd(apiTotalUsd)}${rollupsAsOf ? ` (as of ${rollupsAsOf.slice(11, 16)} UTC)` : ''} — Athena reads raw logs live; rollups refresh every 15 min, so the ${fmtUsd(Math.abs(rowsCost - apiTotalUsd))} difference is traffic since the last rollup`
+                   ? `Athena rows ${fmtUsd(rowsCost)} vs rollups ${fmtUsd(apiTotalUsd)}${rollupsAsOf ? ` (as of ${rollupsAsOf.slice(11, 16)} UTC)` : ''} — Athena reads raw logs live; rollups refresh every 15 min, so the ${fmtUsd(Math.abs(rowsCost - apiTotalUsd))} difference is traffic since the last rollup. Token figures count input + output only; prompt-cache reads are priced but not counted, so a small token gap can carry a larger cost gap`
                    : `rows sum ${fmtUsd(rowsCost)} vs model rollups ${fmtUsd(apiTotalUsd)} — residual ${fmtUsd(Math.abs(apiTotalUsd - rowsCost))} predates per-project tracking`)
                : centDrift > 0
                  ? `per-model rates — same rate card as the Cost page · rows are shown to the cent, so their sum (${fmtUsd(rowsCost)}) can differ from this total by a few cents${rollupsAsOf ? ` · rollups as of ${rollupsAsOf.slice(11, 16)} UTC` : ''}`

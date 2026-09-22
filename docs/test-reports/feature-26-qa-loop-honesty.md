@@ -71,6 +71,32 @@ migration dry run was re-run immediately after: `scanned 3 item(s): 3 already re
 The deployed `AnomalyResponseFn` bundle was pulled and inspected: it now writes `TENANT#<tenant>` /
 `ANOMALY#…` — the reader's key shape.
 
-## Live (filled after the first CI run of this PR)
-- `ui-qa-agent` check colour vs the posted report's `overall`: _pending_
-- Bug-Fix agent refusals (files outside `intent/qa-loop-honesty/plan.md`): _pending_
+## Live — the first two CI runs of this PR (2026-09-22, runs 35674532780 and 35674555098)
+
+Two pushes landed a minute apart, so the workflow ran twice against the same dev site. **Every rule
+fired as specified, and the colour matched the verdict both times.**
+
+| Rule | Evidence |
+|---|---|
+| (a) colour = verdict | Both runs: `OVERALL=FAIL`, `BLOCKING=true`, `FINDINGS=3`, fix step `pushed=false` → step "Fail check if the QA report is not clean" exited 1 with the message naming the count. Check **red**. |
+| (b) bot stays in the plan | Run 1 summary: `0/2 patched · Scope: only files named in intent/qa-loop-honesty/plan.md` — refused `DoraPage.tsx` and `UsagePage.tsx`, neither in the plan. Run 2: refused `UsagePage.tsx`. No harness invoke for either, no commit pushed, `sdlc-gate` stayed green. |
+| (c) recurrence named | Run 1, F-PR56-001 (DORA mismatch): *"This is a repeat report as F-PR51R5-002, F-PR53-102 — it needs its own intent chain naming that file"*. Triggered by the evidence text citing both earlier ids. |
+
+### Triage of the findings themselves (none is a regression from this branch)
+| Finding | Verdict |
+|---|---|
+| HIGH — Overview 10.5/wk vs DORA 6.3/wk (F-PR56-001, run 1) | **Not this branch.** Overview sums per-repo rates across 6 repos; DORA shows one pooled rate. Owned by #55 (`OverviewPage.tsx`, fixed there in `b8ff7e8` per its author). This is the fifth report of the deployment-frequency lineage; rule (c) did its job by saying so. |
+| MEDIUM — Overview 2.56B vs Usage 3.10B tokens (F-PR56-002, both runs) | **Not this branch.** Overview excludes prompt-cache writes that Usage includes. Owned by #55 (fixed there in `b8ff7e8`). |
+| LOW — `/anomalies` 90-day toggle "one-way" (F-PR56-003, run 1) | **Not this branch, and partly a misread**: the revert control is the global time-range picker in the header (`Layout.tsx:93`, `useTimeRange([7,30,90,'mtd'])`); the in-feed button is a shortcut, not the only control. But this is the **fifth** report of the `/anomalies` window lineage (F-PR51-006 → F-PR52-001 → F-PR53-003 → F-PR53-103 → F-PR56-003) — two controls for one state with the empty state pointing at neither. It needs its own chain; that is exactly rule (c)'s case, and LOW findings never reach the bot so the note cannot fire for it. |
+| LOW — `/projects` $9.94 Athena-vs-rollup gap on 0.01M tokens (F-PR56-001, run 2) | **Fair, and fixed here.** `queries.ts:127-130`: the Athena `tokens` column is input + output only, while `est_usd` also prices cache reads. A ~10M cache-read burst since the last rollup is priced but not counted, which is exactly the shape qa saw. The disclosure now says so. `ProjectsPage.tsx` is in this plan. |
+| LOW — admin "Settings" nav link appears late (F-PR56-003, run 2) | **Not on main at all.** `/settings` is #55's new page. Its qa run redeployed its frontend to the one shared dev site between my two runs ([[lesson-shared-dev-env-pr-qa-overwrite]]), so run 2 tested #55's bundle. Relayed to #55's author. |
+
+### What this shows about the loop
+- The red is **correct** and it is **not actionable by this PR** for four of the five findings. That is the
+  trade the owner chose with `QA_RED_ON: FAIL`: the check tells the truth and the triage lives here in
+  the report and in the PR comments, instead of a green check over a FAIL report.
+- The bot refusing both HIGH/MEDIUM findings is the intended behaviour — both files belong to another
+  open PR's plan, and a patch here would have collided with #55.
+- Two findings in one run (F-PR56-001 in run 1 vs run 2) were **different findings with the same id**
+  — qa numbers findings per run, so ids are not stable across runs. Cross-run identity comes from the
+  reconciliation block (prior-report ids), not from the `F-PR56-nnn` label.
