@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** 8693ff42cbde17ff17236029f0a7a085908efb13
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #53 — main was merged into this branch after #53 landed (a
 re-acceptance; first accepted against `7c67e8b`).
