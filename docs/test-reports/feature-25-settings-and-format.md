@@ -23,12 +23,14 @@
 | `frontend/src/lib/format.ts` | `fmtInt` |
 | `frontend/src/pages/UsagePage.tsx` | Invocations via `fmtInt` |
 | `frontend/src/styles.css` | `.nav-link-footer` |
+| `frontend/src/pages/OverviewPage.tsx` · `frontend/src/lib/help-content.ts` | correction to feature-23 after qa on this PR: Deployment-frequency tile gets an `all repos` chip and states the DORA page shows one repository; Spend tile names its token figure as input + output + cache-read (the Usage page also counts cache writes — the ~6% gap qa saw); help entries carry both caveats |
+| `frontend/src/pages/DoraPage.tsx` (bot round 1, kept) | throughput panel copy scoped to the selected repository — in this plan, so retained |
 
 ## Gates
 | Gate | Result |
 |---|---|
 | Frontend `tsc --noEmit` / `vite build` | PASS |
-| `sdlc_ci_gate.py --require-active` | PASS — 8 source files, all named in the plan |
+| `sdlc_ci_gate.py --require-active` | PASS — 10 source files, all named in the plan |
 
 ## Local authenticated render (live dev API, owner's session)
 | Check | Result |

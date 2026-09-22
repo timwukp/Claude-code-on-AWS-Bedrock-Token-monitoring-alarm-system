@@ -18,6 +18,10 @@ is in flight.
 6. `frontend/src/lib/format.ts` — `fmtInt`.
 7. `frontend/src/pages/UsagePage.tsx` — Invocations via `fmtInt`.
 8. `frontend/src/styles.css` — `.nav-link-footer`.
+9. `frontend/src/pages/OverviewPage.tsx` — **correction to feature-23** (qa on #55, two HIGHs): the Deployment-frequency tile
+   gains an `all repos` chip and says the DORA page shows one repository at a time; the Spend tile names what its token
+   figure counts (input + output + cache-read — no cache writes, which the Usage page includes).
+10. `frontend/src/lib/help-content.ts` — matching caveats on `overview.spend` and `dora.deployment-frequency`.
 
 Non-source riders: `.sdlc/active` (handover from `roi-cost-tables`), `intent/roi-cost-tables/*` → shipped (my
 own predecessor), `intent/settings-and-format/*`, `CHANGELOG.md`, `docs/test-reports/feature-25-settings-and-format.md`

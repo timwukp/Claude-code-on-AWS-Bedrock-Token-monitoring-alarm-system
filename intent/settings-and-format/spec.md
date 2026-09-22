@@ -30,5 +30,10 @@ said "add one below" / "manage projects on the By Project page" now points to Se
 ### 4. Formatting
 `lib/format.ts`: `fmtInt(n)` = `Math.round(n).toLocaleString('en-US')`. `UsagePage.tsx` Invocations uses it.
 
+### 5. Overview corrections (feature-23 follow-through)
+Deployment-frequency tile: chips `all repos` + `proxy`; definition states it combines all synced repositories
+while the DORA page shows one. Spend tile: the token figure reads "N input + output + cache-read tokens";
+help entries carry the same two caveats. No number changes.
+
 ## Out of scope
 `fmtTokens`; APIs; ROI assumptions overrides; DORA table lengths.
