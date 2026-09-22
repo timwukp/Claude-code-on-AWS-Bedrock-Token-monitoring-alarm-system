@@ -188,12 +188,30 @@ export function ProjectsPage() {
   const totalCost   = apiTotalUsd ?? rowsCost;
   const centDrift   = apiTotalUsd != null ? Math.round(Math.abs(apiTotalUsd - rowsCost) * 100) / 100 : 0;
 
+  // The three header tiles do NOT all come from the same place, and with Full selected that is
+  // visible in the numbers: "Projects tracked" counts the Athena rows below, while both totals stay
+  // on the per-model rollups (F-401, so they keep matching the Cost page). Reading the header as one
+  // dataset is therefore wrong — 5 projects next to totals covering 21 of them. Each tile names its
+  // own source instead of binding all three to one: binding to the rows would discard the
+  // authoritative rollup totals, binding to the rollups would misstate the Athena row count.
+  const rowSource = source === 'full' ? 'Athena' : 'rollups';
+  const srcChip = (text: string) => <span className="badge neutral">{text}</span>;
+
   return (
     <>
       <div className="kpi-grid">
-        <Kpi label="Projects tracked" value={String(rows.length)} accent="var(--primary)" />
-        <Kpi label="Total tokens" value={fmtTokens(totalTokens)} accent="var(--accent-blue)" />
+        <Kpi label="Projects tracked" value={String(rows.length)} accent="var(--primary)"
+             chip={srcChip(rowSource)}
+             foot={source === 'full'
+               ? 'rows in the table below — Athena over the raw logs, so it counts only projects whose attribution is resolvable at call time (tiers ① and ②); the totals beside it are rollup-sourced and cover every tier'
+               : 'rows in the table below — the DynamoDB rollups, all four attribution tiers'} />
+        <Kpi label="Total tokens" value={fmtTokens(totalTokens)} accent="var(--accent-blue)"
+             chip={srcChip(apiTotalTokens != null ? 'rollups' : rowSource)}
+             foot={apiTotalTokens != null
+               ? `per-model rollups across every project, not just the ${rows.length} row(s) above (those sum to ${fmtTokens(rowsTokens)})${rollupsAsOf ? ` · as of ${rollupsAsOf.slice(11, 16)} UTC` : ''}`
+               : 'sum of the rows in the table below'} />
         <Kpi label="Total est. cost" value={fmtUsd(totalCost)} accent="var(--accent-green)"
+             chip={srcChip(apiTotalUsd != null ? 'rollups' : rowSource)}
              foot={apiTotalUsd != null && Math.abs(apiTotalUsd - rowsCost) > 0.5
                ? (source === 'full'
                    ? `Athena rows ${fmtUsd(rowsCost)} vs rollups ${fmtUsd(apiTotalUsd)}${rollupsAsOf ? ` (as of ${rollupsAsOf.slice(11, 16)} UTC)` : ''} — Athena reads raw logs live; rollups refresh every 15 min, so the ${fmtUsd(Math.abs(rowsCost - apiTotalUsd))} difference is traffic since the last rollup`
