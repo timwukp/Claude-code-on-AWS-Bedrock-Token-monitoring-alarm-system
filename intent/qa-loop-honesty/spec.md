@@ -73,9 +73,20 @@ recur. Returns `''` when there is no evidence of recurrence, so a first report r
 
 `bugfix_agent.py --patched-list <path>` writes one repo-relative path per line for each file it
 actually patched, and writes an empty file when there was nothing to patch (the workflow reads it
-unconditionally). The workflow stages that list NUL-delimited and nothing else, replacing the
+unconditionally). The workflow stages that list line by line and nothing else, replacing the
 directory-scoped `git add -- backend frontend infra`. One list governs both the refusal and the
-commit, so the two cannot disagree.
+commit, so the two cannot disagree — and there is deliberately no second, hardcoded path allowlist
+in the workflow, which could only diverge from the plan. A listed path that is not on disk fails the
+step with a `::error::` rather than being skipped: a silently failed `git add` would read as "no
+applicable source patch".
+
+### 5b. Diagnostics survive a red run, redacted
+
+`qa-report.json`, `qa-output.txt`, `bugfix-summary.md` and `bugfix-patched.txt` are uploaded as a
+14-day artifact on every run (`if: always()`), **after** passing through `.github/scripts/redact.js`.
+Any file that still matches a secret pattern after redaction is withheld with a `::warning::`.
+Artifacts are not log-masked and the repository is public; the agents narrate S3 URIs that carry
+the account id.
 
 ### 6. `/projects` — each header KPI names its source
 

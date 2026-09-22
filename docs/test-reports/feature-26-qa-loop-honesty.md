@@ -91,6 +91,17 @@ fired as specified, and the colour matched the verdict both times.**
 | LOW — `/projects` $9.94 Athena-vs-rollup gap on 0.01M tokens (F-PR56-001, run 2) | **Fair, and fixed here.** `queries.ts:127-130`: the Athena `tokens` column is input + output only, while `est_usd` also prices cache reads. A ~10M cache-read burst since the last rollup is priced but not counted, which is exactly the shape qa saw. The disclosure now says so. `ProjectsPage.tsx` is in this plan. |
 | LOW — admin "Settings" nav link appears late (F-PR56-003, run 2) | **Not on main at all.** `/settings` is #55's new page. Its qa run redeployed its frontend to the one shared dev site between my two runs ([[lesson-shared-dev-env-pr-qa-overwrite]]), so run 2 tested #55's bundle. Relayed to #55's author. |
 
+### Follow-up from the first red run (owner-forwarded log analysis)
+Two of its three suggestions were taken. **Loud staging:** the `2>/dev/null || true` on the
+`git add` was removed; a listed path missing from disk now fails the step with `::error::`. Its
+proposed hardcoded `frontend/*|backend/lambdas/api/*` allowlist was **not** taken — the active plan is
+the single authority (rule b) and a second list could only disagree with it. **Diagnostics artifact:**
+added, but only after `.github/scripts/redact.js` — artifacts are not log-masked and the repo is
+public, so a raw `qa-output.txt` would publish the account id. Verified locally with a synthetic
+12-digit id and a fake `AKIA…` key: both were redacted in the artifact copy, and `findSecrets` on the
+result was empty. Its third suggestion — "fix the remaining blocking finding in this PR" — was
+declined: the finding lives in #55's files, is fixed there, and is not in this plan.
+
 ### What this shows about the loop
 - The red is **correct** and it is **not actionable by this PR** for four of the five findings. That is the
   trade the owner chose with `QA_RED_ON: FAIL`: the check tells the truth and the triage lives here in

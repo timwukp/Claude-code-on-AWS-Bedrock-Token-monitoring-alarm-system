@@ -36,9 +36,15 @@ the edits carried across unchanged.
 3. `.github/workflows/ui-qa-agent.yml` — job-level `QA_RED_ON: FAIL` with the two options documented
    inline; `id: fix` on the Bug-Fix step so its `pushed` output is addressable; the staging block
    replaced with the exact-path `xargs -0 git add --` over `bugfix-patched.txt` plus
-   `pushed=true|false`; and the new terminal step **"Fail check if the QA report is not clean"**,
+   `pushed=true|false`; the new terminal step **"Fail check if the QA report is not clean"**,
    placed after the stall and fuse steps and before "Converged - clear loop state", keyed on
-   `steps.fix.outputs.pushed != 'true'` with `overall`/`blocking`/`findings` routed through `env:`.
+   `steps.fix.outputs.pushed != 'true'` with `overall`/`blocking`/`findings` routed through `env:`;
+   and two steps added after the first live run: the staging loop fails loudly on a listed path that
+   is not on disk (a `2>/dev/null || true` there made a broken patch read as "no applicable source
+   patch"), and a **"Redact QA diagnostics"** + **"Upload QA diagnostics"** pair keeps
+   `qa-report.json` / `qa-output.txt` / `bugfix-summary.md` / `bugfix-patched.txt` as a 14-day
+   artifact — after `.github/scripts/redact.js`, withholding any file that still matches a secret
+   pattern, because artifacts are not log-masked and the repo is public.
 
 ### Frontend
 4. `frontend/src/pages/ProjectsPage.tsx` — `rowSource` and a local `srcChip` helper; a source chip and

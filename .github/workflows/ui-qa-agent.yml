@@ -189,9 +189,19 @@ jobs:
           # Stage exactly the files the agent patched — nothing else. A directory-scoped
           # `git add -- backend frontend infra` also swept in anything else dirty in the runner
           # tree, and the agent now refuses files the active plan doesn't name, so honouring that
-          # refusal at the commit step too means one list governs both (rule (b)).
+          # refusal at the commit step too means one list governs both (rule (b)). The list is the
+          # only authority here — no second hardcoded path allowlist, which could only disagree
+          # with the plan. A listed path that does not exist is an agent bug and fails loudly:
+          # swallowing it would make a broken patch read as "no applicable source patch".
           if [ -s bugfix-patched.txt ]; then
-            tr '\n' '\0' < bugfix-patched.txt | xargs -0 -r git add -- 2>/dev/null || true
+            while IFS= read -r file; do
+              [ -n "$file" ] || continue
+              if [ ! -f "$file" ]; then
+                echo "::error::Bug-Fix Agent listed a path it did not leave on disk: $file"
+                exit 1
+              fi
+              git add -- "$file"
+            done < bugfix-patched.txt
           fi
           if ! git diff --cached --quiet; then
             round=$(( PRIOR_ROUNDS + 1 ))
@@ -205,6 +215,41 @@ jobs:
             echo "pushed=false" >> "$GITHUB_OUTPUT"
             echo "Bug-Fix Agent produced no applicable source patch."
           fi
+
+      # ── Keep the diagnostics, redacted ───────────────────────────────────────
+      # The report and the agents' stdout are what a reviewer needs when the check is red, and
+      # the PR comment truncates them. But artifacts are NOT log-masked and this repo is public:
+      # the agents narrate S3 URIs carrying the account id. So every file goes through the same
+      # redactor the comment uses, and a file that still matches a secret pattern afterwards is
+      # withheld rather than uploaded (see .github/scripts/redact.js).
+      - name: Redact QA diagnostics
+        if: always()
+        run: |
+          mkdir -p qa-diag
+          node - <<'JS'
+            const fs = require('fs');
+            const { redact, findSecrets } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/redact.js`);
+            for (const f of ['qa-report.json', 'qa-output.txt', 'bugfix-summary.md', 'bugfix-patched.txt']) {
+              if (!fs.existsSync(f)) continue;
+              const body = redact(fs.readFileSync(f, 'utf8'));
+              const left = findSecrets(body);
+              if (left.length) {
+                console.log(`::warning::${f} still matched ${left.map(r => r.label).join(', ')} after redaction - withheld from the artifact`);
+                continue;
+              }
+              fs.writeFileSync(`qa-diag/${f}`, body);
+            }
+          JS
+          ls -l qa-diag || true
+
+      - name: Upload QA diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-qa-${{ github.run_id }}
+          path: qa-diag/
+          if-no-files-found: ignore
+          retention-days: 14
 
       # ── Post results / loop status onto the PR ───────────────────────────────
       - name: Comment on PR
