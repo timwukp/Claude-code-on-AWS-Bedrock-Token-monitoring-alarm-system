@@ -6,6 +6,32 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Fixed — the CI QA loop now reports what it found
+- **A failing QA report can no longer end the run green.** `qa_agent.py` publishes its `overall`
+  verdict to `$GITHUB_OUTPUT`, and a new terminal workflow step fails the job when the loop has
+  stopped (no auto-fix pushed) with an unclean report. Previously the QA step ran under
+  `continue-on-error` and nothing read the verdict back, so "blocking findings remain, fewer than two
+  stalls, nothing pushed" ended **green** — PRs #51, #52 and #53 each reached "all checks passed" over
+  a report saying `overall: FAIL`. The job-level `QA_RED_ON` knob selects whether LOW findings redden
+  the check (`FAIL`, the default) or only blocking ones (`BLOCKING`). An absent or unparseable verdict
+  is red under both: "no report" must not read as "found nothing".
+- **The Bug-Fix agent may only edit files the active intent plan names**, using a check that mirrors
+  `sdlc_ci_gate.plan_covers` exactly, and refusing everything when no plan is readable. A patch
+  outside the plan reddened `sdlc-gate` — the very kind of check the fix was meant to green — and
+  needed hand-written reverts on #48 and #51. The commit step now stages exactly the agent's own
+  patched-file list instead of `git add -- backend frontend infra`.
+- **A finding that recurs across PRs is named as a repeat** in the bot's summary, with the statement
+  that it needs its own intent chain. A finding no plan covers is refused every round, so one
+  `/anomalies` copy defect was reported four times before anyone owned it.
+- All three rules, and the failure each prevents, are written down in `AGENTS.md`.
+
+### Changed — two pages state their counts so they cannot be read wrong
+- **Projects:** each header tile now carries a source chip and a provenance line. With the Full
+  (Athena) source selected, "Projects tracked" counts Athena rows while both totals stay on the
+  per-model rollups — three tiles, two sources — which read as one dataset before.
+- **Latency:** the fleet tiles say the first-byte sample set is *contained in* the end-to-end one and
+  that the two do not add up. Adding them is the arithmetic error the QA agent itself made.
+
 ### Changed — one table and one chart on AI ROI; a readable Cost table
 - **AI ROI:** the eighteen stacked per-project waterfalls (9 800 px) are replaced by one sortable table
   — project · spend/mo · break-even · evidence · value/yr · investment/yr · ROI or a short reason — and

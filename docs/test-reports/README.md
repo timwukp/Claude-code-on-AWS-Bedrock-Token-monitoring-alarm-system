@@ -25,11 +25,12 @@ results. One report per feature (mapped to a GitHub issue / PR).
 | UX foundation (tokens, icons, tiles, help panel, dark theme) | — | #46 | [feature-20](./feature-20-ux-foundation.md) | PASS |
 | Global time range (one control, URL-synced, every page states its period) | — | #48 | [feature-21](./feature-21-global-time-range.md) | PASS |
 | Anomaly table key-shape drift (one key definition + one-off row repair) | — | #50 | [feature-22](./feature-22-anomaly-key-shape.md) | PASS |
-| Model-hop latency (measured hops only, fleet scope stated) | — | TBD | [feature-18](./feature-18-latency-observability.md) | PASS |
-| Model-hop latency — inference-profile ids resolved to model names (qa F-PR52-002) | — | TBD | [feature-18b](./feature-18b-latency-profile-labels.md) | PASS |
+| Model-hop latency (measured hops only, fleet scope stated) | — | #52 | [feature-18](./feature-18-latency-observability.md) | PASS |
+| Model-hop latency — inference-profile ids resolved to model names (qa F-PR52-002) | — | #53 | [feature-18b](./feature-18b-latency-profile-labels.md) | PASS |
 | Projects / ROI follow-ups (F-1706 cent drift, F-1707 refusal scope) | — | #49 | [feature-21b](./feature-21b-projects-roi-followups.md) | PASS |
 | Overview landing page + `/v1/overview` (spend vs prior period, budget status, anomalies, delivery) | — | #51 | [feature-23](./feature-23-overview-page.md) | PASS |
 | ROI + Cost tables (one table + one chart; merged model rows, totals, folded noise) | — | #54 | [feature-24](./feature-24-roi-cost-tables.md) | PASS |
+| QA loop honesty (the check colour matches the report; the bot stays inside the plan) | — | TBD | [feature-26](./feature-26-qa-loop-honesty.md) | PASS |
 
 Each report records: scope, unit-test results, build/synth gates, real-AWS validation evidence,
 any defect found+fixed during validation, and a verdict. Reports are written before opening the
