@@ -31,6 +31,58 @@ DEFAULT_HARNESS = f"arn:aws:bedrock-agentcore:{REGION}:{_ACCOUNT_ID}:harness/{BU
 SEARCH_DIRS = ["backend/lambdas", "frontend/src"]
 
 
+def active_plan(repo_root: str) -> tuple[str | None, str]:
+    """The active chain's plan.md text, plus a label for it.
+
+    Returns (None, label) when no active chain can be read, which makes the caller refuse to
+    patch anything. Failing closed is deliberate: the sdlc gate rejects any changed source file
+    the active plan does not name, so a patch outside the plan turns the very check the fix was
+    meant to green into a red one. That happened on #48 (ProjectsPage) and #51 (dora.ts), each
+    needing a hand-written revert commit."""
+    try:
+        with open(os.path.join(repo_root, ".sdlc", "active"), encoding="utf-8") as f:
+            slug = f.read().strip().splitlines()[0].strip()
+    except (OSError, IndexError):
+        return None, "no .sdlc/active"
+    if not slug:
+        return None, "empty .sdlc/active"
+    try:
+        with open(os.path.join(repo_root, "intent", slug, "plan.md"),
+                  encoding="utf-8") as f:
+            return f.read().replace("\\", "/"), slug
+    except OSError:
+        return None, f"{slug} (no plan.md)"
+
+
+def plan_covers(plan_text: str, rel: str) -> bool:
+    """Mirror of sdlc_ci_gate.plan_covers — a plain substring test, deliberately.
+
+    It must stay byte-identical in behaviour to the gate's own check. If this were stricter the
+    bot would refuse patches the gate would accept; if looser, it would push patches the gate
+    rejects, which is the failure this rule exists to prevent."""
+    return rel.replace("\\", "/") in plan_text
+
+
+def recurrence_note(finding: dict, report: dict) -> str:
+    """Flag a finding that has been reported before, so it gets a chain instead of another round.
+
+    A finding outside the active plan is refused every round, so it survives PR after PR without
+    anyone owning it: the /anomalies window-button label was reported four times (F-PR51-006 →
+    F-PR52-001 → F-PR53-003 → F-PR53-103) purely for want of plan coverage. Naming the recurrence
+    in the summary is what turns it into an action."""
+    fid = finding.get("id") or ""
+    still = any(r.get("id") == fid and r.get("status") == "STILL_FAILING"
+                for r in report.get("reconciliation") or [])
+    # Findings cite their own ancestry in the evidence ("recurrence of F-PR51-006/F-PR52-001").
+    earlier = sorted({i for i in re.findall(r"F-[A-Za-z0-9-]+",
+                                            finding.get("evidence") or "") if i != fid})
+    if not (still or earlier):
+        return ""
+    seen = f" as {', '.join(earlier)}" if earlier else ""
+    return (f" **This is a repeat report**{seen} — it needs its own intent chain naming that file, "
+            f"because waiting for a plan that happens to cover it is why it keeps recurring.")
+
+
 def stream_text(resp) -> str:
     """Collect streamed text; on a dropped/errored stream return what arrived so far.
 
@@ -118,6 +170,9 @@ def main() -> int:
     ap.add_argument("--region", default="us-east-1")
     ap.add_argument("--repo-root", default=".")
     ap.add_argument("--out", default="bugfix-summary.md")
+    ap.add_argument("--patched-list", default="bugfix-patched.txt",
+                    help="Where to write the paths actually patched, one per line, so the "
+                         "workflow can stage exactly those and nothing else.")
     args = ap.parse_args()
 
     with open(args.report) as f:
@@ -127,6 +182,8 @@ def main() -> int:
     if not findings:
         print("No blocking findings — nothing to fix.")
         open(args.out, "w").write("No blocking findings; no fix generated.\n")
+        # Always leave the list behind, even empty: the workflow reads it unconditionally.
+        open(args.patched_list, "w").write("")
         return 0
 
     # Root-causing + patching a finding can stream for many minutes (stronger models think
@@ -134,13 +191,24 @@ def main() -> int:
     # long-read config qa_agent.py already uses, and don't auto-retry a long invoke.
     cfg = BotoConfig(read_timeout=900, connect_timeout=30, retries={"max_attempts": 0})
     client = boto3.client("bedrock-agentcore", region_name=args.region, config=cfg)
-    summaries, applied = [], 0
+    plan_text, chain = active_plan(args.repo_root)
+    if plan_text is None:
+        print(f"⛔ no readable active plan ({chain}) — refusing to patch anything", file=sys.stderr)
+    summaries, applied, patched = [], 0, []
     for finding in findings:
         src_path = guess_source(finding, args.repo_root)
         if not src_path:
             summaries.append(f"- **{finding.get('id')}** — could not locate source; skipped.")
             continue
         rel = os.path.relpath(src_path, args.repo_root)
+        # Rule (b): the bot may only edit files the active intent plan names.
+        if plan_text is None or not plan_covers(plan_text, rel):
+            where = f"the active plan (`{chain}`)" if plan_text is not None else f"any plan ({chain})"
+            summaries.append(
+                f"- **{finding.get('id')}** — `{rel}` is not named in {where}, so it was **not "
+                f"patched**.{recurrence_note(finding, report)}")
+            print(f"⛔ {finding.get('id')}: {rel} not covered by {chain} — refused")
+            continue
         source = open(src_path).read()
         prompt = f"""A real bug was found by our UI Test Agent:
 
@@ -177,6 +245,7 @@ line and output NO diff instead of guessing."""
         diff = extract_diff(text)
         if diff and apply_patch(diff, args.repo_root):
             applied += 1
+            patched.append(rel)
             summaries.append(f"- **{finding.get('id')}** ({finding.get('severity')}) → patched `{rel}`\n\n"
                              f"```diff\n{diff}```")
             print(f"✅ patched {rel} for {finding.get('id')}")
@@ -186,14 +255,22 @@ line and output NO diff instead of guessing."""
 
     with open(args.out, "w") as f:
         f.write(f"## Bug-Fix Agent — {applied}/{len(findings)} finding(s) patched\n\n")
+        if plan_text is not None:
+            f.write(f"Scope: only files named in `intent/{chain}/plan.md` may be edited.\n\n")
         f.write("\n\n".join(summaries) + "\n")
-    print(f"\n— applied {applied}/{len(findings)} fixes; wrote {args.out}")
+    # Exact paths patched, so the workflow stages these and not a whole directory: a dir-scoped
+    # `git add` would also sweep up anything else that happened to be dirty in the runner tree.
+    with open(args.patched_list, "w") as f:
+        f.write("".join(f"{p}\n" for p in patched))
+    print(f"\n— applied {applied}/{len(findings)} fixes; wrote {args.out} "
+          f"and {len(patched)} path(s) to {args.patched_list}")
     # "Nothing applicable to patch" is a RESULT, not a tool failure. Exiting non-zero here runs
     # under `bash -e` in the workflow, so it aborted the step before its own `git add` / "produced
     # no applicable source patch" branch — making that branch dead code — and before the Comment
     # on PR, stall-detector and fuse steps that own the red verdict and the actionable message.
-    # Redness for unfixable findings is the stall detector's job (two zero-progress rounds);
-    # reserve a non-zero exit for a genuine failure of this tool.
+    # Redness for an unclean report is now the "Fail check if the QA report is not clean" step's
+    # job, which reads qa_agent's `overall` output; reserve a non-zero exit here for a genuine
+    # failure of this tool. Returning 0 is what lets a refusal above be reported rather than crash.
     return 0
 
 

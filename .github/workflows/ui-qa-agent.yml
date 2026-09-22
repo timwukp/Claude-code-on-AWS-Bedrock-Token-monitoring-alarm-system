@@ -44,6 +44,13 @@ env:
   # no blocking findings, red early when two consecutive rounds make zero progress (nothing
   # FIXED and the blocking set not shrinking — the signature of a bug this loop cannot fix).
   MAX_FIX_ROUNDS: '15'
+  # What makes this check red once the loop has stopped advancing (owner decision 2026-09-21).
+  #   FAIL     = any finding at all reddens it — the report's own verdict, LOW nits included.
+  #   BLOCKING = only CRITICAL/HIGH/MEDIUM redden it; LOW findings annotate but pass.
+  # FAIL is the default because the failure it prevents was real and repeated: #51, #52 and #53
+  # each ended GREEN while their report said `overall: FAIL`, so six green checks invited a merge
+  # of a failing report. Switching to BLOCKING is a one-word change here, nothing else.
+  QA_RED_ON: FAIL
 
 jobs:
   qa:
@@ -163,6 +170,7 @@ jobs:
 
       # ── Bug-Fix Agent → patch → push (re-triggers this workflow) ─────────────
       - name: Run Bug-Fix Agent and push fix
+        id: fix
         if: >-
           steps.qa.outputs.blocking == 'true' &&
           fromJSON(steps.rounds.outputs.count) < fromJSON(env.MAX_FIX_ROUNDS) &&
@@ -176,18 +184,25 @@ jobs:
             --report qa-report.json \
             --harness-arn "$BUGFIX_ARN" \
             --repo-root . \
-            --out bugfix-summary.md
-          # Only commit source the agent patched — never the CI run artifacts
-          # (qa-report.json, qa-output.txt, bugfix-summary.md) sitting in the workdir.
-          git add -- backend frontend infra 2>/dev/null || true
+            --out bugfix-summary.md \
+            --patched-list bugfix-patched.txt
+          # Stage exactly the files the agent patched — nothing else. A directory-scoped
+          # `git add -- backend frontend infra` also swept in anything else dirty in the runner
+          # tree, and the agent now refuses files the active plan doesn't name, so honouring that
+          # refusal at the commit step too means one list governs both (rule (b)).
+          if [ -s bugfix-patched.txt ]; then
+            tr '\n' '\0' < bugfix-patched.txt | xargs -0 -r git add -- 2>/dev/null || true
+          fi
           if ! git diff --cached --quiet; then
             round=$(( PRIOR_ROUNDS + 1 ))
             git config user.name  "agentcore-bugfix[bot]"
             git config user.email "agentcore-bugfix@users.noreply.github.com"
             git commit -m "chore(agent): auto-fix round $round — from UI QA findings"
             git push origin "HEAD:$HEAD_REF"
+            echo "pushed=true" >> "$GITHUB_OUTPUT"
             echo "Pushed auto-fix round $round; workflow will re-trigger."
           else
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
             echo "Bug-Fix Agent produced no applicable source patch."
           fi
 
@@ -277,6 +292,40 @@ jobs:
         run: |
           echo "::error::UI QA still failing after $MAX_FIX_ROUNDS auto-fix rounds (absolute fuse) - needs human review."
           exit 1
+
+      # ── The check's colour must match the report's verdict ───────────────────
+      # The QA step runs under continue-on-error, because a non-zero exit there must not abort
+      # the fix loop. The consequence was that nothing ever read its verdict back: whenever the
+      # bot pushed no patch and the stall counter had not yet reached 2, a report saying
+      # `overall: FAIL` ended the run GREEN. #51, #52 and #53 each reached "all checks passed"
+      # that way. Only runs that END the loop are judged here — if a fix was pushed, the
+      # re-triggered run renders the verdict instead.
+      - name: Fail check if the QA report is not clean
+        if: steps.fix.outputs.pushed != 'true'
+        env:
+          OVERALL: ${{ steps.qa.outputs.overall }}
+          BLOCKING: ${{ steps.qa.outputs.blocking }}
+          FINDINGS: ${{ steps.qa.outputs.findings }}
+        run: |
+          if [ -z "$OVERALL" ] || [ "$OVERALL" = "UNKNOWN" ]; then
+            echo "::error::UI QA produced no parseable verdict (overall='${OVERALL}'). Treating as failure - read the job output."
+            exit 1
+          fi
+          if [ "$QA_RED_ON" = "BLOCKING" ]; then
+            if [ "$BLOCKING" = "true" ]; then
+              echo "::error::UI QA has blocking findings and no fix was pushed - the loop has stopped. Read the PR comment."
+              exit 1
+            fi
+            if [ "$OVERALL" = "FAIL" ]; then
+              echo "::warning::UI QA report is FAIL with ${FINDINGS:-?} non-blocking finding(s); QA_RED_ON=BLOCKING, so this check stays green."
+            fi
+            exit 0
+          fi
+          if [ "$OVERALL" = "FAIL" ]; then
+            echo "::error::UI QA report says overall=FAIL with ${FINDINGS:-?} finding(s) and no fix was pushed - the loop has stopped. Read the PR comment for the findings."
+            exit 1
+          fi
+          echo "UI QA report is clean (overall=$OVERALL)."
 
       - name: Converged - clear loop state
         if: steps.qa.outputs.blocking != 'true'

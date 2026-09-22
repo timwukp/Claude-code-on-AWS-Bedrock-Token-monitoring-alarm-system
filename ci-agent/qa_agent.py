@@ -348,9 +348,13 @@ appear in "findings" (so it stays blocking)."""
     print(f"— reconciliation: {fixed} FIXED of {len(prior_findings)} prior; progress={progress}")
     # Emit machine-readable flags so the workflow can gate the Bug-Fix stage and the
     # zero-progress circuit breaker on the report itself, not on this process's exit code.
+    # `overall` is emitted too: this step runs under continue-on-error (a non-zero exit here
+    # must not abort the fix loop), so the *only* way the job's colour can reflect the verdict
+    # is for a later step to read it back. Without it a FAIL report ends the run green.
     gho = os.environ.get("GITHUB_OUTPUT")
     if gho:
         with open(gho, "a") as f:
+            f.write(f"overall={report.get('overall') or 'UNKNOWN'}\n")
             f.write(f"blocking={'true' if blocking else 'false'}\n")
             f.write(f"progress={'true' if progress else 'false'}\n")
             f.write(f"fixed={fixed}\n")
