@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** 2a9630cad20a9437afa3a5d7eb122bc9bddaaec0
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #54 (feature-24), the merge base at branch time. Nothing else
 is in flight.

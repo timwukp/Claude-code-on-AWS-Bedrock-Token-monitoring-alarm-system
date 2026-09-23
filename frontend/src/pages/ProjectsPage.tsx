@@ -161,15 +161,34 @@ export function ProjectsPage() {
   const totalCost   = apiTotalUsd ?? rowsCost;
   const centDrift   = apiTotalUsd != null ? Math.round(Math.abs(apiTotalUsd - rowsCost) * 100) / 100 : 0;
 
+  // Every header tile names where its number comes from. With Full selected the tiles are bound to
+  // the rollups (so the header is one dataset — the F-PR53-104 fix) while the table below is Athena
+  // over the raw logs, which resolves only two of the four attribution tiers. Without a label a
+  // reader sees 21 projects above 5 rows and cannot tell whether that is a bug. It is not, and the
+  // foot says why.
+  const rowSource = source === 'full' ? 'Athena' : 'rollups';
+  const srcChip = (text: string) => <span className="badge neutral">{text}</span>;
+
   return (
     <>
       <div className="kpi-grid">
-        <Kpi label="Projects tracked" value={String(apiProjectCount ?? rows.length)} accent="var(--primary)" />
-        <Kpi label="Total tokens" value={fmtTokens(totalTokens)} accent="var(--accent-blue)" />
+        <Kpi label="Projects tracked" value={String(apiProjectCount ?? rows.length)} accent="var(--primary)"
+             chip={srcChip(apiProjectCount != null ? 'rollups' : rowSource)}
+             foot={source === 'full'
+               ? (apiProjectCount != null
+                   ? `from the DynamoDB rollups, all four attribution tiers — the table below shows ${rows.length} Athena row(s), which resolve only tiers ① and ②, so the two counts differ by design`
+                   : 'rows in the table below — Athena over the raw logs, so it counts only projects whose attribution is resolvable at call time (tiers ① and ②)')
+               : 'rows in the table below — the DynamoDB rollups, all four attribution tiers'} />
+        <Kpi label="Total tokens" value={fmtTokens(totalTokens)} accent="var(--accent-blue)"
+             chip={srcChip(apiTotalTokens != null ? 'rollups' : rowSource)}
+             foot={apiTotalTokens != null
+               ? `per-model rollups across every project, not just the ${rows.length} row(s) below (those sum to ${fmtTokens(rowsTokens)})${rollupsAsOf ? ` · as of ${rollupsAsOf.slice(11, 16)} UTC` : ''}`
+               : 'sum of the rows in the table below'} />
         <Kpi label="Total est. cost" value={fmtUsd(totalCost)} accent="var(--accent-green)"
+             chip={srcChip(apiTotalUsd != null ? 'rollups' : rowSource)}
              foot={apiTotalUsd != null && Math.abs(apiTotalUsd - rowsCost) > 0.5
                ? (source === 'full'
-                   ? `Athena rows ${fmtUsd(rowsCost)} vs rollups ${fmtUsd(apiTotalUsd)}${rollupsAsOf ? ` (as of ${rollupsAsOf.slice(11, 16)} UTC)` : ''} — Athena reads raw logs live; rollups refresh every 15 min, so the ${fmtUsd(Math.abs(rowsCost - apiTotalUsd))} difference is traffic since the last rollup`
+                   ? `Athena rows ${fmtUsd(rowsCost)} vs rollups ${fmtUsd(apiTotalUsd)}${rollupsAsOf ? ` (as of ${rollupsAsOf.slice(11, 16)} UTC)` : ''} — Athena reads raw logs live; rollups refresh every 15 min, so the ${fmtUsd(Math.abs(rowsCost - apiTotalUsd))} difference is traffic since the last rollup. Token figures count input + output only; prompt-cache reads are priced but not counted, so a small token gap can carry a larger cost gap`
                    : `rows sum ${fmtUsd(rowsCost)} vs model rollups ${fmtUsd(apiTotalUsd)} — residual ${fmtUsd(Math.abs(apiTotalUsd - rowsCost))} predates per-project tracking`)
                : centDrift > 0
                  ? `per-model rates — same rate card as the Cost page · rows are shown to the cent, so their sum (${fmtUsd(rowsCost)}) can differ from this total by a few cents${rollupsAsOf ? ` · rollups as of ${rollupsAsOf.slice(11, 16)} UTC` : ''}`

@@ -255,7 +255,7 @@ export function LatencyPage() {
           }
           value={fmtMs(view.ttft[percentile])}
           accent={MEASURED}
-          foot={`${view.ttft.samples ?? 0} streaming invocations · ${percentile}${APPROX_FOOT(view.ttft.approximated)}`}
+          foot={`${view.ttft.samples ?? 0} streaming invocations · ${percentile} · a subset of the end-to-end count, not an additional set of calls${APPROX_FOOT(view.ttft.approximated)}`}
         />
         <Kpi
           label="Generation (streaming tail)"
@@ -268,7 +268,7 @@ export function LatencyPage() {
           label="End-to-end model call"
           chip={view.e2e.approximated ? <span className="badge">weighted</span> : undefined}
           value={fmtMs(view.e2e[percentile])}
-          foot={`${view.e2e.samples ?? 0} invocations · ${percentile} · Bedrock service time only${APPROX_FOOT(view.e2e.approximated)}`}
+          foot={`${view.e2e.samples ?? 0} invocations · ${percentile} · Bedrock service time only · every call, streaming and not — the first-byte count above is contained in this one, so the two never add up${APPROX_FOOT(view.e2e.approximated)}`}
         />
         <Kpi
           label="Streaming coverage"
