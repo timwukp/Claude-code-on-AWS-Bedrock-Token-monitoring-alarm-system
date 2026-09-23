@@ -31,6 +31,9 @@ are grouped by development milestone rather than strict semver releases.
   per-model rollups — three tiles, two sources — which read as one dataset before.
 - **Latency:** the fleet tiles say the first-byte sample set is *contained in* the end-to-end one and
   that the two do not add up. Adding them is the arithmetic error the QA agent itself made.
+- **DORA / ROI project tables:** the per-project 30-day spend read **31** PROJDAY day-buckets
+  (`projdayRange` subtracted the full window instead of `days − 1`), so it could exceed the Overview's
+  figure for the same project and label by one day of spend. Now the same 30 buckets as the Overview.
 - **Anomalies:** detections older than the selected window are listed behind a "Show N older
   detections" disclosure under the feed, instead of being counted in the empty state and unreachable.
 

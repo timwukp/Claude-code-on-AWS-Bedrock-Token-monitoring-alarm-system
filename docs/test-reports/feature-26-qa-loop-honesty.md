@@ -135,6 +135,21 @@ run 6 recorded below once it lands.
 |---|---|
 | `frontend/src/pages/AnomaliesPage.tsx` | `older` list + `Disclosure`, `FeedTable` helper; no API or time-range change |
 
+### Run 6 result, and the HIGH it uncovered
+`/anomalies` older-detections: ✅ **FIXED** (qa opened the disclosure at 30 d and 90 d, both rows rendered).
+New **HIGH** F-PR56R6-101: Overview "What changed" $304.22 vs DORA/ROI $353.44 for one project, all
+others matching to the cent. **Root cause — an off-by-one, not this PR's code:** `overview-calc.windowBounds`
+spans `today − (days − 1) … today` (30 buckets); `project-calc.projdayRange` spanned `now − days … today`
+(31 buckets). The $49.22 is one project's spend on the 31st day. The existing test pinned `08-18` for
+a 30-day window ending `09-17` — 31 days — so it documented the bug rather than guarding against it.
+Owner decision 2026-09-23: fix here (`project-calc.ts` + test added to the plan, §5c/5d) and deploy
+`Tums-dev-Api` from this tree so qa can see it. `cdk diff Tums-dev-Api`: exactly two Lambda code changes (`DoraFn`, `RoiFn` — the two `projdayRange`
+callers), no IAM, no routes, no other stack. Deployed 2026-09-23 (29.6 s). **Live-verified** by invoking
+the deployed `DoraFn` (`/v1/dora/projects?window=30`) and `OverviewFn` (`/v1/overview?window=30`) directly
+with a synthetic API-Gateway event carrying the real tenant claim: Open Agent Robot **$304.22 on both**
+(was $353.44 vs $304.22); token-monitoring $650.71 = $650.71; llmops-agentic-system $152.06 = $152.06;
+agentcore-guardrails-design-validation $66.74 = $66.74. Result of run 7 recorded below once it lands.
+
 ### What this shows about the loop
 - The red is **correct** and it is **not actionable by this PR** for four of the five findings. That is the
   trade the owner chose with `QA_RED_ON: FAIL`: the check tells the truth and the triage lives here in

@@ -26,12 +26,24 @@ const day = (dayStr: string, projectId: string, modelId: string, inTok: number, 
 const OPTS = { windowDays: 30, now: NOW, doraTrackedRepos: new Set(['o/a', 'o/b']) };
 
 describe('projdayRange', () => {
-  it('produces inclusive day bounds with a high sk sentinel', () => {
+  it('spans exactly windowDays day-buckets including today, with a high sk sentinel', () => {
     const r = projdayRange(NOW, 30);
     expect(r.toDay).toBe('2026-09-17');
-    expect(r.fromDay).toBe('2026-08-18');
-    expect(r.fromSk).toBe('2026-08-18');
+    // 2026-08-19 .. 2026-09-17 inclusive = 30 buckets. The old bound (08-18) was 31 — one more day
+    // of spend than the Overview shows for the same "last 30 days" label.
+    expect(r.fromDay).toBe('2026-08-19');
+    expect(r.fromSk).toBe('2026-08-19');
     expect(r.toSk > '2026-09-17#zzzz').toBe(true); // ￿ sorts after any projectId#modelId
+  });
+  it('agrees with the Overview window bounds for every supported window', () => {
+    for (const days of [7, 30, 90]) {
+      const r = projdayRange(NOW, days);
+      const first = new Date(Date.UTC(2026, 8, 17) - (days - 1) * 86_400_000).toISOString().slice(0, 10);
+      expect(r.fromDay).toBe(first);
+    }
+  });
+  it('never spans fewer than one bucket', () => {
+    expect(projdayRange(NOW, 0).fromDay).toBe('2026-09-17');
   });
 });
 

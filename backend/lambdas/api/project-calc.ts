@@ -40,11 +40,21 @@ export interface DoraProjectRow {
   notes: string[];
 }
 
-/** sk range for a PROJDAY window query: sk BETWEEN <fromDay> AND <toDay>#￿. */
+/**
+ * sk range for a PROJDAY window query: sk BETWEEN <fromDay> AND <toDay>#￿.
+ *
+ * `windowDays` day-buckets INCLUDING today — so a 30-day window is today and the 29 days before
+ * it, the same bounds `overview-calc.windowBounds` uses. This used to subtract the full window
+ * from `now`, which spans 31 buckets for "30 days": the DORA and ROI project tables then showed
+ * one more day of spend than the Overview did for the same label, and the gap surfaced as a
+ * cross-page mismatch on whichever project happened to have spend on that extra day (qa F-PR56R6-101,
+ * $49.22 on one project while every other project matched to the cent).
+ */
 export function projdayRange(now: Date, windowDays: number): { fromSk: string; toSk: string; fromDay: string; toDay: string } {
   const DAY = 86_400_000;
   const toDay = now.toISOString().slice(0, 10);
-  const fromDay = new Date(now.getTime() - Math.max(1, Math.floor(windowDays)) * DAY).toISOString().slice(0, 10);
+  const days = Math.max(1, Math.floor(windowDays));
+  const fromDay = new Date(now.getTime() - (days - 1) * DAY).toISOString().slice(0, 10);
   return { fromSk: fromDay, toSk: `${toDay}#￿`, fromDay, toDay };
 }
 

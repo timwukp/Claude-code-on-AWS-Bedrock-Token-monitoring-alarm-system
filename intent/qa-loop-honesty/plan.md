@@ -64,6 +64,18 @@ all recorded rather than rewritten away.
    into `FeedTable`. No API, no time-range-lib change — the widest window stays 90 days and the "two
    controls for one state" question stays with its own chain.
 
+### Backend (added at run 6)
+5c. `backend/lambdas/api/project-calc.ts` — `projdayRange` spans `windowDays` day-buckets **including
+   today** (`now − (days − 1)`), the bounds `overview-calc.windowBounds` already uses. It subtracted the
+   full window, so "30 days" read 31 PROJDAY buckets and the DORA and ROI project tables carried one
+   more day of spend than the Overview for the same label — surfaced by qa F-PR56R6-101 as a $49.22
+   mismatch on the one project with spend on that extra day. Callers (`dora.ts`, `roi.ts`) unchanged.
+5d. `backend/lambdas/api/project-calc.test.ts` — the range test asserts 30 buckets (`2026-08-19`, not
+   `08-18`), agreement with the Overview bounds for 7/30/90, and the one-bucket floor.
+
+   This is an API change, so `Tums-dev-Api` is deployed from this tree **before** the commit is pushed
+   (ui-qa ordering), under the owner's explicit authorisation of 2026-09-23.
+
 ### Docs and chain riders
 6. `AGENTS.md` — a new section, "The CI QA loop's rules", stating all three rules with the specific
    failure each prevents, so the next agent in this repo does not re-derive them.
@@ -81,14 +93,14 @@ all recorded rather than rewritten away.
    later `frontend/src/pages/AnomaliesPage.tsx` (see 5b).
 4. `docs`: `AGENTS.md`, `CHANGELOG.md`, the test report + index row. Open the PR.
 
-No API or infra change, so there is nothing to deploy before pushing — the usual
-"deploy the API before the frontend commit lands" ordering does not apply here.
+Until run 6 there was no API change. 5c/5d is one, so the usual "deploy the API before the
+commit lands" ordering applies to that commit: `cdk deploy Tums-dev-Api` from this tree, then push.
 
 ## Verification
 
 - **Gates:** backend `jest` + `tsc --noEmit` (untouched by this branch, but CI runs them);
   frontend `tsc --noEmit` + `vite build`; `cdk synth --context env=ci`; `sdlc_ci_gate.py` dry run —
-  the five gate-checked source files above must all be named in this plan and `Accepted-for` must
+  the seven gate-checked source files above must all be named in this plan and `Accepted-for` must
   equal `git merge-base github/main HEAD`.
 - **`plan_covers` parity:** exercised directly — a path the plan names returns `True`, one it does not
   returns `False`, a Windows-separator path normalises, and `active_plan` on a directory with no

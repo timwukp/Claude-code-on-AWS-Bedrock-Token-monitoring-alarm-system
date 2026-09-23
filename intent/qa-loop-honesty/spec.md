@@ -115,6 +115,12 @@ Under the alert feed, whenever the API returned detections older than the select
 shape as the feed. At the 90-day window the summary also states that the feed keeps the newest 100
 detections overall. The count in the empty state is unchanged; it now has something to point at.
 
+### 9. DORA and ROI project tables use the same 30-day window as the Overview
+
+`projdayRange(now, n)` returns `n` PROJDAY day-buckets including today. Previously it returned `n + 1`.
+The three pages that say "last 30 days" beside a per-project spend figure — Overview movers, DORA
+"Projects — delivery × cost", ROI — now read the same buckets and therefore the same number.
+
 ## Out of scope
 
 - The severity model, the stall threshold and `MAX_FIX_ROUNDS` are untouched.
