@@ -5,7 +5,7 @@
   sources) and the `/latency` sample-count wording that let qa invent F-PR53-001.
 - **Date:** 2026-09-22
 - **Verdict:** PASS on gates and direct exercise of the new helpers. The new workflow step is verified
-  by its own first run on this PR, recorded below once it lands.
+  by its own runs on this PR — red on runs 1–6 while findings remained, green on run 7 (see the closing note).
 
 ## What this report has to say plainly
 - **PRs #51, #52 and #53 each ended "all checks passed" over a report saying `overall: FAIL`.** The
@@ -128,8 +128,8 @@ as "make it green". Rather than flip `QA_RED_ON`, the finding was fixed at its s
 now lists the out-of-window detections behind a `Disclosure` under the feed (`FeedTable` factored out),
 so the empty state's "N older detections" has something to open. `AnomaliesPage.tsx` was added to this
 plan (§5b) — the honest way to widen scope under rule (b), rather than a bot patch or an unlisted edit.
-The "two controls for one state" question is deliberately left to the `/anomalies` chain. Result of
-run 6 recorded below once it lands.
+The "two controls for one state" question is deliberately left to the `/anomalies` chain. Run 6
+(`fb928a5`, id 35811046070) still ended red on one LOW; run 7 cleared it (closing note).
 
 | Scope | Change |
 |---|---|
@@ -148,7 +148,7 @@ callers), no IAM, no routes, no other stack. Deployed 2026-09-23 (29.6 s). **Liv
 the deployed `DoraFn` (`/v1/dora/projects?window=30`) and `OverviewFn` (`/v1/overview?window=30`) directly
 with a synthetic API-Gateway event carrying the real tenant claim: Open Agent Robot **$304.22 on both**
 (was $353.44 vs $304.22); token-monitoring $650.71 = $650.71; llmops-agentic-system $152.06 = $152.06;
-agentcore-guardrails-design-validation $66.74 = $66.74. Result of run 7 recorded below once it lands.
+agentcore-guardrails-design-validation $66.74 = $66.74.
 
 ### What this shows about the loop
 - The red is **correct** and it is **not actionable by this PR** for four of the five findings. That is the
@@ -159,3 +159,9 @@ agentcore-guardrails-design-validation $66.74 = $66.74. Result of run 7 recorded
 - Two findings in one run (F-PR56-001 in run 1 vs run 2) were **different findings with the same id**
   — qa numbers findings per run, so ids are not stable across runs. Cross-run identity comes from the
   reconciliation block (prior-report ids), not from the `F-PR56-nnn` label.
+
+### Closing note — run 7 (added by feature-27, docs only)
+Run 7 on `23678da` (workflow run 35813238943, 2026-09-23 03:09 UTC) ended **SUCCESS / overall PASS**: no
+findings remained, the terminal step found `overall` clean and let the job go green. Runs 1–6 were red for
+the reasons recorded above. #56 merged as `91bb02a` with that green run as its final check — the first PR
+on which the qa check colour matched the qa report on every run.

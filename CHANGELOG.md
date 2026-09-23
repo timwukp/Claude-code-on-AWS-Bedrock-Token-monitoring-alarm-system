@@ -6,6 +6,20 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Changed — the Cost page follows the portal's time range
+- **Estimated Cost honours the header time-range picker** (`?window=7|30|90|mtd`) instead of being pinned
+  to "All time". Its tiles and the Spend-by-model table now come from `/v1/overview` — the same PROJDAY
+  rollups and rate card as Overview and By project — so the three pages give the same figure for the same
+  range; the Estimated-spend tile carries the delta against the prior equal period and a daily sparkline.
+  The all-time total stays as the footer line, from `/v1/costs`.
+- **`GET /v1/overview` gains `byModel[].cacheSavingsUsd`** (additive) so cache savings can be windowed.
+  Until the API is redeployed the Cost page shows "—" for that column and says why, rather than a false zero.
+- **Overview's Budget tile names its source** whenever it shows a figure: "AWS Budgets billed spend — not the
+  token estimate in the Spend tile" (qa on #55/#56: "$0.00 · On track" beside a spend of thousands).
+- **Anomalies keeps one time-range control**: the in-feed "Show last 90 days" shortcut is gone; the header
+  picker sets the window and the disclosure under the feed lists older detections (F-PR56R4-001 lineage).
+  (feature-27, PR TBD)
+
 ### Fixed — the CI QA loop now reports what it found
 - **A failing QA report can no longer end the run green.** `qa_agent.py` publishes its `overall`
   verdict to `$GITHUB_OUTPUT`, and a new terminal workflow step fails the job when the loop has
