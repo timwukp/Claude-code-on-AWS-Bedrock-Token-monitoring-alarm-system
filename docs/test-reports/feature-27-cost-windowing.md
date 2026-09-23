@@ -1,6 +1,6 @@
 # Feature 27 — Cost page windowing (Cost follows the portal's time range)
 
-- **Chain:** `intent/cost-windowing/` · **Branch:** `feat/cost-windowing` off `main@91bb02a` (post-#56) · **PR:** TBD
+- **Chain:** `intent/cost-windowing/` · **Branch:** `feat/cost-windowing` off `main@91bb02a` (post-#56) · **PR:** #57
 - **Origin:** research finding R2 (one time model across the portal); qa LOWs on #55/#56 (Budget tile beside Spend
   tile; Anomalies two controls for one state).
 - **Date:** 2026-09-23

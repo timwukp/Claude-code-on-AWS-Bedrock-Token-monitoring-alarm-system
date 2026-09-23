@@ -18,7 +18,7 @@ are grouped by development milestone rather than strict semver releases.
   token estimate in the Spend tile" (qa on #55/#56: "$0.00 · On track" beside a spend of thousands).
 - **Anomalies keeps one time-range control**: the in-feed "Show last 90 days" shortcut is gone; the header
   picker sets the window and the disclosure under the feed lists older detections (F-PR56R4-001 lineage).
-  (feature-27, PR TBD)
+  (feature-27, PR #57)
 
 ### Fixed — the CI QA loop now reports what it found
 - **A failing QA report can no longer end the run green.** `qa_agent.py` publishes its `overall`
