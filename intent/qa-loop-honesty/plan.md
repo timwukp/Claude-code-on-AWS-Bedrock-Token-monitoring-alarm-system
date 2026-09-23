@@ -57,6 +57,12 @@ all recorded rather than rewritten away.
 5. `frontend/src/pages/LatencyPage.tsx` — one clause added to each of the two fleet KPI feet, stating
    that the first-byte sample set is contained in the end-to-end one and that the two do not add up.
    Copy only.
+5b. `frontend/src/pages/AnomaliesPage.tsx` — added after the fifth qa run on this PR left exactly one
+   finding, a LOW on this page: the empty state advertised "N older detections outside this window"
+   and offered no way to see them (sixth report of the lineage). The out-of-window detections are now
+   listed behind a native `Disclosure` under the feed, at every window; the table body is factored
+   into `FeedTable`. No API, no time-range-lib change — the widest window stays 90 days and the "two
+   controls for one state" question stays with its own chain.
 
 ### Docs and chain riders
 6. `AGENTS.md` — a new section, "The CI QA loop's rules", stating all three rules with the specific
@@ -71,7 +77,8 @@ all recorded rather than rewritten away.
 1. `docs(sdlc)`: this chain + `.sdlc/active` handover + the previous chain → shipped.
 2. `fix(ci)`: `ci-agent/qa_agent.py`, `ci-agent/bugfix_agent.py`,
    `.github/workflows/ui-qa-agent.yml`.
-3. `fix(frontend)`: `frontend/src/pages/ProjectsPage.tsx`, `frontend/src/pages/LatencyPage.tsx`.
+3. `fix(frontend)`: `frontend/src/pages/ProjectsPage.tsx`, `frontend/src/pages/LatencyPage.tsx`;
+   later `frontend/src/pages/AnomaliesPage.tsx` (see 5b).
 4. `docs`: `AGENTS.md`, `CHANGELOG.md`, the test report + index row. Open the PR.
 
 No API or infra change, so there is nothing to deploy before pushing — the usual
@@ -81,7 +88,7 @@ No API or infra change, so there is nothing to deploy before pushing — the usu
 
 - **Gates:** backend `jest` + `tsc --noEmit` (untouched by this branch, but CI runs them);
   frontend `tsc --noEmit` + `vite build`; `cdk synth --context env=ci`; `sdlc_ci_gate.py` dry run —
-  the four gate-checked source files above must all be named in this plan and `Accepted-for` must
+  the five gate-checked source files above must all be named in this plan and `Accepted-for` must
   equal `git merge-base github/main HEAD`.
 - **`plan_covers` parity:** exercised directly — a path the plan names returns `True`, one it does not
   returns `False`, a Windows-separator path normalises, and `active_plan` on a directory with no

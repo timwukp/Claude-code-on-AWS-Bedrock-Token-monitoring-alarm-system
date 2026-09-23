@@ -31,6 +31,7 @@
 | `.github/workflows/ui-qa-agent.yml` | `QA_RED_ON` knob; `id: fix` + `pushed` output; exact-path staging from the patched list; terminal step **"Fail check if the QA report is not clean"** |
 | `frontend/src/pages/ProjectsPage.tsx` | source chip + provenance foot on all three header tiles |
 | `frontend/src/pages/LatencyPage.tsx` | the two fleet KPI feet state that the first-byte set is contained in the end-to-end set |
+| `frontend/src/pages/AnomaliesPage.tsx` | out-of-window detections listed behind a disclosure (added at run 6) |
 | `AGENTS.md` | new section "The CI QA loop's rules" |
 
 No API, infra, query or number change. Nothing to deploy before the push.
@@ -120,6 +121,19 @@ chain.** `QA_RED_ON` stays `FAIL`. So the first PR to land under the new rule la
 check whose report says exactly one LOW finding, none of it this PR's — which is the intended reading:
 the colour is the report's verdict, and the merge decision is the owner's, made with that verdict
 visible instead of hidden behind a green check.
+
+### Run 6 — the owner re-raised the red, so the LOW was fixed here after all
+The owner's first decision was to merge over the LOW; they then re-posted the failing step, which reads
+as "make it green". Rather than flip `QA_RED_ON`, the finding was fixed at its source: `AnomaliesPage.tsx`
+now lists the out-of-window detections behind a `Disclosure` under the feed (`FeedTable` factored out),
+so the empty state's "N older detections" has something to open. `AnomaliesPage.tsx` was added to this
+plan (§5b) — the honest way to widen scope under rule (b), rather than a bot patch or an unlisted edit.
+The "two controls for one state" question is deliberately left to the `/anomalies` chain. Result of
+run 6 recorded below once it lands.
+
+| Scope | Change |
+|---|---|
+| `frontend/src/pages/AnomaliesPage.tsx` | `older` list + `Disclosure`, `FeedTable` helper; no API or time-range change |
 
 ### What this shows about the loop
 - The red is **correct** and it is **not actionable by this PR** for four of the five findings. That is the

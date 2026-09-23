@@ -108,6 +108,13 @@ The first-byte tile's foot says its count is *a subset of* the end-to-end count,
 of calls. The end-to-end tile's foot says it covers every call, streaming or not, and that the
 first-byte count is contained in it, **so the two never add up**. No number changes.
 
+### 8. `/anomalies` — out-of-window detections are viewable, not just counted
+
+Under the alert feed, whenever the API returned detections older than the selected window, a native
+`<details>` disclosure titled `Show N older detection(s) — before <date>` lists them in the same table
+shape as the feed. At the 90-day window the summary also states that the feed keeps the newest 100
+detections overall. The count in the empty state is unchanged; it now has something to point at.
+
 ## Out of scope
 
 - The severity model, the stall threshold and `MAX_FIX_ROUNDS` are untouched.
