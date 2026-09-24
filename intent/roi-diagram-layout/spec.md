@@ -17,5 +17,10 @@
 - Acceptance: no `<text>` bounding box intersects the result-box `<rect>`; every text's right edge is inside the
   SVG; 0 console errors.
 
+## 2. `frontend/src/lib/time-range.ts` — window start aligned with the API (added after qa F-PR59-001)
+`windowBounds(w, now)`: numeric windows start at **UTC midnight of `today − (w − 1)`** (today included), `mtd` at
+UTC midnight of the 1st; `to` stays `now`. This is the calendar window `/v1/overview` computes server-side, so
+Usage (client-filtered by `fromIso`) and Cost (server-windowed) count the same days. `days` = ceil of the span.
+
 ## Out of scope
 Any other file; wording; colours.

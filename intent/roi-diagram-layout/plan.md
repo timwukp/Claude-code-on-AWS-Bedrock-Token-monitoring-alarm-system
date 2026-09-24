@@ -14,6 +14,12 @@ whoever merges second resolves.
 ## Files changed
 1. `frontend/src/components/RoiModelDiagram.tsx` — provenance lines relocated below the result box; Adoption-dip
    sentence wrapped to two lines; refusal note moved; viewBox height 470 → 506.
+2. `frontend/src/lib/time-range.ts` — **added after qa on this PR (F-PR59-001, HIGH, pre-existing):** Usage's
+   30-day input/output totals exceeded Cost's for the same range because the shared hook started its window at
+   `now − N×24h` (mid-day) while `/v1/overview` uses N calendar days from UTC midnight; the extra partial day
+   pulled a whole extra daily bucket into Usage. `windowBounds` now starts at UTC midnight of `today − (N−1)`,
+   matching the server. Affects the two pages that filter client-side by `fromIso` (Usage, Anomalies); pages
+   that pass `window=N` to the API are unchanged.
 
 Non-source riders: `.sdlc/active` (handover from `cost-windowing`), `intent/cost-windowing/*` → shipped (my own
 predecessor), `intent/roi-diagram-layout/*`, `CHANGELOG.md`, `docs/test-reports/feature-19b-roi-diagram-layout.md`
