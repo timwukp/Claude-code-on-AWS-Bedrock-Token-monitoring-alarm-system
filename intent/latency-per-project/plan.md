@@ -3,11 +3,12 @@
 - **Spec:** ./spec.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Accepted-for:** e47da9b92d4609f4ce79ac44c7b4c91757edd829
+- **Accepted-for:** 488b50879d78b61831285b6a23c9475639440ddf
 - **Status:** accepted
 
-`Accepted-for` is bound to `e47da9b9` — the tip of `main` after #59 (roi-diagram-layout) merged, itself after
-feature-27 (#57). This branch was deliberately cut after both, under the owner's rule that two chains never fly at once (the three
+`Accepted-for` is bound to `488b5087` — the tip of `main` after #60 (README only) merged, which landed after
+#59 (roi-diagram-layout) and #57 (feature-27). This branch was cut at `e47da9b` and main was merged in when #60
+moved the tip; four bindings in total, each recorded rather than rewritten. It was deliberately cut after #57/#59, under the owner's rule that two chains never fly at once (the three
 rider files and the `.sdlc/active` handover are structurally sequential). The code was built and
 gate-tested offline against `91bb02a` while feature-27 was in flight; nothing feature-27 touches is
 in this file set.
