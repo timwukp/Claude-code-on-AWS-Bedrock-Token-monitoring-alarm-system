@@ -4,7 +4,7 @@
 - **Origin:** research finding R2 (one time model across the portal); qa LOWs on #55/#56 (Budget tile beside Spend
   tile; Anomalies two controls for one state).
 - **Date:** 2026-09-23
-- **Verdict:** PASS on gates and the local authenticated render against the deployed dev API; live via qa recorded below.
+- **Verdict:** PASS — gates, local authenticated render, qa on the final commit, and the live dev page after the Api deploy (below).
 
 ## What this report has to say plainly
 - **The three spend pages now reconcile to the cent for the same range.** Cost (last 30 days) $2,176.30 =
@@ -53,11 +53,18 @@
 | `/anomalies?window=90` and `?window=7` | one action ("View budget guardrails"); disclosure "Show 2 older detections — before …" opens 2 rows |
 | Console errors | 0 across all routes |
 
-## Live (after the owner-authorised `Tums-dev-Api` deploy)
-_To be filled: invoke `OverviewFn` with `/tmp/ev-overview.json`; assert every `byModel` row has `cacheSavingsUsd`,
-Σ(30 d) ≤ all-time `totalCacheSavingsUsd`; Cost page tile shows a dollar figure._
+## Live (2026-09-24, after the owner-authorised `Tums-dev-Api` deploy)
+- **qa on the PR:** run 1 (`9c5c22b`) red; run 2 on the final commit `6557da7` **SUCCESS / overall PASS**. Merged as `fe15d14`.
+- **Deploy:** `cdk diff Tums-dev-Api` from `main@fe15d14` showed exactly one change — `[~] AWS::Lambda::Function OverviewFn`
+  (code); Data/Auth/Dora stacks "no differences". Deployed; a second `cdk deploy` reported "no changes".
+- **Direct invoke of the deployed `OverviewFn`** (`window=30`, real tenant claim, admin group): HTTP 200, window
+  2026-08-26 → 2026-09-24, `spend.currentUsd` **$1,739.21**, 8 `byModel` rows, **every row carries `cacheSavingsUsd`**,
+  Σ = **$12,149.04** (Claude Fable 5.1 $4,576.83 · Fable 5 $3,249.66 · Opus 5 $2,961.29 · Sonnet 4.6 $1,280.30 …).
+- **Live dev page** (bundle `index-5vOK-YFk.js`, owner's session): Cost 30 d tile **$1,739.21** = Overview Spend
+  **$1,739.21**; "Saved by prompt caching" **$12,149.04** (was "—"); totals row $12,149.04 / $1,739.21; one
+  `/v1/overview?window=30` call + one `/v1/costs`; 0 console errors.
 
 ## Risks and open points
-- Until the Api is redeployed, dev's Cost page shows "—" for cache savings — stated inline.
+- (closed) The "—" cache-savings state lasted from merge until the Api deploy the same day; the inline reason covered it.
 - The 90-day delta (+4195%) is against a prior window that predates the rollups; the "partial history" chip and
   the caption carry that. A reader who ignores both will over-read the delta — same trade as on Overview.
