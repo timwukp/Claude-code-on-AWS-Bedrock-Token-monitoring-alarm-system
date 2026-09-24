@@ -1,6 +1,6 @@
 # Feature 19b — ROI model diagram layout (footnotes no longer under the result box)
 
-- **Chain:** `intent/roi-diagram-layout/` · **Branch:** `fix/roi-diagram-layout` off `main@16da459` (post-#58) · **PR:** TBD
+- **Chain:** `intent/roi-diagram-layout/` · **Branch:** `fix/roi-diagram-layout` off `main@16da459` (post-#58) · **PR:** #59
 - **Origin:** owner's screenshot of the live `/roi` page, 2026-09-24: the ROI result box overlapping the
   "Adoption dip (J-curve …)" footnote, which was also clipped at the right edge.
 - **Date:** 2026-09-24
