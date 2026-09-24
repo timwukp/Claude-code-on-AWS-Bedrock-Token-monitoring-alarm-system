@@ -6,6 +6,23 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Added — latency per project, from the calls we already log (feature-28)
+- **`/latency` gains a "By project" table.** Every logged Bedrock call carries
+  `amazon-bedrock-invocationMetrics` (`invocationLatency`, `firstByteLatency`) in its response body; the
+  aggregator now lifts those two numbers out and **discards the body** (the payload that once ran a 4 GB
+  heap out of memory), folding them into count + sum + fixed-edge buckets on every rollup — hourly, per
+  model, per project and per project-day. Because the rollups are already attributed to projects
+  through the four existing tiers, latency is per project for free.
+- **`GET /v1/latency` returns `projects`** — per-project mean/p50/p95 for e2e and first-byte over the
+  window, read from the tenant's PROJDAY buckets. Percentiles off fixed buckets are **estimates**
+  (`estimated: true`, exact only to a bucket's span; `openEnded` marks a lower bound, shown as `≥`), and
+  the payload states what share of the window's calls carry a sample. The fleet CloudWatch figures
+  remain the exact reference and sit above the table. `LatencyFn` gains read grants on the tenants and
+  aggregates tables for this section only.
+- **`backend/scripts/backfill-latency.ts`** adds latency to rollups written before this build: dry-run by
+  default, `BACKFILL_UNTIL` (the aggregator deploy time) required, per-object claim/done markers so a
+  re-run never double-counts and a crash mid-object is reported rather than hidden.
+
 ### Fixed — the ROI model diagram's footnotes no longer run under its result box
 - On AI ROI, the "Adoption dip (J-curve …)", model-skeleton and method lines were drawn across the full
   width at the same height as the ROI result box, so the box covered them and the first line overflowed the
