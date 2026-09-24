@@ -27,15 +27,16 @@ export function coerceWindow(requested: Window, supported: readonly Window[]): W
   return order.find((w) => supported.includes(w)) ?? supported[0] ?? DEFAULT_WINDOW;
 }
 
+// Calendar days from UTC midnight, today included — the same window /v1/overview builds server-side
+// (`windowBounds` in overview-calc.ts). A rolling `now − N×24h` start began mid-day and pulled a whole
+// extra daily bucket into Usage, so its 30-day totals exceeded Cost's for "the same" range (qa F-PR59-001).
 export function windowBounds(w: Window, now = new Date()): { fromIso: string; toIso: string; days: number } {
   const to = new Date(now);
   const from = new Date(now);
-  if (w === 'mtd') {
-    from.setUTCDate(1); from.setUTCHours(0, 0, 0, 0);
-  } else {
-    from.setTime(to.getTime() - w * 86_400_000);
-  }
-  const days = Math.max(1, Math.round((to.getTime() - from.getTime()) / 86_400_000));
+  from.setUTCHours(0, 0, 0, 0);
+  if (w === 'mtd') from.setUTCDate(1);
+  else from.setUTCDate(from.getUTCDate() - (w - 1));
+  const days = Math.max(1, Math.ceil((to.getTime() - from.getTime()) / 86_400_000));
   return { fromIso: from.toISOString(), toIso: to.toISOString(), days };
 }
 
