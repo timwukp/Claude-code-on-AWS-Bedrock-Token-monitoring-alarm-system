@@ -88,7 +88,7 @@ export function RoiModelDiagram({ row }: { row?: RoiProjectRow }) {
 
   const title = row ? `ROI model for ${row.name}` : 'ROI model';
   return (
-    <svg viewBox="0 0 960 470" width="100%" role="img" aria-labelledby="roi-model-title roi-model-desc"
+    <svg viewBox="0 0 960 506" width="100%" role="img" aria-labelledby="roi-model-title roi-model-desc"
       style={{ display: 'block', fontFamily: 'inherit', maxWidth: 1180 }}>
       <title id="roi-model-title">{title}</title>
       <desc id="roi-model-desc">
@@ -169,19 +169,20 @@ export function RoiModelDiagram({ row }: { row?: RoiProjectRow }) {
       <text x={672} y={398} fontSize={10.5} fill="var(--text-dim)">{beText.length > 48 ? beText.slice(0, 47) + '…' : beText}<title>{beText}</title></text>
       {/* A clipped reason is never the only copy: the full sentence is printed under the diagram. */}
       {rRoi && (
-        <text x={20} y={452} fontSize={10.5} fontStyle="italic" fill="var(--danger)">
+        <text x={20} y={494} fontSize={10.5} fontStyle="italic" fill="var(--danger)">
           Why ROI is not computed here: {rRoi.length > 150 ? rRoi.slice(0, 149) + '…' : rRoi}
         </text>
       )}
 
-      {/* legend + provenance */}
+      {/* legend (left of the result box) + provenance (full width, below it — the result box ends at y 408) */}
       <g fontSize={10.5} fill="var(--text-dim)">
         <rect x={20} y={340} width={10} height={10} rx={2} fill="var(--accent-blue)" opacity={0.6} /><text x={36} y={349}>Measured — from this portal's telemetry (enforceable attribution, DORA store)</text>
         <rect x={20} y={360} width={10} height={10} rx={2} fill="var(--warning)" opacity={0.6} /><text x={36} y={369}>Assumed — configured per project; every default is editable and disclosed</text>
         <rect x={20} y={380} width={10} height={10} rx={2} fill="var(--danger)" opacity={0.5} /><text x={36} y={389}>Faded — refused: the page withholds a number rather than invent an input</text>
-        <text x={20} y={404} fontSize={10}>Adoption dip ("J-curve" in DORA's model): the team is temporarily slower while learning the tool — output dips, then recovers. One-time cost, applies to the first year only; off by default, editable per project.</text>
-        <text x={20} y={420} fontSize={10}>Model skeleton: DORA first-year AI ROI (dora.dev/ai/roi), formulas verified against the calculator source. Evidence bracket: Peng 2023 (+55.8%), Google 2024 (~+21%), METR 2025 (−19%).</text>
-        <text x={20} y={436} fontSize={10}>Full method: docs/ROI_METHODOLOGY.md · "within bracket" means plausible, never proven.</text>
+        <text x={20} y={430} fontSize={10}>Adoption dip ("J-curve" in DORA's model): the team is temporarily slower while learning the tool — output dips, then recovers.</text>
+        <text x={20} y={444} fontSize={10}>One-time cost, applies to the first year only; off by default, editable per project.</text>
+        <text x={20} y={462} fontSize={10}>Model skeleton: DORA first-year AI ROI (dora.dev/ai/roi), formulas verified against the calculator source. Evidence bracket: Peng 2023 (+55.8%), Google 2024 (~+21%), METR 2025 (−19%).</text>
+        <text x={20} y={478} fontSize={10}>Full method: docs/ROI_METHODOLOGY.md · "within bracket" means plausible, never proven.</text>
       </g>
     </svg>
   );

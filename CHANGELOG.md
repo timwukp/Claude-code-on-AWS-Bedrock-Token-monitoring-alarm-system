@@ -6,6 +6,12 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Fixed — the ROI model diagram's footnotes no longer run under its result box
+- On AI ROI, the "Adoption dip (J-curve …)", model-skeleton and method lines were drawn across the full
+  width at the same height as the ROI result box, so the box covered them and the first line overflowed the
+  SVG. They now sit below the box, the Adoption-dip sentence wraps, and the drawing is 36 units taller. Same
+  words, same colours. Reported by the owner on the live page. (feature-19b, PR TBD)
+
 ### Changed — the Cost page follows the portal's time range
 - **Estimated Cost honours the header time-range picker** (`?window=7|30|90|mtd`) instead of being pinned
   to "All time". Its tiles and the Spend-by-model table now come from `/v1/overview` — the same PROJDAY
