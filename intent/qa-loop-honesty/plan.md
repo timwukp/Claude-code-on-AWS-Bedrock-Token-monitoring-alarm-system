@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** b4398241ef76f17aa85f2d70436a82bfd347988c
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is bound to `b4398241` — the tip of `main` after #55 (feature-25) merged, which is this
 branch's merge base once main is merged in. The work was first staged against `8693ff42` (post-#53),

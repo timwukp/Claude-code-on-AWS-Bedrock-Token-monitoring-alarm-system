@@ -100,6 +100,7 @@ export const HELP = {
     why: 'It is the number that moves with your usage in near-real time, hours to days ahead of the AWS bill.',
     how: 'Per-model token counts × the rate card in the repo (input, output, cache-read at 0.1×). Rolled up from the same logs as Usage.',
     caveats: [
+      'Follows the time range in the header; the all-time total is the footer line under the table. Overview and By project use the same rollups and rate card, so the same range gives the same figure on all three pages.',
       'An estimate, not an invoice: credits, refunds, private pricing and rounding make the AWS bill differ. Reconfirm against official pricing before billing.',
       'The Governance page shows AWS Budgets’ billed figure; the two use different sources and will not match.',
     ],
@@ -107,9 +108,10 @@ export const HELP = {
   },
   'cost.cache-savings': {
     title: 'Saved by prompt caching',
-    what: 'How much lower the estimate is than it would have been without prompt caching.',
+    what: 'How much lower the estimate is than it would have been without prompt caching, for the selected time range.',
     why: 'Caching is the single largest lever on Claude spend for agentic workloads; this quantifies it.',
-    how: 'Cache-read tokens × (full input rate − cache-read rate), summed per model.',
+    how: 'Cache-read tokens in the range × (full input rate − cache-read rate), summed per model.',
+    caveats: ['Shows “—” when the API build serving this page predates per-range cache savings; the all-time figure is unaffected.'],
     labels: ['Saved by prompt caching'],
   },
   'cost.models-used': {

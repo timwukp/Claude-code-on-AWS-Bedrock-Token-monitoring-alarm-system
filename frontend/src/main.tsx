@@ -22,7 +22,7 @@ configureAuth();
 const PAGE_META: Record<string, { title: string; sub: string; windows?: readonly Window[]; fixedCaption?: string }> = {
   '/': { title: 'Overview', sub: 'Spend, budget, anomalies and delivery at a glance — each tile links to its page', windows: [7, 30, 90, 'mtd'] },
   '/usage': { title: 'Token Usage', sub: 'Consumption across models and time', windows: [7, 30, 90, 'mtd'] },
-  '/costs': { title: 'Estimated Cost', sub: 'Spend by model, derived from token usage', windows: [], fixedCaption: 'All time · token-based estimate' },
+  '/costs': { title: 'Estimated Cost', sub: 'Spend by model, derived from token usage', windows: [7, 30, 90, 'mtd'] },
   '/projects': { title: 'Usage by Project', sub: 'Attribution via inference profiles, request metadata and the project registry', windows: [], fixedCaption: 'All time · rollups' },
   '/governance': { title: 'Cost Governance', sub: 'Budget status and enforcement guardrails', windows: [], fixedCaption: 'Month to date · AWS Budgets period' },
   '/anomalies': { title: 'Anomalies & Alerts', sub: 'Automated detection and response feed', windows: [7, 30, 90, 'mtd'] },

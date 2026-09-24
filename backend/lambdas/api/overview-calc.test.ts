@@ -69,6 +69,18 @@ describe('buildOverview', () => {
     expect(r.spend.currentUsd).toBe(2);
   });
 
+  it('reports per-model cache savings for the current window only: full input rate minus cache-read rate', () => {
+    const cached = (day: string, cacheReadTokens: number): ProjdayItem =>
+      ({ ...item(day, 'alpha', 0), cacheReadTokens });
+    const r = buildOverview([
+      cached('2026-09-13', 10_000_000),   // current: $10 at the full input rate − $1 paid = $9 saved
+      cached('2026-09-14', 10_000_000),   // current: another $9
+      cached('2026-09-07', 50_000_000),   // prior — must not count
+    ], b, new Map(), CARD);
+    expect(r.byModel).toHaveLength(1);
+    expect(r.byModel[0]).toMatchObject({ cacheReadTokens: 20_000_000, estimatedUsd: 2, cacheSavingsUsd: 18 });
+  });
+
   it('ranks movers by absolute change and caps the list', () => {
     const items: ProjdayItem[] = [];
     for (let i = 0; i < 12; i++) items.push(item('2026-09-13', `p${i}`, (i + 1) * 1_000_000));

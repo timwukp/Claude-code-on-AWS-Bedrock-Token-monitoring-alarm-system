@@ -74,7 +74,7 @@ export function OverviewPage() {
           value={budget && budget.limitUsd > 0 ? fmtUsd(budget.actualUsd) : '—'}
           status={BUDGET_STATUS[bState]}
           definition={bState === 'ok' || bState === 'forecast-over' || bState === 'over'
-            ? `of ${fmtUsd(budget!.limitUsd)} budget, month to date · forecast ${fmtUsd(budget!.forecastedUsd)} · AWS Budgets`
+            ? `of ${fmtUsd(budget!.limitUsd)} budget, month to date · forecast ${fmtUsd(budget!.forecastedUsd)} · AWS Budgets billed spend — not the token estimate in the Spend tile`
             : bState === 'no-billing-data' ? `of ${fmtUsd(budget!.limitUsd)} budget · AWS Budgets reports no billed spend for this account this month` : 'no Bedrock budget configured'} />
 
         <KpiTile label="Anomalies" helpId="overview.anomalies" link={{ to: '/anomalies', label: 'Anomalies' }}

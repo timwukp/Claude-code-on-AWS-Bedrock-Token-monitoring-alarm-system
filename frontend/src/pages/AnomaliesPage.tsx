@@ -51,7 +51,7 @@ export function AnomaliesPage() {
             detail={olderCount > 0
               ? `${olderCount} older detection${olderCount === 1 ? '' : 's'} exist outside this window${range.window === 90 ? ' — beyond 90 days; the feed keeps the newest 100 detections overall' : ''}.`
               : 'Detectors are the aggregator’s spend-runaway guard and Cost Anomaly Detection; a detection appears here within minutes of firing.'}
-            action={olderCount > 0 && range.window !== 90 ? { label: 'Show last 90 days', onClick: () => range.setWindow(90) } : { label: 'View budget guardrails', to: '/governance' }} />
+            action={{ label: 'View budget guardrails', to: '/governance' }} />
         ) : <FeedTable rows={items} />}
         {olderCount > 0 && (
           <Disclosure summary={`Show ${olderCount} older detection${olderCount === 1 ? '' : 's'} — before ${range.fromIso.slice(0, 10)}${range.window === 90 ? ' (the feed keeps the newest 100 detections overall)' : ''}`}>

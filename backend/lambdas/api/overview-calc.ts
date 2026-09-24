@@ -51,6 +51,7 @@ export interface OverviewSpend {
 }
 export interface OverviewModelRow {
   modelId: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; invocations: number; estimatedUsd: number;
+  cacheSavingsUsd: number;
 }
 export interface OverviewMover {
   projectId: string; name: string | null; currentUsd: number; priorUsd: number; deltaUsd: number; deltaPct: number | null;
@@ -66,8 +67,9 @@ export interface OverviewResult {
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const pct = (cur: number, prior: number): number | null => (prior > 0 ? round2(((cur - prior) / prior) * 100) : null);
 
-function priceOf(it: ProjdayItem, card: ModelRate[]): number {
-  return computeModelCost({ modelId: it.modelId, inputTokens: it.inputTokens, outputTokens: it.outputTokens, cacheReadTokens: it.cacheReadTokens }, card).estimatedUsd;
+function priceOf(it: ProjdayItem, card: ModelRate[]): { estimatedUsd: number; cacheSavingsUsd: number } {
+  const c = computeModelCost({ modelId: it.modelId, inputTokens: it.inputTokens, outputTokens: it.outputTokens, cacheReadTokens: it.cacheReadTokens }, card);
+  return { estimatedUsd: c.estimatedUsd, cacheSavingsUsd: c.cacheSavingsUsd };
 }
 const tokensOf = (it: ProjdayItem) => it.inputTokens + it.outputTokens + it.cacheReadTokens;
 
@@ -90,16 +92,16 @@ export function buildOverview(
   for (const it of items) {
     if (!it.day) continue;
     if (firstDay === null || it.day < firstDay) firstDay = it.day;
-    const usd = priceOf(it, card);
+    const { estimatedUsd: usd, cacheSavingsUsd } = priceOf(it, card);
     const tok = tokensOf(it);
     const p = proj.get(it.projectId) ?? { cur: 0, prior: 0 };
     if (inCur(it.day)) {
       currentUsd += usd; tokens += tok; p.cur += usd;
       const d = daily.get(it.day) ?? { usd: 0, tokens: 0 };
       d.usd += usd; d.tokens += tok; daily.set(it.day, d);
-      const m = byModel.get(it.modelId) ?? { modelId: it.modelId, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, invocations: 0, estimatedUsd: 0 };
+      const m = byModel.get(it.modelId) ?? { modelId: it.modelId, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, invocations: 0, estimatedUsd: 0, cacheSavingsUsd: 0 };
       m.inputTokens += it.inputTokens; m.outputTokens += it.outputTokens; m.cacheReadTokens += it.cacheReadTokens;
-      m.invocations += it.invocations; m.estimatedUsd += usd; byModel.set(it.modelId, m);
+      m.invocations += it.invocations; m.estimatedUsd += usd; m.cacheSavingsUsd += cacheSavingsUsd; byModel.set(it.modelId, m);
     } else if (inPrior(it.day)) {
       priorUsd += usd; priorTokens += tok; p.prior += usd;
     } else continue;
@@ -128,7 +130,7 @@ export function buildOverview(
       currentUsd: round2(currentUsd), priorUsd: round2(priorUsd), deltaUsd: round2(currentUsd - priorUsd),
       deltaPct: pct(currentUsd, priorUsd), tokens, priorTokens, daily: series,
     },
-    byModel: [...byModel.values()].map((m) => ({ ...m, estimatedUsd: round2(m.estimatedUsd) })).sort((a, b) => b.estimatedUsd - a.estimatedUsd),
+    byModel: [...byModel.values()].map((m) => ({ ...m, estimatedUsd: round2(m.estimatedUsd), cacheSavingsUsd: round2(m.cacheSavingsUsd) })).sort((a, b) => b.estimatedUsd - a.estimatedUsd),
     movers,
     // Partial when the earliest rollup day is inside the prior window — the comparison is then
     // against an incomplete baseline and the page must say so rather than show a clean delta.

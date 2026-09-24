@@ -160,7 +160,8 @@ export interface OverviewResponse {
   tenantId: string;
   window: { kind: '7' | '30' | '90' | 'mtd'; days: number; from: string; to: string; priorFrom: string; priorTo: string };
   spend: { currentUsd: number; priorUsd: number; deltaUsd: number; deltaPct: number | null; tokens: number; priorTokens: number; daily: { day: string; usd: number; tokens: number }[] };
-  byModel: { modelId: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; invocations: number; estimatedUsd: number }[];
+  // cacheSavingsUsd is absent from API builds deployed before feature-27.
+  byModel: { modelId: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; invocations: number; estimatedUsd: number; cacheSavingsUsd?: number }[];
   movers: { projectId: string; name: string | null; currentUsd: number; priorUsd: number; deltaUsd: number; deltaPct: number | null }[];
   coverage: { firstDayWithData: string | null; partial: boolean };
   rollupsAsOf: string | null;
