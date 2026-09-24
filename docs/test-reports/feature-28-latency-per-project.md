@@ -1,6 +1,6 @@
 # Feature 28 — Latency per project (invocation-log rollups; bucket estimates beside exact fleet figures)
 
-- **Chain:** `intent/latency-per-project/` · **Branch:** `feat/latency-per-project` off `main@e47da9b` (post-#59) · **PR:** TBD
+- **Chain:** `intent/latency-per-project/` · **Branch:** `feat/latency-per-project` off `main@e47da9b` (post-#59) · **PR:** #61
 - **Origin:** ROADMAP row 13 was 🟡 because `/latency` was fleet-only — CloudWatch carries no project dimension.
 - **Date:** 2026-09-24
 - **Verdict:** PASS on gates and unit tests; live section filled after the deploys below.

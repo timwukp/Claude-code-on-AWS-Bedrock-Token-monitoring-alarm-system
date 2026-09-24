@@ -35,7 +35,7 @@ results. One report per feature (mapped to a GitHub issue / PR).
 | Cost page windowing (Cost follows the global time range; `/v1/overview.byModel.cacheSavingsUsd`; Budget-tile source note; one Anomalies control) | — | #57 | [feature-27](./feature-27-cost-windowing.md) | PASS |
 | ROI model diagram layout (footnotes no longer under the result box; owner-reported) | — | #59 | [feature-19b](./feature-19b-roi-diagram-layout.md) | PASS (gates + local render) |
 
-| Latency per project (invocation-log rollups; bucket estimates beside exact fleet figures; guarded backfill) | — | TBD | [feature-28](./feature-28-latency-per-project.md) | PASS |
+| Latency per project (invocation-log rollups; bucket estimates beside exact fleet figures; guarded backfill) | — | #61 | [feature-28](./feature-28-latency-per-project.md) | PASS |
 Each report records: scope, unit-test results, build/synth gates, real-AWS validation evidence,
 any defect found+fixed during validation, and a verdict. Reports are written before opening the
 PR; a feature is only PR-ready when all gates are green.
