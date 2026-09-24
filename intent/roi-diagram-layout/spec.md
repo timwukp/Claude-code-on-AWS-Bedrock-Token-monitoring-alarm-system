@@ -3,7 +3,7 @@
 - **Intent:** ./intent.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Status:** signed-off
+- **Status:** shipped
 
 ## Behaviour (`frontend/src/components/RoiModelDiagram.tsx` only)
 - `viewBox` 960 × 470 → 960 × 506.

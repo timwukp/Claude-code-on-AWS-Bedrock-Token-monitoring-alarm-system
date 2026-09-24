@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** 16da459f8a9f86cd28887746b186961ba3b9b95d
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #58 (feature-27 docs), the merge base at branch time. The
 latency-per-project chain (feature-28) is staged by the other session but not yet pushed; the only files this
