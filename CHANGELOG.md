@@ -6,6 +6,11 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Changed — /latency says its fleet and per-model figures are separate series (feature-31)
+- The "By model" panel now states that the rows and the fleet tiles are separate CloudWatch series that can
+  briefly disagree after a burst, that profile-routed calls are not counted twice, and that the fleet series
+  is the reference (qa F-PR63-001; verified fleet 4,240 == Σ per-model 4,240 over 7 days). Copy only.
+
 ### Added — every chart has a table twin
 - **Chart | Table control on the four Recharts panels** — Usage "Token consumption over time", DORA "Merges to the
   default branch per week" and "Lead time per week", AI ROI "ROI components". Table view is the portal's standard
