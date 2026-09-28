@@ -19,5 +19,12 @@ The `/projects` Full-vs-Fast disclosure was **not** filed — the #62 rule works
 Frontend `tsc` + `vite build` PASS; `sdlc_ci_gate.py` see CI. qa: this PR's run must not file the by-model-vs-fleet
 difference — result recorded below.
 
-## qa result on this PR
-_pending_
+## qa result on this PR — a hollow green, recorded as such
+Both runs on the final commit returned `overall: PASS`, 0 findings, in ~2 minutes with a 358-character transcript:
+Bedrock answered the harness with `ServiceUnavailableException` on both the exploration call and the structured
+retry, so **nothing was explored**. `qa_agent.py`'s `normalize_report` rewrote the `UNKNOWN` fallback to `PASS` on an
+empty findings list — the defect the next chain (`qa-empty-run-honesty`) fixes. **The disclosure this PR adds has
+therefore not been verified by a real qa run.** It will be, on the next frontend PR after the fix lands.
+An earlier overlapping run (commit `062d162`) was terminated mid-exploration and reported FAIL honestly — its two
+Overview MEDIUMs (Budget-tile disclosure plausibility; freshness caption vs 2 h-old rollups) are not this PR's and
+are queued for triage once a complete run exists.
