@@ -6,6 +6,20 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Fixed — one over-counted day repaired; qa no longer files what the page already explains (feature-30)
+- **2026-09-17 PROJDAY rollups** for the demo tenant carried +231 invocations / +12,380 input / +146,311
+  output tokens more than the hourly rollups and the raw logs — the boundary day of feature-13's PROJDAY
+  backfill, counted twice. Visible since #57 as a Usage-vs-Cost mismatch. Repaired by
+  `backend/scripts/repair-projday-day.ts` (committed here; run 2026-09-24 with the owner's authorisation):
+  it re-derives the day through the aggregator's own four-tier attribution, locates the surplus
+  treatment-aware, gates every write on three assertions, and negative-ADDs the `untagged` rows only under a
+  marker. Hourly == PROJDAY over 30 days afterwards, Δ 0/0/0.
+- **UI QA agent:** a difference the page itself discloses and quantifies (e.g. "the $5.76 difference is
+  traffic since the last rollup") is no longer filed as a finding — it had been filed three times as a LOW
+  that reddened PRs under `QA_RED_ON: FAIL`. The rule says exactly when to file anyway (the disclosure cannot
+  account for the gap, or the numbers contradict it) and requires quoting the disclosure. `QA_RED_ON` stays
+  `FAIL`; this narrows one false positive, not the bar. Owner decision 2026-09-28.
+
 ### Added — latency per project, from the calls we already log (feature-28)
 - **`/latency` gains a "By project" table.** Every logged Bedrock call carries
   `amazon-bedrock-invocationMetrics` (`invocationLatency`, `firstByteLatency`) in its response body; the
