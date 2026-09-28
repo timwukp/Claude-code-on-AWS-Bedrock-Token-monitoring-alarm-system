@@ -4,7 +4,7 @@
 - **Origin:** chart standard 6 ("Tooltip never gates") and the dataviz accessibility pass in
   `docs/research-dashboard-ux.md` — the one chart-standard item left open after features 20–27.
 - **Date:** 2026-09-24
-- **Verdict:** PASS on gates and the local authenticated render; live via qa recorded below.
+- **Verdict:** PASS on gates, the local authenticated render and qa (no finding on this PR's pages; one LOW on `/latency`, out of scope — below).
 
 ## What this report has to say plainly
 - **Every number a chart draws is now reachable as text.** Four panels (Usage consumption, DORA merges per week,
@@ -40,10 +40,16 @@
 | Keyboard | Tab from Chart to Table, Enter switches; `aria-pressed="true"` follows; table rendered (16 rows) |
 | Console errors | 0 across all routes |
 
-## Live (after push — qa)
-_To be filled from the qa report on the PR._ This run is also the first qa pass under the #62 rule ("a page-disclosed,
-quantified difference is not a finding"): record whether the `/projects` Full-vs-Fast disclosure was filed (it should
-not be) and whether any real finding still was.
+## Live — qa on `237eb3e` (first run under the #62 rule)
+| Check | Result |
+|---|---|
+| Overall | FAIL with **one LOW**, nothing on this PR's pages |
+| The four toggled panels | no finding; qa's own cross-checks: "Usage internally consistent (table sums match KPIs)", "Cost … spend $1,760.24 matches Overview; tokens match Usage" |
+| `/projects` Full-vs-Fast disclosure | **NOT filed** — the #62 rule ("a page-disclosed, quantified difference is not a finding") did what it was meant to; earlier PRs saw this LOW on every run |
+| Usage vs Cost | reconcile — the 09-17 PROJDAY repair (#62) holds on a live qa pass |
+| F-PR63-001 (LOW) | `/latency`: by-model invocation counts sum to 4,336 while the fleet KPI reads 4,187 for the same 7 days, no on-page disclosure. **Out of scope for this PR** — `LatencyPage.tsx` is deliberately untouched here. The latency owner verified at CloudWatch that fleet SampleCount equals Σ per-model (4,240 = 4,240 over 7 days), i.e. no double count; the two series are published separately and per-model can lead the aggregate for minutes after a burst. Triage on #63; a one-line disclosure follows in its own chain after this PR lands |
+| Verdict on the rule | verified — one true finding filed, the disclosed difference not filed |
+
 
 ## Risks
 - The Usage table can reach 336 rows for hourly buckets (≤ 14-day windows); the chart stays the default and the
