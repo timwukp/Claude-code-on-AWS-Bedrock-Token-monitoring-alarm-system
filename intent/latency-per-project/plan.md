@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** 488b50879d78b61831285b6a23c9475639440ddf
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is bound to `488b5087` — the tip of `main` after #60 (README only) merged, which landed after
 #59 (roi-diagram-layout) and #57 (feature-27). This branch was cut at `e47da9b` and main was merged in when #60
