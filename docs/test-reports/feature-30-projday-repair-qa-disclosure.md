@@ -1,6 +1,6 @@
 # Feature 30 — PROJDAY one-day repair (2026-09-17) + qa disclosure rule
 
-- **Chain:** `intent/projday-repair-qa-disclosure/` · **Branch:** `fix/projday-repair-qa-disclosure` off `main@18f976a` (post-#61) · **PR:** TBD
+- **Chain:** `intent/projday-repair-qa-disclosure/` · **Branch:** `fix/projday-repair-qa-disclosure` off `main@18f976a` (post-#61) · **PR:** #62
 - **Origin:** qa F-PR59R2-001 / F-PR61-001 (Usage vs Cost, HIGH — the 09-17 over-count); qa F-PR59R3-002 / F-PR61-002 / F-PR61R2-001 (the disclosed Full-vs-Fast gap filed as a LOW, three times).
 - **Date:** 2026-09-28
 - **Verdict:** PASS. The repair is already applied and verified on dev; this PR commits the method and the qa rule.
