@@ -13,7 +13,7 @@ are grouped by development milestone rather than strict semver releases.
   the tiles (so a table cell equals the tooltip value), and `—` with an accessible label for gaps. The chart is
   unmounted while the table shows; the control is hidden in print. Closes chart standard 6 ("Tooltip never gates")
   from `docs/research-dashboard-ux.md`. `LatencyPage.tsx` is left for a follow-up now that feature-28 has landed.
-  (feature-29, PR TBD)
+  (feature-29, PR #63)
 
 ### Fixed — one over-counted day repaired; qa no longer files what the page already explains (feature-30)
 - **2026-09-17 PROJDAY rollups** for the demo tenant carried +231 invocations / +12,380 input / +146,311

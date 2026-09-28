@@ -1,6 +1,6 @@
 # Feature 29 — Chart | Table twin (every chart has a table view)
 
-- **Chain:** `intent/chart-table-toggle/` · **Branch:** `feat/chart-table-toggle` off `main@0db85c5` (post-#62) · **PR:** TBD
+- **Chain:** `intent/chart-table-toggle/` · **Branch:** `feat/chart-table-toggle` off `main@0db85c5` (post-#62) · **PR:** #63
 - **Origin:** chart standard 6 ("Tooltip never gates") and the dataviz accessibility pass in
   `docs/research-dashboard-ux.md` — the one chart-standard item left open after features 20–27.
 - **Date:** 2026-09-24

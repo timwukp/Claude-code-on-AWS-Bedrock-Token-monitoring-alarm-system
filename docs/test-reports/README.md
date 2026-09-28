@@ -37,7 +37,7 @@ results. One report per feature (mapped to a GitHub issue / PR).
 
 | Latency per project (invocation-log rollups; bucket estimates beside exact fleet figures; guarded backfill) | — | #61 | [feature-28](./feature-28-latency-per-project.md) | PASS |
 | PROJDAY one-day repair (2026-09-17 over-count) + qa disclosure rule | — | #62 | [feature-30](./feature-30-projday-repair-qa-disclosure.md) | PASS |
-| Chart \| Table twin on the four chart panels (Usage, DORA ×2, AI ROI) — table view with the same figures as the tooltip | — | TBD | [feature-29](./feature-29-chart-table-toggle.md) | PASS (gates + local render) |
+| Chart \| Table twin on the four chart panels (Usage, DORA ×2, AI ROI) — table view with the same figures as the tooltip | — | #63 | [feature-29](./feature-29-chart-table-toggle.md) | PASS (gates + local render) |
 Each report records: scope, unit-test results, build/synth gates, real-AWS validation evidence,
 any defect found+fixed during validation, and a verdict. Reports are written before opening the
 PR; a feature is only PR-ready when all gates are green.
