@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** 18f976a16748c9891f72588a75a98dd4597e1860
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is bound to `18f976a1` — the tip of `main` after #61 (feature-28) merged. Cut after it under
 the one-chain-at-a-time rule; the peer's feature-29 follows this one by agreement.

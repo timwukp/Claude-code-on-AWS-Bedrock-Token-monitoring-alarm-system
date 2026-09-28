@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Date:** 2026-09-28
 - **Accepted-by:** Tim WU
-- **Status:** accepted
+- **Status:** shipped
 
 ## Problem 1 — the PROJDAY rollups for 2026-09-17 were over-counted
 

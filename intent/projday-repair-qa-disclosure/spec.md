@@ -3,7 +3,7 @@
 - **Intent:** ./intent.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Status:** signed-off
+- **Status:** shipped
 
 ## 1. `backend/scripts/repair-projday-day.ts`
 Dry run by default; `--apply` required. Re-parses the day's raw S3 objects (plus the next hour, for

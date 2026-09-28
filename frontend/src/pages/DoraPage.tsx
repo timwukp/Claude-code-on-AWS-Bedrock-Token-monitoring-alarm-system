@@ -7,6 +7,7 @@ import {
   api, AssistedBy, DoraDataSource, DoraMetrics, DoraOverviewRow, DoraPrRow, DoraProjectRow, DoraRepo, DoraWindow, SyncStatus,
 } from '../api/client';
 import { Disclosure, Kpi, Panel } from '../components/Layout';
+import { ChartTable } from '../components/ChartTable';
 import { fmtAgo, fmtAxisHours, fmtDateTime, fmtHours, fmtPct, fmtTokens, fmtUsd } from '../lib/format';
 import { gridProps, legendProps, MARK, role, series, surfaceGap, tooltipProps, xAxisProps, yAxisProps } from '../charts/theme';
 import { useTimeRange } from '../lib/time-range';
@@ -291,29 +292,44 @@ export function DoraPage() {
               ) : (
                 <>
                   <Panel title="Merges to the default branch per week" desc="The deployment-frequency proxy over time, split by whether an AI assistant participated">
-                    <ResponsiveContainer width="100%" height={280}>
-                      <BarChart data={tl} margin={{ left: 4, right: 12, top: 8 }}>
-                        <CartesianGrid {...gridProps()} />
-                        <XAxis dataKey="week" {...xAxisProps()} tickFormatter={(w: string) => w.slice(5)} />
-                        <YAxis allowDecimals={false} {...yAxisProps((n: number) => (n === 0 ? '' : String(n)))} width={32} />
-                        <Tooltip {...tooltipProps()} />
-                        <Legend {...legendProps()} wrapperStyle={{ fontSize: 13, paddingTop: 8 }} />
-                        <Bar dataKey="deploysHuman" name="Human-only PRs" stackId="d" fill={role('human')} {...surfaceGap()} {...MARK.barStackedBottom} />
-                        <Bar dataKey="deploysAi" name="AI-assisted PRs" stackId="d" fill={role('ai')} {...surfaceGap()} {...MARK.bar} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <ChartTable label="Merges per week" rows={tl} rowKey={(w) => w.week}
+                      columns={[
+                        { header: 'Week', cell: (w) => w.week },
+                        { header: 'Human-only PRs', cell: (w) => w.deploysHuman, num: true },
+                        { header: 'AI-assisted PRs', cell: (w) => w.deploysAi, num: true },
+                        { header: 'Total', cell: (w) => w.deploysHuman + w.deploysAi, num: true },
+                      ]}>
+                      <ResponsiveContainer width="100%" height={280}>
+                        <BarChart data={tl} margin={{ left: 4, right: 12, top: 8 }}>
+                          <CartesianGrid {...gridProps()} />
+                          <XAxis dataKey="week" {...xAxisProps()} tickFormatter={(w: string) => w.slice(5)} />
+                          <YAxis allowDecimals={false} {...yAxisProps((n: number) => (n === 0 ? '' : String(n)))} width={32} />
+                          <Tooltip {...tooltipProps()} />
+                          <Legend {...legendProps()} wrapperStyle={{ fontSize: 13, paddingTop: 8 }} />
+                          <Bar dataKey="deploysHuman" name="Human-only PRs" stackId="d" fill={role('human')} {...surfaceGap()} {...MARK.barStackedBottom} />
+                          <Bar dataKey="deploysAi" name="AI-assisted PRs" stackId="d" fill={role('ai')} {...surfaceGap()} {...MARK.bar} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </ChartTable>
                   </Panel>
 
                   <Panel title="Lead time per week" desc="Median hours from first commit to merge for PRs merged that week">
-                    <ResponsiveContainer width="100%" height={260}>
-                      <LineChart data={tl} margin={{ left: 4, right: 12, top: 8 }}>
-                        <CartesianGrid {...gridProps()} />
-                        <XAxis dataKey="week" {...xAxisProps()} tickFormatter={(w: string) => w.slice(5)} />
-                        <YAxis {...yAxisProps(fmtAxisHours)} width={40} />
-                        <Tooltip {...tooltipProps()} formatter={(v: number) => fmtHours(v)} />
-                        <Line type="monotone" dataKey="medianLeadHours" name="Median lead time" stroke={series()[2]} {...MARK.line} dot={{ r: MARK.dot.r, fill: series()[2], strokeWidth: 0 }} connectNulls />
-                      </LineChart>
-                    </ResponsiveContainer>
+                    <ChartTable label="Lead time per week" rows={tl} rowKey={(w) => w.week}
+                      columns={[
+                        { header: 'Week', cell: (w) => w.week },
+                        { header: 'Median lead time', cell: (w) => (w.medianLeadHours == null ? <span className="muted" aria-label="no merges that week">—</span> : fmtHours(w.medianLeadHours)), num: true },
+                        { header: 'Merged PRs', cell: (w) => w.deploysHuman + w.deploysAi, num: true },
+                      ]}>
+                      <ResponsiveContainer width="100%" height={260}>
+                        <LineChart data={tl} margin={{ left: 4, right: 12, top: 8 }}>
+                          <CartesianGrid {...gridProps()} />
+                          <XAxis dataKey="week" {...xAxisProps()} tickFormatter={(w: string) => w.slice(5)} />
+                          <YAxis {...yAxisProps(fmtAxisHours)} width={40} />
+                          <Tooltip {...tooltipProps()} formatter={(v: number) => fmtHours(v)} />
+                          <Line type="monotone" dataKey="medianLeadHours" name="Median lead time" stroke={series()[2]} {...MARK.line} dot={{ r: MARK.dot.r, fill: series()[2], strokeWidth: 0 }} connectNulls />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </ChartTable>
                   </Panel>
 
                   {/* The cohort split is a second data dimension, not provenance, so it gets its
