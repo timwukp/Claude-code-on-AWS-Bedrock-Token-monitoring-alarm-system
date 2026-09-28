@@ -6,6 +6,15 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Added — every chart has a table twin
+- **Chart | Table control on the four Recharts panels** — Usage "Token consumption over time", DORA "Merges to the
+  default branch per week" and "Lead time per week", AI ROI "ROI components". Table view is the portal's standard
+  `table.data` with a caption, unit-bearing headers, right-aligned figures formatted by the same `fmt*` helpers as
+  the tiles (so a table cell equals the tooltip value), and `—` with an accessible label for gaps. The chart is
+  unmounted while the table shows; the control is hidden in print. Closes chart standard 6 ("Tooltip never gates")
+  from `docs/research-dashboard-ux.md`. `LatencyPage.tsx` is left for a follow-up now that feature-28 has landed.
+  (feature-29, PR TBD)
+
 ### Fixed — one over-counted day repaired; qa no longer files what the page already explains (feature-30)
 - **2026-09-17 PROJDAY rollups** for the demo tenant carried +231 invocations / +12,380 input / +146,311
   output tokens more than the hourly rollups and the raw logs — the boundary day of feature-13's PROJDAY

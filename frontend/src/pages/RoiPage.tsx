@@ -7,6 +7,7 @@ import {
 import { api, Bands, ProjectRoiConfig, RoiMethodology, RoiProjectRow } from '../api/client';
 import { Kpi, Panel } from '../components/Layout';
 import { RoiModelDiagram } from '../components/RoiModelDiagram';
+import { ChartTable } from '../components/ChartTable';
 import { EmptyState } from '../components/EmptyState';
 import { fmtSignedUsd, fmtUsd, fmtUsdK } from '../lib/format';
 import { chrome, gridProps, MARK, role, series, tooltipProps, xAxisProps, yAxisProps } from '../charts/theme';
@@ -250,20 +251,27 @@ export function RoiPage() {
           <Panel key={p.projectId}
                  title={`${p.name} — ROI ${r.roiPct != null ? `${r.roiPct > 0 ? '+' : ''}${r.roiPct}%` : 'not computable'}`}
                  desc={`Annualized from ${r.window} days (×${r.annualizationFactor}) · assumptions: ${p.assumptionsSource}${r.paybackMonths != null ? ` · payback ~${r.paybackMonths} months` : ''}${p.killFast.flagged ? ' · ⚠ review recommended' : ''}`}>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={waterfall} margin={{ left: 12, right: 12, top: 8 }}>
-                <CartesianGrid {...gridProps()} />
-                <XAxis dataKey="name" {...xAxisProps()} minTickGap={0} />
-                <YAxis {...yAxisProps((n: number) => fmtUsdK(n))} width={64} />
-                <Tooltip {...tooltipProps()} formatter={(v: number) => fmtSignedUsd(v)} />
-                <ReferenceLine y={0} stroke={chrome().axis} />
-                <Bar dataKey="usd" name="annual USD" {...MARK.bar} radius={[4, 4, 4, 4]}>
-                  {waterfall.map((w, i) => (
-                    <Cell key={i} fill={w.usd >= 0 ? (w.kind === 'value' ? role('positive') : role('subtotal')) : role('negative')} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <ChartTable label={`${p.name} ROI components`} rows={waterfall} rowKey={(w) => w.name}
+              columns={[
+                { header: 'Component', cell: (w) => w.name },
+                { header: 'Side', cell: (w) => (w.kind === 'value' ? 'Value' : 'Investment') },
+                { header: 'Annual USD', cell: (w) => fmtSignedUsd(w.usd), num: true },
+              ]}>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={waterfall} margin={{ left: 12, right: 12, top: 8 }}>
+                  <CartesianGrid {...gridProps()} />
+                  <XAxis dataKey="name" {...xAxisProps()} minTickGap={0} />
+                  <YAxis {...yAxisProps((n: number) => fmtUsdK(n))} width={64} />
+                  <Tooltip {...tooltipProps()} formatter={(v: number) => fmtSignedUsd(v)} />
+                  <ReferenceLine y={0} stroke={chrome().axis} />
+                  <Bar dataKey="usd" name="annual USD" {...MARK.bar} radius={[4, 4, 4, 4]}>
+                    {waterfall.map((w, i) => (
+                      <Cell key={i} fill={w.usd >= 0 ? (w.kind === 'value' ? role('positive') : role('subtotal')) : role('negative')} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartTable>
             {(r.refusals.length > 0 || p.killFast.flagged) && (
               <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>
                 {p.killFast.flagged && <><strong>Review recommended:</strong> {p.killFast.rule} (weeks {p.killFast.weeks.join(', ')}). </>}

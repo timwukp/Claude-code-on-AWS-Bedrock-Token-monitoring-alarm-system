@@ -4,6 +4,7 @@ import {
 } from 'recharts';
 import { api, UsagePoint } from '../api/client';
 import { Kpi, Panel } from '../components/Layout';
+import { ChartTable } from '../components/ChartTable';
 import { fmtInt, fmtTokens, fmtAxisTokens } from '../lib/format';
 import { gridProps, legendProps, MARK, role, tooltipProps, xAxisProps, yAxisProps } from '../charts/theme';
 import { EmptyState } from '../components/EmptyState';
@@ -75,17 +76,27 @@ export function UsagePage() {
 
       <Panel title="Token consumption over time"
              desc={`${daily ? 'Daily' : 'Hourly'} buckets, ${range.label.toLowerCase()} — billed input vs output tokens (prompt-cache traffic is shown in its own KPI above; it would dwarf both series). Which series dominates depends on the workload.`}>
-        <ResponsiveContainer width="100%" height={340}>
-          <AreaChart data={points} margin={{ left: 4, right: 12, top: 8 }}>
-            <CartesianGrid {...gridProps()} />
-            <XAxis dataKey="label" {...xAxisProps()} />
-            <YAxis {...yAxisProps(fmtAxisTokens)} width={48} />
-            <Tooltip {...tooltipProps()} />
-            <Legend {...legendProps()} wrapperStyle={{ fontSize: 13, paddingTop: 8 }} />
-            <Area type="monotone" dataKey="inputTokens" name="Input tokens" stroke={role('input')} fill={role('input')} {...MARK.area} />
-            <Area type="monotone" dataKey="outputTokens" name="Output tokens" stroke={role('output')} fill={role('output')} {...MARK.area} />
-          </AreaChart>
-        </ResponsiveContainer>
+        {points.length > 0 && (
+          <ChartTable label="Token consumption over time" rows={points} rowKey={(p) => p.timestamp}
+            columns={[
+              { header: daily ? 'Day' : 'Hour (UTC)', cell: (p) => p.label },
+              { header: 'Input tokens', cell: (p) => fmtTokens(p.inputTokens), num: true },
+              { header: 'Output tokens', cell: (p) => fmtTokens(p.outputTokens), num: true },
+              { header: 'Invocations', cell: (p) => fmtInt(p.invocations), num: true },
+            ]}>
+            <ResponsiveContainer width="100%" height={340}>
+              <AreaChart data={points} margin={{ left: 4, right: 12, top: 8 }}>
+                <CartesianGrid {...gridProps()} />
+                <XAxis dataKey="label" {...xAxisProps()} />
+                <YAxis {...yAxisProps(fmtAxisTokens)} width={48} />
+                <Tooltip {...tooltipProps()} />
+                <Legend {...legendProps()} wrapperStyle={{ fontSize: 13, paddingTop: 8 }} />
+                <Area type="monotone" dataKey="inputTokens" name="Input tokens" stroke={role('input')} fill={role('input')} {...MARK.area} />
+                <Area type="monotone" dataKey="outputTokens" name="Output tokens" stroke={role('output')} fill={role('output')} {...MARK.area} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </ChartTable>
+        )}
         {points.length === 0 && <EmptyState kind="empty" title={`No usage recorded in the ${range.label.toLowerCase()}`} detail="Points appear once the aggregator has processed invocation logs for this window." action={{ label: 'Show last 90 days', onClick: () => range.setWindow(90) }} />}
       </Panel>
 
