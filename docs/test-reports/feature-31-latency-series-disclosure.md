@@ -1,6 +1,6 @@
 # Feature 31 — /latency: fleet and per-model figures are separate series (disclosure)
 
-- **Chain:** `intent/latency-series-disclosure/` · **Branch:** `fix/latency-series-disclosure` off `main@533abee` (post-#63) · **PR:** TBD
+- **Chain:** `intent/latency-series-disclosure/` · **Branch:** `fix/latency-series-disclosure` off `main@533abee` (post-#63) · **PR:** #64
 - **Origin:** qa F-PR63-001 (LOW) — by-model rows 4,336 vs fleet tile 4,187 on the same 7-day window, suspected double count of profile-routed calls.
 - **Date:** 2026-09-28
 - **Verdict:** PASS. Copy only; the claim it makes was checked at the source.
