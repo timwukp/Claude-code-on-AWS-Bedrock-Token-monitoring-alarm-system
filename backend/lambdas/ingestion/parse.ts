@@ -24,7 +24,133 @@ export interface InvocationRecord {
     cacheReadInputTokenCount?: number;
     cacheWriteInputTokenCount?: number;
   };
-  output?: { outputTokenCount?: number };
+  output?: {
+    outputTokenCount?: number;
+    /**
+     * The model's response body, present only when body logging is on. Streaming responses log
+     * an ARRAY of chunks, non-streaming ones an OBJECT. The last chunk (or the object) carries
+     * `amazon-bedrock-invocationMetrics` with the service-side latencies. `parseLogFile` reads that
+     * one key into `latency` and then DELETES this field: the body is the payload that ran a 4 GB
+     * heap out of memory at ~70k records in backfill-projday.ts, and nothing downstream needs it.
+     */
+    outputBodyJson?: unknown;
+  };
+  /** Service-side latency for this call, lifted out of the body by `parseLogFile`. */
+  latency?: LatencySample | null;
+}
+
+/**
+ * What Bedrock measured for one call, in milliseconds. `e2eMs` is `invocationLatency` (request in →
+ * last byte out, Bedrock service time only). `ttfbMs` is `firstByteLatency` and exists only for
+ * streaming calls — so its count is a SUBSET of the e2e count, never a second population.
+ */
+export interface LatencySample {
+  e2eMs: number;
+  ttfbMs?: number;
+}
+
+/**
+ * Pull `amazon-bedrock-invocationMetrics` out of a logged response body. Null when the body was
+ * not logged, has no metrics, or the values are not finite non-negative numbers — a null is
+ * "unknown", which the aggregates count as nothing rather than as zero latency.
+ */
+export function latencyOf(r: InvocationRecord): LatencySample | null {
+  const body = r.output?.outputBodyJson;
+  const last = Array.isArray(body) ? body[body.length - 1] : body;
+  if (!last || typeof last !== 'object') return null;
+  const m = (last as Record<string, unknown>)['amazon-bedrock-invocationMetrics'];
+  if (!m || typeof m !== 'object') return null;
+  const e2e = (m as Record<string, unknown>).invocationLatency;
+  const ttfb = (m as Record<string, unknown>).firstByteLatency;
+  if (typeof e2e !== 'number' || !Number.isFinite(e2e) || e2e < 0) return null;
+  const out: LatencySample = { e2eMs: e2e };
+  if (typeof ttfb === 'number' && Number.isFinite(ttfb) && ttfb >= 0) out.ttfbMs = ttfb;
+  return out;
+}
+
+/**
+ * Upper edges (ms) of the fixed latency histogram; the last bucket is open-ended. Fixed edges are
+ * what lets buckets from many batches be ADDed together in DynamoDB and still yield a percentile
+ * (no digest structure to merge). p50/p95 read from these are estimates within a bucket's span —
+ * the page must say so — but the fleet-level CloudWatch percentiles remain the exact reference.
+ */
+export const LATENCY_BUCKET_EDGES_MS: readonly number[] =
+  [250, 500, 1_000, 2_000, 4_000, 8_000, 16_000, 32_000, 64_000];
+export const LATENCY_BUCKET_COUNT = LATENCY_BUCKET_EDGES_MS.length + 1;
+
+/**
+ * Count + sum + fixed buckets for e2e and first-byte, kept as separate populations because only
+ * streaming calls carry first-byte. Every field is additive, so a batch's stats can be merged into
+ * another batch's — or ADDed onto a DynamoDB item — without loss.
+ */
+export interface LatencyStats {
+  latencyCount: number;
+  latencySumMs: number;
+  latencyBuckets: number[]; // LATENCY_BUCKET_COUNT entries
+  ttfbCount: number;
+  ttfbSumMs: number;
+  ttfbBuckets: number[];
+}
+
+export function emptyLatencyStats(): LatencyStats {
+  return {
+    latencyCount: 0, latencySumMs: 0, latencyBuckets: new Array(LATENCY_BUCKET_COUNT).fill(0),
+    ttfbCount: 0, ttfbSumMs: 0, ttfbBuckets: new Array(LATENCY_BUCKET_COUNT).fill(0),
+  };
+}
+
+export function bucketIndex(ms: number): number {
+  let i = 0;
+  while (i < LATENCY_BUCKET_EDGES_MS.length && ms > LATENCY_BUCKET_EDGES_MS[i]) i += 1;
+  return i;
+}
+
+/** Fold one call's sample into the stats. A null sample folds nothing — unknown is not zero. */
+export function foldLatency(stats: LatencyStats, sample: LatencySample | null | undefined): void {
+  if (!sample) return;
+  stats.latencyCount += 1;
+  stats.latencySumMs += sample.e2eMs;
+  stats.latencyBuckets[bucketIndex(sample.e2eMs)] += 1;
+  if (sample.ttfbMs !== undefined) {
+    stats.ttfbCount += 1;
+    stats.ttfbSumMs += sample.ttfbMs;
+    stats.ttfbBuckets[bucketIndex(sample.ttfbMs)] += 1;
+  }
+}
+
+export function mergeLatency(target: LatencyStats, src: LatencyStats): void {
+  target.latencyCount += src.latencyCount; target.latencySumMs += src.latencySumMs;
+  target.ttfbCount += src.ttfbCount; target.ttfbSumMs += src.ttfbSumMs;
+  for (let i = 0; i < LATENCY_BUCKET_COUNT; i += 1) {
+    target.latencyBuckets[i] += src.latencyBuckets[i] ?? 0;
+    target.ttfbBuckets[i] += src.ttfbBuckets[i] ?? 0;
+  }
+}
+
+/**
+ * Estimate the p-th percentile (0..1) from fixed buckets by linear interpolation inside the bucket
+ * that contains the rank. Null when there are no samples. The open-ended last bucket has no upper
+ * edge, so a rank landing there returns its lower edge — an under-estimate, flagged by the caller
+ * as "≥". Callers must present these as estimates.
+ */
+export function percentileFromBuckets(buckets: readonly number[], p: number): number | null {
+  const total = buckets.reduce((s, n) => s + n, 0);
+  if (total <= 0) return null;
+  const rank = Math.min(total, Math.max(1, Math.ceil(p * total)));
+  let seen = 0;
+  for (let i = 0; i < buckets.length; i += 1) {
+    const n = buckets[i];
+    if (n <= 0) continue;
+    if (seen + n >= rank) {
+      const lo = i === 0 ? 0 : LATENCY_BUCKET_EDGES_MS[i - 1];
+      if (i >= LATENCY_BUCKET_EDGES_MS.length) return lo; // open-ended: lower edge
+      const hi = LATENCY_BUCKET_EDGES_MS[i];
+      const frac = (rank - seen) / n; // position within this bucket, (0, 1]
+      return Math.round(lo + (hi - lo) * frac);
+    }
+    seen += n;
+  }
+  return null;
 }
 
 /** One rolled-up bucket of usage, ready to upsert into DynamoDB. */
@@ -37,6 +163,7 @@ export interface UsageAggregate {
   cacheReadTokens: number;
   cacheWriteTokens: number;
   invocations: number;
+  latency: LatencyStats; // service-side latency of the calls in this bucket (#13 phase 1b)
   requestIds: Set<string>; // for idempotency / de-dup
 }
 
@@ -48,7 +175,11 @@ export function parseLogFile(contents: string): InvocationRecord[] {
     if (!t) continue;
     try {
       const r = JSON.parse(t) as InvocationRecord;
-      if (r.requestId && r.timestamp) out.push(r);
+      if (!(r.requestId && r.timestamp)) continue;
+      // Extract-then-discard: keep the one number we need from the body, never the body itself.
+      r.latency = latencyOf(r);
+      if (r.output && 'outputBodyJson' in r.output) delete r.output.outputBodyJson;
+      out.push(r);
     } catch {
       // Skip malformed lines rather than failing the whole batch (Reliability pillar).
     }
@@ -118,6 +249,7 @@ export interface ProjectAggregate {
   outputTokens: number;
   cacheReadTokens: number;
   invocations: number;
+  latency: LatencyStats;
   users: Set<string>; // distinct user_id values seen
   requestIds: Set<string>; // idempotency / de-dup
 }
@@ -141,7 +273,7 @@ export function aggregateByProject(
       agg = {
         tenant, projectId, modelId: effectiveModelId,
         inputTokens: 0, outputTokens: 0, cacheReadTokens: 0,
-        invocations: 0, users: new Set(), requestIds: new Set(),
+        invocations: 0, latency: emptyLatencyStats(), users: new Set(), requestIds: new Set(),
       };
       map.set(key, agg);
     }
@@ -151,6 +283,7 @@ export function aggregateByProject(
     agg.inputTokens += r.input?.inputTokenCount ?? 0;
     agg.outputTokens += r.output?.outputTokenCount ?? 0;
     agg.cacheReadTokens += r.input?.cacheReadInputTokenCount ?? 0;
+    foldLatency(agg.latency, r.latency ?? latencyOf(r));
     const userId = r.requestMetadata?.user_id;
     if (userId) agg.users.add(userId);
   }
@@ -176,7 +309,7 @@ export function aggregate(
       agg = {
         tenant, modelId, hourBucket: hour,
         inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0,
-        invocations: 0, requestIds: new Set(),
+        invocations: 0, latency: emptyLatencyStats(), requestIds: new Set(),
       };
       map.set(key, agg);
     }
@@ -187,6 +320,7 @@ export function aggregate(
     agg.outputTokens += r.output?.outputTokenCount ?? 0;
     agg.cacheReadTokens += r.input?.cacheReadInputTokenCount ?? 0;
     agg.cacheWriteTokens += r.input?.cacheWriteInputTokenCount ?? 0;
+    foldLatency(agg.latency, r.latency ?? latencyOf(r));
   }
   return map;
 }
@@ -201,6 +335,7 @@ export interface ProjectDayAggregate {
   outputTokens: number;
   cacheReadTokens: number;
   invocations: number;
+  latency: LatencyStats;
   requestIds: Set<string>;
 }
 
@@ -223,7 +358,7 @@ export function aggregateByProjectDay(
       agg = {
         tenant, day, projectId, modelId: effectiveModelId,
         inputTokens: 0, outputTokens: 0, cacheReadTokens: 0,
-        invocations: 0, requestIds: new Set(),
+        invocations: 0, latency: emptyLatencyStats(), requestIds: new Set(),
       };
       map.set(key, agg);
     }
@@ -233,6 +368,7 @@ export function aggregateByProjectDay(
     agg.inputTokens += r.input?.inputTokenCount ?? 0;
     agg.outputTokens += r.output?.outputTokenCount ?? 0;
     agg.cacheReadTokens += r.input?.cacheReadInputTokenCount ?? 0;
+    foldLatency(agg.latency, r.latency ?? latencyOf(r));
   }
   return map;
 }

@@ -6,7 +6,9 @@ import { gunzipSync } from 'zlib';
 import {
   parseLogFile, aggregate, aggregateByProject, aggregateByProjectDay, detectRunaways,
   AttributionMaps, InvocationRecord, RunawayHit, UsageAggregate, ProjectAggregate, ProjectDayAggregate,
+  mergeLatency,
 } from './parse';
+import { latencyAddClause } from './latency-ddb';
 import { computeModelCost, normalizeModelId } from '../api/cost-calc';
 import {
   PROFILE_PK, ProfileCacheItem, loadAttributionMaps, listProfiles, putProfile,
@@ -194,31 +196,36 @@ function mergeInto(target: Map<string, UsageAggregate>, src: Map<string, UsageAg
     e.inputTokens += v.inputTokens; e.outputTokens += v.outputTokens;
     e.cacheReadTokens += v.cacheReadTokens; e.cacheWriteTokens += v.cacheWriteTokens;
     e.invocations += v.invocations;
+    mergeLatency(e.latency, v.latency);
   }
 }
 
 /** Time-series item: pk=TENANT#<tenant>#USAGE, sk=<hour> (read by GET /v1/usage). */
 async function upsertUsage(a: UsageAggregate) {
+  const lat = latencyAddClause(a.latency);
   await ddb.send(new UpdateCommand({
     TableName: TABLE,
     Key: { pk: `TENANT#${a.tenant}#USAGE`, sk: a.hourBucket },
     UpdateExpression:
-      'ADD inputTokens :i, outputTokens :o, cacheReadTokens :cr, cacheWriteTokens :cw, invocations :n',
+      'ADD inputTokens :i, outputTokens :o, cacheReadTokens :cr, cacheWriteTokens :cw, invocations :n'
+      + lat.clause,
     ExpressionAttributeValues: {
       ':i': a.inputTokens, ':o': a.outputTokens, ':cr': a.cacheReadTokens,
-      ':cw': a.cacheWriteTokens, ':n': a.invocations,
+      ':cw': a.cacheWriteTokens, ':n': a.invocations, ...lat.values,
     },
   }));
 }
 
 /** Per-model rollup: pk=TENANT#<tenant>#MODEL, sk=<modelId> (read by GET /v1/costs). */
 async function upsertModelRollup(a: UsageAggregate) {
+  const lat = latencyAddClause(a.latency);
   await ddb.send(new UpdateCommand({
     TableName: TABLE,
     Key: { pk: `TENANT#${a.tenant}#MODEL`, sk: a.modelId },
-    UpdateExpression: 'SET modelId = :m ADD inputTokens :i, outputTokens :o, cacheReadTokens :cr, invocations :n',
+    UpdateExpression: 'SET modelId = :m ADD inputTokens :i, outputTokens :o, cacheReadTokens :cr, invocations :n' + lat.clause,
     ExpressionAttributeValues: {
       ':m': a.modelId, ':i': a.inputTokens, ':o': a.outputTokens, ':cr': a.cacheReadTokens, ':n': a.invocations,
+      ...lat.values,
     },
   }));
 }
@@ -235,6 +242,7 @@ function mergeProjects(target: Map<string, ProjectAggregate>, src: Map<string, P
     for (const u of v.users) e.users.add(u);
     e.inputTokens += v.inputTokens; e.outputTokens += v.outputTokens;
     e.cacheReadTokens += v.cacheReadTokens; e.invocations += v.invocations;
+    mergeLatency(e.latency, v.latency);
   }
 }
 
@@ -244,16 +252,17 @@ function mergeProjects(target: Map<string, ProjectAggregate>, src: Map<string, P
  */
 async function upsertProjectRollup(p: ProjectAggregate) {
   const users = [...p.users];
+  const lat = latencyAddClause(p.latency);
   await ddb.send(new UpdateCommand({
     TableName: TABLE,
     Key: { pk: `TENANT#${p.tenant}#PROJECT`, sk: `${p.projectId}#${p.modelId}` },
     UpdateExpression:
       'SET projectId = :p, modelId = :m ADD inputTokens :i, outputTokens :o, cacheReadTokens :cr, invocations :n'
-      + (users.length ? ', userSet :u' : ''),
+      + lat.clause + (users.length ? ', userSet :u' : ''),
     ExpressionAttributeValues: {
       ':p': p.projectId, ':m': p.modelId,
       ':i': p.inputTokens, ':o': p.outputTokens, ':cr': p.cacheReadTokens, ':n': p.invocations,
-      ...(users.length ? { ':u': new Set(users) } : {}),
+      ...lat.values, ...(users.length ? { ':u': new Set(users) } : {}),
     },
   }));
 }
@@ -269,6 +278,7 @@ function mergeProjectDays(target: Map<string, ProjectDayAggregate>, src: Map<str
     }
     e.inputTokens += v.inputTokens; e.outputTokens += v.outputTokens;
     e.cacheReadTokens += v.cacheReadTokens; e.invocations += v.invocations;
+    mergeLatency(e.latency, v.latency);
   }
 }
 
@@ -277,15 +287,18 @@ function mergeProjectDays(target: Map<string, ProjectDayAggregate>, src: Map<str
  * lets the DORA page query project cost for the same 7/30/90-day windows it uses for metrics.
  */
 async function upsertProjectDayRollup(d: ProjectDayAggregate) {
+  const lat = latencyAddClause(d.latency);
   await ddb.send(new UpdateCommand({
     TableName: TABLE,
     Key: { pk: `TENANT#${d.tenant}#PROJDAY`, sk: `${d.day}#${d.projectId}#${d.modelId}` },
     UpdateExpression:
-      'SET #day = :d, projectId = :p, modelId = :m ADD inputTokens :i, outputTokens :o, cacheReadTokens :cr, invocations :n',
+      'SET #day = :d, projectId = :p, modelId = :m ADD inputTokens :i, outputTokens :o, cacheReadTokens :cr, invocations :n'
+      + lat.clause,
     ExpressionAttributeNames: { '#day': 'day' },
     ExpressionAttributeValues: {
       ':d': d.day, ':p': d.projectId, ':m': d.modelId,
       ':i': d.inputTokens, ':o': d.outputTokens, ':cr': d.cacheReadTokens, ':n': d.invocations,
+      ...lat.values,
     },
   }));
 }

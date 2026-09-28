@@ -319,6 +319,45 @@ export function LatencyPage() {
         </table>
       </Panel>
 
+      <Panel
+        title="By project"
+        desc={`${data.projects.note} Estimated from fixed buckets — see the note below the table; the fleet figures above are the exact reference.`}>
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Project</th><th className="num">Calls with latency</th>
+              <th className="num">TTFB p50</th><th className="num">TTFB p95</th>
+              <th className="num">E2E mean</th><th className="num">E2E p50</th><th className="num">E2E p95</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.projects.rows.map((r) => (
+              <tr key={r.projectId}>
+                <td>
+                  {r.name}
+                  {r.e2e.openEnded && (
+                    <span className="badge" style={{ marginLeft: 6 }}
+                      title="A percentile for this project fell in the unbounded top bucket (> 64 s); the value shown is that bucket's lower edge, so the true figure is at least this.">
+                      lower bound
+                    </span>
+                  )}
+                </td>
+                <td className="num" title={`${r.ttft.samples} of these were streaming calls with a first-byte figure`}>{r.e2e.samples}</td>
+                <td className="num">{r.ttft.samples > 0 ? fmtMs(r.ttft.p50) : '—'}</td>
+                <td className="num">{r.ttft.samples > 0 ? fmtMs(r.ttft.p95) : '—'}</td>
+                <td className="num">{fmtMs(r.e2e.meanMs)}</td>
+                <td className="num">{fmtMs(r.e2e.p50)}</td>
+                <td className="num">{r.e2e.openEnded ? `≥ ${fmtMs(r.e2e.p95)}` : fmtMs(r.e2e.p95)}</td>
+              </tr>
+            ))}
+            {data.projects.rows.length === 0 && (
+              <tr><td colSpan={7} className="muted">No project has a latency sample in this window — rollups written before latency collection began carry none, and a backfill supplies them.</td></tr>
+            )}
+          </tbody>
+        </table>
+        <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>{data.projects.estimateNote}</p>
+      </Panel>
+
       <Panel title="What we cannot see yet" desc="Three of the five hops need telemetry that does not exist on our side of the boundary">
         <table className="data">
           <thead><tr><th>Hop</th><th>Why it is dark</th><th>What would light it up</th></tr></thead>

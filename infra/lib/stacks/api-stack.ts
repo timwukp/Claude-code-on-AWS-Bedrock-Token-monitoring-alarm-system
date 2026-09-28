@@ -187,6 +187,11 @@ export class ApiStack extends cdk.Stack {
       environment: commonEnv,
       bundling: { minify: true, sourceMap: true },
     });
+    // Phase 1b: the per-project section reads the tenant's PROJDAY latency rollups and the registry
+    // for names. Read-only, same two tables the DORA and ROI functions read. The fleet section
+    // still touches no table.
+    tables.tenants.grantReadData(latencyFn);
+    tables.aggregates.grantReadData(latencyFn);
     latencyFn.addToRolePolicy(
       new iam.PolicyStatement({
         actions: [

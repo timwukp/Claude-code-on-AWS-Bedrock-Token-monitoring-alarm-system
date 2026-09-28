@@ -144,10 +144,20 @@ export interface LatencyHop {
   id: string; label: string; status: 'measured' | 'unmeasured';
   metric?: 'ttft' | 'generation'; note: string; instrument?: string;
 }
+/** Per-project figure read from fixed histogram buckets — an estimate, and a lower bound when openEnded. */
+export interface ProjectLatencyFigure {
+  samples: number; meanMs: number | null; p50: number | null; p95: number | null; estimated: true; openEnded: boolean;
+}
+export interface ProjectLatencyRow { projectId: string; name: string; e2e: ProjectLatencyFigure; ttft: ProjectLatencyFigure }
+export interface LatencyProjects {
+  source: string; scope: 'tenant'; window: number; rows: ProjectLatencyRow[];
+  coverage: { invocations: number; withLatency: number; pct: number | null };
+  note: string; estimateNote: string;
+}
 export interface LatencyResponse {
   window: number; generatedAt: string; source: string; scope: string; scopeNote: string;
   fleet: { e2e: LatencyStat; ttft: LatencyStat; generation: LatencyStat };
-  models: LatencyRow[]; hops: LatencyHop[];
+  models: LatencyRow[]; projects: LatencyProjects; hops: LatencyHop[];
   coverage: { e2eSamples: number | null; ttftSamples: number | null; streamingPct: number | null; note: string };
   percentileNote: string; caveat: string;
 }

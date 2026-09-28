@@ -5,8 +5,13 @@
  *
  * Scope and honesty, both stated in the payload so the UI cannot overstate them:
  *  - CloudWatch `AWS/Bedrock` is **account-level**. It carries no project, user or tenant
- *    dimension, so these numbers are a fleet view, not per-project. Per-project latency needs the
- *    invocation logs (they do carry it, on streaming records) and is deliberately not in here.
+ *    dimension, so the fleet numbers are exactly that. Per-project latency comes from a different
+ *    source in the same payload (`projects`): the aggregator folds each logged call's
+ *    `amazon-bedrock-invocationMetrics` into count + sum + fixed buckets on the tenant's PROJDAY
+ *    rollups (#13 phase 1b), and this handler reads those back for the window. That is why the
+ *    function now holds read grants on the tenants and aggregates tables: the project section IS
+ *    tenant-scoped, by the same claim every other page uses. Bucket percentiles are estimates
+ *    (`estimated: true`); the fleet CloudWatch figures stay the exact reference.
  *  - `TimeToFirstToken` is published for **streaming** invocations only, so its sample count is
  *    lower than `InvocationLatency`'s. The difference is the honest coverage figure.
  *  - The generation segment is `InvocationLatency − TimeToFirstToken` at the same percentile.
@@ -23,11 +28,18 @@ import {
   MetricDataQuery,
 } from '@aws-sdk/client-cloudwatch';
 import { BedrockClient, ListInferenceProfilesCommand } from '@aws-sdk/client-bedrock';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { badRequest, ok, serverError } from '../shared/response';
 import { getTenantId } from '../shared/tenant';
+import * as projectRegistry from '../shared/project-registry';
+import { projdayRange } from './project-calc';
+import { buildProjectLatencyRows, latencyCoverage } from './latency-projects';
 
 const cw = new CloudWatchClient({});
 const bedrock = new BedrockClient({});
+const ddbAgg = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const AGGREGATES_TABLE = process.env.AGGREGATES_TABLE ?? '';
 const NAMESPACE = 'AWS/Bedrock';
 const E2E = 'InvocationLatency';
 const TTFT = 'TimeToFirstToken';
@@ -281,11 +293,30 @@ async function listProfiles(): Promise<Map<string, ProfileRef>> {
   return out;
 }
 
+/** Raw PROJDAY items for the tenant's window — same key range the DORA/ROI project tables read. */
+async function queryProjdayRaw(tenantId: string, now: Date, windowDays: number): Promise<Record<string, unknown>[]> {
+  if (!AGGREGATES_TABLE) return [];
+  const { fromSk, toSk } = projdayRange(now, windowDays);
+  const out: Record<string, unknown>[] = [];
+  let key: Record<string, unknown> | undefined;
+  do {
+    const res = await ddbAgg.send(new QueryCommand({
+      TableName: AGGREGATES_TABLE,
+      KeyConditionExpression: 'pk = :pk AND sk BETWEEN :from AND :to',
+      ExpressionAttributeValues: { ':pk': `TENANT#${tenantId}#PROJDAY`, ':from': fromSk, ':to': toSk },
+      ExclusiveStartKey: key,
+    }));
+    out.push(...((res.Items ?? []) as Record<string, unknown>[]));
+    key = res.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (key);
+  return out;
+}
+
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    // Auth only — the tenant claim must be present, but CloudWatch data is account-wide and is
-    // labelled as such in the response rather than pretending to be tenant-scoped.
-    getTenantId(event);
+    // The fleet section is account-wide CloudWatch data and is labelled as such; the project
+    // section is the tenant's own PROJDAY rollups, scoped by this claim.
+    const tenantId = getTenantId(event);
 
     const windowDays = Number(event.queryStringParameters?.window ?? 7);
     if (!WINDOWS.includes(windowDays as (typeof WINDOWS)[number])) {
@@ -294,7 +325,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const end = new Date();
     const start = new Date(end.getTime() - windowDays * 86_400_000);
-    const [allModelIds, profiles] = await Promise.all([listModelIds(), listProfiles()]);
+    const [allModelIds, profiles, projdayItems, registry] = await Promise.all([
+      listModelIds(), listProfiles(),
+      queryProjdayRaw(tenantId, end, windowDays).catch((e) => { console.warn('latency: PROJDAY read failed; project section empty', (e as Error).message); return [] as Record<string, unknown>[]; }),
+      projectRegistry.listProjects().catch(() => [] as { projectId: string; name: string }[]),
+    ]);
+    const names = new Map(registry.map((p) => [p.projectId, p.name] as [string, string]));
+    const projectRows = buildProjectLatencyRows(projdayItems, names);
+    const projectCoverage = latencyCoverage(projdayItems);
     const modelIds = allModelIds.slice(0, MAX_MODELS);
 
     const queries: MetricDataQuery[] = [
@@ -356,9 +394,21 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       source: 'CloudWatch AWS/Bedrock (InvocationLatency, TimeToFirstToken)',
       scope: 'aws-account',
       scopeNote:
-        'Account-level. CloudWatch publishes no project, user or tenant dimension for these metrics, so this is a fleet view. Per-project latency requires the invocation logs.',
+        'Account-level. CloudWatch publishes no project, user or tenant dimension for these metrics, so the fleet section is a fleet view. Per-project latency is in `projects`, read from the invocation-log rollups for this tenant.',
       fleet: { e2e: fleetE2e, ttft: fleetTtft, generation: deriveGeneration(fleetE2e, fleetTtft) },
       models,
+      projects: {
+        source: 'invocation-log rollups (PROJDAY): amazon-bedrock-invocationMetrics per call, count + sum + fixed buckets',
+        scope: 'tenant',
+        window: windowDays,
+        rows: projectRows,
+        coverage: projectCoverage,
+        note: projectCoverage.pct === null
+          ? 'No project rollups in this window.'
+          : `${projectCoverage.withLatency} of ${projectCoverage.invocations} invocations in this window carry a latency sample (${projectCoverage.pct}%). Calls logged without a response body, and rollups written before latency was collected, have none — they are excluded, not counted as zero.`,
+        estimateNote:
+          'p50/p95 are read from fixed histogram buckets (250 ms … 64 s) by linear interpolation inside the bucket that holds the rank, so they are estimates to within a bucket span; a value marked open-ended fell in the unbounded top bucket and is a lower bound. Compare against the exact fleet percentiles above.',
+      },
       hops: hopModel(),
       coverage: {
         e2eSamples: fleetE2e.samples,
