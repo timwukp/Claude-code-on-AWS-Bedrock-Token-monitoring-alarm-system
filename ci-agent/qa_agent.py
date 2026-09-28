@@ -77,6 +77,12 @@ Rules for the final JSON:
 - Every inconsistency, discrepancy, wrong value, missing data, or broken control you noticed
   during exploration MUST appear as a findings entry — do NOT report "0 findings" if you
   described any problem above. A cross-page value mismatch is at least HIGH.
+- EXCEPTION — a difference the page itself DISCLOSES AND QUANTIFIES on screen is expected
+  behaviour, not a finding. Example: two figures differ by $5.76 and the tile beside them says
+  "the $5.76 difference is traffic since the last rollup" — that is the product working as
+  designed and must NOT be filed. File such a difference ONLY if the disclosure is wrong: the
+  stated cause cannot account for the size or direction of the gap, or the numbers contradict the
+  sentence. When you do file it, quote the disclosure and say why it does not hold.
 - If you are running out of steps, STOP exploring and emit the JSON now with what you have.
 - overall = "FAIL" if findings is non-empty, else "PASS". Never leave it blank.
 This is REAL testing — report the true state, never invent passes."""
