@@ -28,8 +28,15 @@
 | real `PASS` with `pages_tested: 10` | untouched |
 | `py_compile`; YAML parse with the concurrency block | PASS |
 
-## Live verification
-Not on this PR (no `frontend/**` / `api/**` change, so no qa run). The next frontend PR — the peer's feature-32 —
+## Live verification — on this PR (the workflow file is in qa's path filter, so qa ran with this branch's code)
+Run 36520605401: attempt 1 *"stream failed before any output … NO transcript"* → retry 30 s; attempt 2 same → retry 60 s;
+attempt 3 explored Overview, `/usage`, `/costs`, `/projects`, then Bedrock failed after 426 chars → **partial**, kept;
+structured pass → **FAIL, "incomplete test run, 6 pages untested"** (MEDIUM); terminal step **red**. The same Bedrock
+behaviour had produced a green check on #64. Verified: no hollow green; the retry absorbs two empty streams; a partial
+run is judged on what it saw. Bedrock's rejection of the harness's calls on `global.anthropic.claude-fable-5` persists
+(5 runs / 15 h) — outside this repo; model switch recommended to the owner.
+
+Previously planned as: not on this PR. The next frontend PR — the peer's feature-32 —
 is the test: if Bedrock is still rejecting the harness, its qa must show **UNKNOWN → red** with "NO transcript" in
 the job log; if healthy, a normal PASS/FAIL with a real transcript. Recorded in that PR's report.
 
