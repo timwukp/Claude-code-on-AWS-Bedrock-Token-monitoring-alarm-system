@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Date:** 2026-09-28
 - **Accepted-by:** Tim WU
-- **Status:** accepted
+- **Status:** shipped
 
 ## Problem
 qa on #63 filed F-PR63-001 (LOW): the `/latency` by-model rows summed to 4,336 invocations while the fleet

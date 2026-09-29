@@ -6,6 +6,21 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Fixed — an agent run that explored nothing is no longer a green check (feature-32a)
+- **UI QA agent:** four consecutive runs on #64 hit Bedrock `ServiceUnavailableException` before the agent
+  explored anything, and `normalize_report` rewrote the `UNKNOWN` sentinel to `PASS` because the findings list
+  was empty — a 2-minute, 358-character run came back **green**. Now: `UNKNOWN` is kept (the workflow's red
+  path fires); a PASS with zero findings requires evidence of exploration (`pages_tested ≥ 1` or a
+  non-trivial transcript) or the verdict is withheld; a stream that fails before any output is reported as
+  "no transcript", not "partial"; the exploration invoke is retried twice when it produced nothing. **Tightens
+  only; nothing loosens.**
+- **Workflow:** one qa run per PR at a time (`concurrency` group, cancel-in-progress) — two pushes 29 s apart
+  had run concurrently against one site and one harness.
+- Outside this repo, same investigation: the QA harness execution role had never held Code Interpreter
+  permissions (owner-authorised grant applied 2026-09-29), and Bedrock rejects the harness's large streaming
+  requests on `global.anthropic.claude-fable-5` while small requests succeed — a harness model change is
+  recommended to the owner.
+
 ### Changed — /latency says its fleet and per-model figures are separate series (feature-31)
 - The "By model" panel now states that the rows and the fleet tiles are separate CloudWatch series that can
   briefly disagree after a burst, that profile-routed calls are not counted twice, and that the fleet series

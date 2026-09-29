@@ -3,7 +3,7 @@
 - **Intent:** ./intent.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Status:** signed-off
+- **Status:** shipped
 
 ## Behaviour
 The "By model" panel description on `/latency` states: the rows and the fleet tiles are separate CloudWatch

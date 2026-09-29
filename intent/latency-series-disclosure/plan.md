@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** 533abeeff0f5d021637f0d10315216d720525915
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is bound to `533abeef` — the tip of `main` after #63 (feature-29) merged. One chain at a time by
 agreement with the peer, who cuts feature-32 after this lands.
