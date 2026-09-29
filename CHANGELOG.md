@@ -12,7 +12,7 @@ are grouped by development milestone rather than strict semver releases.
   unchanged. Repositories rank by merged PRs and projects by estimated spend — the value column each table is
   read for — and recent PRs stay newest first; each caption names the ordering and, when cut, how many rows are
   shown. Table standards 4 and 5 from the UX research, already applied to Cost and ROI, now reach DORA. No
-  number changes, no API change. (feature-33, PR TBD)
+  number changes, no API change. (feature-33, PR #66)
 
 ### Fixed — an agent run that explored nothing is no longer a green check (feature-32a)
 - **UI QA agent:** four consecutive runs on #64 hit Bedrock `ServiceUnavailableException` before the agent

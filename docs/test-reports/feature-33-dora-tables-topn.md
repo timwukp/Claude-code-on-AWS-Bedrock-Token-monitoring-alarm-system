@@ -1,6 +1,6 @@
 # Feature 33 — DORA tables open on their top rows
 
-- **Chain:** `intent/dora-tables-topn/` · **Branch:** `feat/dora-tables-topn` off `main@7647a77` (post-#65) · **PR:** TBD
+- **Chain:** `intent/dora-tables-topn/` · **Branch:** `feat/dora-tables-topn` off `main@7647a77` (post-#65) · **PR:** #66
 - **Origin:** table standards 4 ("default top 10 + Show all N") and 5 ("default sort by the value column") in
   `docs/research-dashboard-ux.md`; applied to Cost and ROI in features 24/27, never to DORA.
 - **Date:** 2026-09-29
