@@ -20,6 +20,14 @@ on:
         required: true
         default: 'https://your-app.example.com/'
 
+# One qa run per PR at a time, latest commit wins. Two pushes 29 s apart on #64 ran concurrently
+# against the same site and harness: one run was terminated mid-exploration, the other's invoke
+# returned an empty stream. Cancelling the superseded run is also what the check's colour assumes —
+# it reports the newest commit, so only the newest commit's run should exist.
+concurrency:
+  group: ui-qa-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 permissions:
   id-token: write        # OIDC → assume the AWS role
   contents: write        # push the auto-fix commit onto the PR branch

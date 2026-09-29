@@ -18,6 +18,7 @@ import os
 import re
 import secrets
 import sys
+import time
 
 import boto3
 from botocore.config import Config as BotoConfig
@@ -110,8 +111,17 @@ def safe_stream(resp) -> str:
                 if "text" in delta:
                     out.append(delta["text"])
     except Exception as e:  # botocore/urllib3 read timeout, connection reset, etc.
-        print(f"\n⚠️  stream interrupted ({type(e).__name__}: {e}); using partial transcript.",
-              file=sys.stderr)
+        got = sum(len(x) for x in out)
+        # "Partial" only means something when there IS a part. A stream that failed before emitting
+        # anything (Bedrock ServiceUnavailable on #64, twice) is not a partial transcript — it is no
+        # transcript, and saying "using partial transcript" over an empty string is how an outage
+        # became a PASS. Say what happened; the caller's evidence guard turns it into UNKNOWN.
+        if got == 0:
+            print(f"\n⚠️  stream failed before any output ({type(e).__name__}: {e}); NO transcript.",
+                  file=sys.stderr)
+        else:
+            print(f"\n⚠️  stream interrupted after {got} chars ({type(e).__name__}: {e}); using partial transcript.",
+                  file=sys.stderr)
     return "".join(out)
 
 
@@ -193,7 +203,8 @@ def normalize_report(report: dict) -> dict:
     """Coerce whatever shape the agent emitted into a stable contract:
       - every finding has id / page / severity / summary / evidence / suspected_source
         (agents variously use 'title' vs 'summary', 'description' vs 'evidence', etc.)
-      - top-level 'overall' is always set: FAIL if any finding, else PASS."""
+      - top-level 'overall' is set FAIL if any finding, else PASS — except the UNKNOWN sentinel,
+        which means no report was produced and is kept so the workflow can redden on it."""
     findings = report.get("findings") or []
     norm = []
     for i, f in enumerate(findings):
@@ -214,6 +225,13 @@ def normalize_report(report: dict) -> dict:
             "suspected_source": f.get("suspected_source") or f.get("source") or "",
         })
     report["findings"] = norm
+    # Derive a verdict ONLY when the agent produced a report but left `overall` blank or odd.
+    # `UNKNOWN` is the sentinel for "no report at all" and must survive: rewriting it to PASS
+    # because the findings list is empty turned an agent run that explored NOTHING into a green
+    # check (PR #64, run 36428863563 — empty transcript, empty structured pass, overall=PASS).
+    # The workflow reddens on UNKNOWN precisely so that silence is never read as success.
+    if report.get("overall") == "UNKNOWN":
+        return report
     if report.get("overall") not in ("PASS", "FAIL"):
         report["overall"] = "FAIL" if norm else "PASS"
     return report
@@ -274,12 +292,28 @@ appear in "findings" (so it stays blocking)."""
     cfg = BotoConfig(read_timeout=900, connect_timeout=30, retries={"max_attempts": 0})
     client = boto3.client("bedrock-agentcore", region_name=args.region, config=cfg)
     print(f"🧪 UI QA Agent — session {session_id}\n   target {args.url}", flush=True)
-    resp = client.invoke_harness(
-        harnessArn=args.harness_arn, runtimeSessionId=session_id,
-        actorId="ci-pipeline",
-        messages=[{"role": "user", "content": [{"text": prompt}]}],
-    )
-    text = safe_stream(resp)
+
+    def invoke_with_retry(messages, label):
+        """Invoke the harness; if the stream dies before emitting ANY text, try again (twice, with
+        backoff). Bedrock answered the harness with ServiceUnavailableException on four consecutive
+        runs of #64 while small requests to the same model succeeded — a transient the loop should
+        absorb rather than report as a run. A stream that emitted something is not retried: the
+        agent's partial work is real evidence and a fresh run would not be comparable."""
+        for attempt in range(1, 4):
+            resp = client.invoke_harness(
+                harnessArn=args.harness_arn, runtimeSessionId=session_id, actorId="ci-pipeline",
+                messages=messages,
+            )
+            out = safe_stream(resp)
+            if out.strip() or attempt == 3:
+                return out
+            wait = 30 * attempt
+            print(f"⚠️  {label}: stream produced no output (attempt {attempt}/3); retrying in {wait}s",
+                  file=sys.stderr, flush=True)
+            time.sleep(wait)
+        return ""
+
+    text = invoke_with_retry([{"role": "user", "content": [{"text": prompt}]}], "exploration")
     print(text)
 
     report = extract_json(text)
@@ -315,6 +349,19 @@ appear in "findings" (so it stays blocking)."""
                       "note": "findings salvaged from exploration transcript"}
     report = report or {"overall": "UNKNOWN", "findings": [], "raw": text[-4000:]}
     report = normalize_report(report)
+    # A PASS has to be earned. If the agent reported no findings but also gives no evidence of
+    # having explored — no pages_tested, and a transcript too short to have visited anything —
+    # the run is UNKNOWN, not PASS. A stream that returned nothing (throttled or aborted invoke)
+    # is the case this guards against.
+    if report.get("overall") == "PASS" and not report.get("findings"):
+        pages = report.get("pages_tested")
+        explored = (isinstance(pages, (int, float)) and pages >= 1) or len(text.strip()) >= 500
+        if not explored:
+            print("\n⚠️  report says PASS with no findings, but there is no evidence of exploration "
+                  f"(pages_tested={pages!r}, transcript={len(text.strip())} chars) — recording UNKNOWN.",
+                  file=sys.stderr)
+            report["overall"] = "UNKNOWN"
+            report["note"] = "no evidence of exploration; verdict withheld"
 
     # Reconciliation contract: every prior finding gets an entry even when the agent's JSON
     # omitted it — silence must read as a blind spot (UNVERIFIED), never as success.
