@@ -1,6 +1,6 @@
 # Feature 32a — qa empty-run honesty
 
-- **Chain:** `intent/qa-empty-run-honesty/` · **Branch:** `fix/qa-empty-run-honesty` off `main@24d20ea` (post-#64) · **PR:** TBD
+- **Chain:** `intent/qa-empty-run-honesty/` · **Branch:** `fix/qa-empty-run-honesty` off `main@24d20ea` (post-#64) · **PR:** #65
 - **Origin:** PR #64 qa runs 36428863563 (and re-runs): `overall: PASS`, 0 findings, 358-char transcript, ~2 min — Bedrock `ServiceUnavailableException` on both harness calls.
 - **Date:** 2026-09-29
 - **Verdict:** PASS on unit checks; the live verification is the next frontend PR's qa run (see below).
