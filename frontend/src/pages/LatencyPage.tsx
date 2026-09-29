@@ -277,7 +277,7 @@ export function LatencyPage() {
         />
       </div>
 
-      <Panel title="By model" desc="Sorted by p95 end-to-end. A model with few samples has a noisy tail — read the sample count before the percentile.">
+      <Panel title="By model" desc="Sorted by p95 end-to-end. A model with few samples has a noisy tail — read the sample count before the percentile. The rows and the fleet tiles above are separate CloudWatch series: for a few minutes after a burst the per-model rows can run ahead of the fleet total (or vice versa), so their sum need not equal it at any instant — the fleet series is the reference. Profile-routed calls are not counted twice; the two agree once both have caught up.">
         <table className="data">
           <thead>
             <tr>

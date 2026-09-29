@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** 0db85c5b2974b1a273732128d06f593a537310a3
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #62 (projday-repair-qa-disclosure), the merge base at branch time.
 Nothing else is in flight. The work was built earlier on `16da459` and re-based twice (over #59/#60 and #61/#62)
