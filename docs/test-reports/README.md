@@ -40,6 +40,7 @@ results. One report per feature (mapped to a GitHub issue / PR).
 | Chart \| Table twin on the four chart panels (Usage, DORA ×2, AI ROI) — table view with the same figures as the tooltip | — | #63 | [feature-29](./feature-29-chart-table-toggle.md) | PASS (gates + local render) |
 | /latency fleet-vs-per-model series disclosure (qa F-PR63-001) | — | #64 | [feature-31](./feature-31-latency-series-disclosure.md) | PASS |
 | qa empty-run honesty (UNKNOWN never becomes PASS; exploration evidence; per-PR concurrency) | — | #65 | [feature-32a](./feature-32a-qa-empty-run-honesty.md) | PASS |
+| DORA tables open on their top rows (top 10 + "Show all N"; repositories by merged PRs, projects by spend) | — | TBD | [feature-33](./feature-33-dora-tables-topn.md) | PASS (gates + local render) |
 Each report records: scope, unit-test results, build/synth gates, real-AWS validation evidence,
 any defect found+fixed during validation, and a verdict. Reports are written before opening the
 PR; a feature is only PR-ready when all gates are green.

@@ -3,7 +3,7 @@
 - **Intent:** ./intent.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Status:** signed-off
+- **Status:** shipped
 
 ## Behaviour (`ci-agent/qa_agent.py`)
 1. `normalize_report` returns a report whose `overall` is `UNKNOWN` **unchanged**. It derives PASS/FAIL from the

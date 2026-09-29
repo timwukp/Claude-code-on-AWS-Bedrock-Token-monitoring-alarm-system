@@ -6,6 +6,14 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Changed — DORA tables open on their top rows
+- **The three long tables on DORA** — recent merged PRs, all tracked repositories, projects × cost — show their top
+  10 rows with a "Show all N" control (and "Show top 10 of N" to fold back); tables with ten rows or fewer are
+  unchanged. Repositories rank by merged PRs and projects by estimated spend — the value column each table is
+  read for — and recent PRs stay newest first; each caption names the ordering and, when cut, how many rows are
+  shown. Table standards 4 and 5 from the UX research, already applied to Cost and ROI, now reach DORA. No
+  number changes, no API change. (feature-33, PR TBD)
+
 ### Fixed — an agent run that explored nothing is no longer a green check (feature-32a)
 - **UI QA agent:** four consecutive runs on #64 hit Bedrock `ServiceUnavailableException` before the agent
   explored anything, and `normalize_report` rewrote the `UNKNOWN` sentinel to `PASS` because the findings list

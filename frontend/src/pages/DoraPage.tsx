@@ -97,6 +97,24 @@ const METRIC_MAP: readonly { dora: string; here: string; deviation: string }[] =
   },
 ];
 
+const TOP_N = 10;
+
+/**
+ * Long tables open on their top rows and grow on request (table standard 4). The caller sorts; this
+ * only cuts and offers the rest, so "top" means whatever the column order says it means.
+ */
+function useTopN<T>(rows: readonly T[], n = TOP_N) {
+  const [all, setAll] = useState(false);
+  const visible = all || rows.length <= n ? rows : rows.slice(0, n);
+  const hidden = rows.length - visible.length;
+  const button = rows.length > n ? (
+    <button className="btn-sm" style={{ marginTop: 12 }} onClick={() => setAll((v) => !v)} aria-expanded={all}>
+      {all ? `Show top ${n} of ${rows.length}` : `Show all ${rows.length}`}
+    </button>
+  ) : null;
+  return { visible, hidden, button };
+}
+
 export function DoraPage() {
   const [params, setParams] = useSearchParams();
   const range = useTimeRange([7, 30, 90]);
@@ -117,6 +135,14 @@ export function DoraPage() {
 
   const [refreshKey, setRefreshKey] = useState(0);
   const [pollCount, setPollCount] = useState(0);
+
+  // Top-N views of the three long tables: recent PRs stay newest-first (the API's order); repositories
+  // rank by merged PRs and projects by estimated spend — the value column each table is read for.
+  const prsTop = useTopN(detail?.recentPrs ?? []);
+  const reposRanked = useMemo(() => [...(overview ?? [])].sort((a, b) => b.mergedPrs - a.mergedPrs), [overview]);
+  const reposTop = useTopN(reposRanked);
+  const projectsRanked = useMemo(() => [...(projectRows ?? [])].sort((a, b) => b.estimatedUsd - a.estimatedUsd), [projectRows]);
+  const projTop = useTopN(projectsRanked);
 
   // Selected repo: URL param if it is tracked, else the first tracked repo.
   const selected = useMemo(() => {
@@ -371,13 +397,13 @@ export function DoraPage() {
                     </p>
                   </Panel>
 
-                  <Panel title="Recent merged PRs" desc={`Up to 25 most recent merges in the last ${windowDays} days`}>
+                  <Panel title="Recent merged PRs" desc={`${detail!.recentPrs.length} most recent merges in the last ${windowDays} days (the API returns up to 25), newest first${prsTop.hidden > 0 ? ` · showing the newest ${prsTop.visible.length}` : ''}`}>
                     <table className="data">
                       <thead>
                         <tr><th>#</th><th>Title</th><th>Author</th><th>Merged</th><th className="num">Lead time</th><th>AI assistant</th><th>Flags</th></tr>
                       </thead>
                       <tbody>
-                        {detail!.recentPrs.map((p) => (
+                        {prsTop.visible.map((p) => (
                           <tr key={p.number}>
                             <td className="mono">{p.number}</td>
                             <td><a href={p.htmlUrl} target="_blank" rel="noreferrer">{p.title}</a></td>
@@ -393,6 +419,7 @@ export function DoraPage() {
                         ))}
                       </tbody>
                     </table>
+                    {prsTop.button}
                   </Panel>
                 </>
               )}
@@ -403,13 +430,13 @@ export function DoraPage() {
 
       {/* ---- all repos ---- */}
       {overview && overview.length > 0 && (
-        <Panel title="All tracked repositories" desc={`Side-by-side over the last ${windowDays} days — same definitions as above`}>
+        <Panel title="All tracked repositories" desc={`${overview.length} repositories, most merged PRs first — last ${windowDays} days, same definitions as above${reposTop.hidden > 0 ? ` · showing the top ${reposTop.visible.length}` : ''}`}>
           <table className="data">
             <thead>
               <tr><th>Repository</th><th className="num">Merged PRs</th><th className="num">AI %</th><th className="num">Deployment frequency</th><th className="num">Change lead time</th><th className="num">Change fail rate</th><th className="num">Recovery time</th><th>Status</th></tr>
             </thead>
             <tbody>
-              {overview.map((r) => (
+              {reposTop.visible.map((r) => (
                 <tr key={r.repo} style={{ cursor: 'pointer' }} onClick={() => setRepo(r.repo)} title="Show this repository">
                   <td><strong>{r.repo}</strong></td>
                   <td className="num">{r.mergedPrs}</td>
@@ -424,19 +451,20 @@ export function DoraPage() {
               ))}
             </tbody>
           </table>
+          {reposTop.button}
         </Panel>
       )}
 
       {/* ---- projects: delivery × cost (#13) ---- */}
       {projectRows && projectRows.length > 0 && (
         <Panel title="Projects — delivery × cost"
-               desc={`Each project pools DORA across its repos and prices its Bedrock usage from daily rollups — last ${windowDays} days`}>
+               desc={`${projectRows.length} projects, highest estimated spend first — each pools DORA across its repos and prices its Bedrock usage from daily rollups, last ${windowDays} days${projTop.hidden > 0 ? ` · showing the top ${projTop.visible.length}` : ''}`}>
           <table className="data">
             <thead>
               <tr><th>Project</th><th className="num">Repos</th><th className="num">Merged PRs</th><th className="num">Deployment frequency</th><th className="num">Change lead time</th><th className="num">AI %</th><th className="num">Tokens</th><th className="num">Est. USD</th><th className="num">$ / merge</th></tr>
             </thead>
             <tbody>
-              {projectRows.map((p) => (
+              {projTop.visible.map((p) => (
                 <tr key={p.projectId}>
                   <td><strong>{p.name}</strong> <span className="muted mono" style={{ fontSize: 12 }}>{p.projectId}</span>
                     {p.costCenter && <div className="muted" style={{ fontSize: 12 }}>{p.costCenter}</div>}</td>
@@ -452,6 +480,7 @@ export function DoraPage() {
               ))}
             </tbody>
           </table>
+          {projTop.button}
           {projectRows.some((p) => p.notes.length > 0) && (
             <p className="muted" style={{ fontSize: 12, marginTop: 10 }}>
               {projectRows.flatMap((p) => p.notes.map((n) => `${p.projectId}: ${n}`)).join(' · ')}

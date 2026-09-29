@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** 24d20ea8f6b3d764154fe716e447735733a79593
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is bound to `24d20ea8` — the tip of `main` after #64 (feature-31) merged. Sequenced before the
 peer's feature-32 by agreement: without this, their PR's qa could report a hollow green too.
