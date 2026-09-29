@@ -53,3 +53,17 @@ qa verdicts quoted:
 | LOW | /latency | In the 7-day view, per-model invocation counts do not sum to the fleet total, and the page's stated cause does not fit the gap. |
 {"overall":"FAIL","pages_tested":10,"findings":[{"id":"F-PR66-001","page":"/costs","severity":"LOW","summary":"Model-id counts contradict: the 90d window reports more model ids than the all-time footer.","evidence":"Cost page, 90d: 'Models used 21 · 34 ids — r
 ```
+
+### Re-run on the same commit (5 findings, 1 FIXED)
+Repeats escalated to MEDIUM (Cost id-count, `/roi` annualisation), a new HIGH on `/latency` vs `/usage` (fleet CloudWatch counts
+are account-wide and now include the qa harness's own model calls; tenant-scoped Usage cannot match — latency owner's
+chain, quantified note beside the numbers), and two new LOWs:
+- **F-PR66-005 (LOW, `/dora`)** — sync banner "53 PRs collected" vs 54 merges in the 90-day window. Not this change and
+  not frontend counting: the banner prints `DoraRepo.prCount`, a snapshot the collector writes into the registry item at
+  sync time (`store.countItems()`), while the metrics count the live PR items on every read; the snapshot lags by the PRs
+  stored after it was written. Backend (`dora.ts` / `collector.ts` / `store.ts`) — handed to the DORA store owner.
+- **F-PR66-006 (LOW, `/costs`)** — a merged model row lists the same raw id twice: the ARN→id normalisation
+  (`split('/').pop()`) maps `…inference-profile/us.anthropic.claude-opus-5` onto the genuine `us.anthropic.claude-opus-5`.
+  Same code as F-PR66-001 — **mine, next chain `cost-id-consistency`** (dedupe normalised ids; count merged models the
+  same way in the tile and the all-time footer).
+The DORA tables themselves: still no finding.
