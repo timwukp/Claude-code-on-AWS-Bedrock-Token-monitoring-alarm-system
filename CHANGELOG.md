@@ -6,6 +6,29 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Fixed — every figure reconciles with the one beside it (feature-34)
+- **/roi:** monthly spend and the annual figure now share one day-count basis (365/window and 365/12), so monthly × 12
+  reproduces the annual number exactly. Before, monthly used a 30.44-day month and the page showed a rounded ×12.17.
+  The page now reads "× 365/N" instead of a rounded factor.
+- **/latency By model:** series are ranked by invocations, and the busiest 12 get rows. Before, the Lambda kept the
+  first 12 in ListMetrics order and silently dropped the rest. A last row holds the fleet total minus the listed rows,
+  so the column adds up to the fleet figure. ListMetrics and GetMetricData now paginate, the latter in chunks of 500
+  queries. The #64 note that blamed "a burst" is replaced.
+- **/latency fleet tiles:** a line under the tiles states the account-wide invocation count, this tenant's share and
+  the rest (other callers in the AWS account, such as CI agents). CloudWatch counts all of these; the Usage page does not.
+- **/latency By project:** the panel states that per-project latency is Fast-only. The Glue table over the raw logs
+  maps no response body, so Athena cannot read it.
+- **Rate card:** Claude `fable-5-1`, `mythos-5-1`, `opus-5-5`, `sonnet-5-5` and `sonnet-5` get their own rows (AWS
+  Price List, us-east-1, Global standard). They were priced at their family rates. **Cost is computed from stored
+  tokens at read time, so this reprices history.** Measured on dev: the largest tenant's all-time total moves from
+  $14,896.79 to $14,365.94 (−$530.85, −3.6%), mostly from `fable-5-1` cache reads, which fall from $1.00 to $0.25 per
+  MTok. Across all tenants the total moves from $19,808.97 to $19,253.12. A test now fails if a row sits below a
+  shorter key that would shadow it.
+- **/dora banner:** "N PRs collected" becomes "N merged PRs stored for this repo since collection began, not only this
+  window". The stored count matches a live count for all six repositories, so only the label changes.
+- **/projects Full:** the panel states the live Athena − rollup difference in dollars and percent, instead of
+  "slightly ahead".
+
 ### Changed — DORA tables open on their top rows
 - **The three long tables on DORA** — recent merged PRs, all tracked repositories, projects × cost — show their top
   10 rows with a "Show all N" control (and "Show top 10 of N" to fold back); tables with ten rows or fewer are
