@@ -41,7 +41,7 @@ results. One report per feature (mapped to a GitHub issue / PR).
 | /latency fleet-vs-per-model series disclosure (qa F-PR63-001) | — | #64 | [feature-31](./feature-31-latency-series-disclosure.md) | PASS |
 | qa empty-run honesty (UNKNOWN never becomes PASS; exploration evidence; per-PR concurrency) | — | #65 | [feature-32a](./feature-32a-qa-empty-run-honesty.md) | PASS |
 | DORA tables open on their top rows (top 10 + "Show all N"; repositories by merged PRs, projects by spend) | — | #66 | [feature-33](./feature-33-dora-tables-topn.md) | PASS (gates + local render) |
-| Every figure reconciles with the one beside it (/roi day-count, /latency ranked rows + remainder + account-vs-tenant, rate card 5.x rows, /dora label, /projects Full − Fast) | — | TBD | [feature-34](./feature-34-numbers-reconcile.md) | PASS (gates + live Lambda + served bundle; qa pending) |
+| Every figure reconciles with the one beside it (/roi day-count, /latency ranked rows + remainder + account-vs-tenant, rate card 5.x rows, /dora label, /projects Full − Fast) | — | #67 | [feature-34](./feature-34-numbers-reconcile.md) | PASS (gates + live Lambda + served bundle; qa pending) |
 Each report records: scope, unit-test results, build/synth gates, real-AWS validation evidence,
 any defect found+fixed during validation, and a verdict. Reports are written before opening the
 PR; a feature is only PR-ready when all gates are green.

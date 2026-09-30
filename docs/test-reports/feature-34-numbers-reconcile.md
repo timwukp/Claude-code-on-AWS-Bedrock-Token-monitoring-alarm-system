@@ -1,6 +1,6 @@
 # Feature 34 — every figure reconciles with the one beside it
 
-- **Chain:** `intent/numbers-reconcile/` · **Branch:** `fix/numbers-reconcile` off `main@3c60f41` (post-#66) · **PR:** TBD
+- **Chain:** `intent/numbers-reconcile/` · **Branch:** `fix/numbers-reconcile` off `main@3c60f41` (post-#66) · **PR:** #67
 - **Origin:** qa findings F-PR65R3-001, F-PR66-002, F-PR66-003, F-PR66-004 (HIGH), F-PR66-005, F-PR66R2-001, and the
   owner's Latency 1c decision (state Fast-only on the page).
 - **Date:** 2026-09-30

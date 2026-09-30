@@ -27,7 +27,7 @@ are grouped by development milestone rather than strict semver releases.
 - **/dora banner:** "N PRs collected" becomes "N merged PRs stored for this repo since collection began, not only this
   window". The stored count matches a live count for all six repositories, so only the label changes.
 - **/projects Full:** the panel states the live Athena − rollup difference in dollars and percent, instead of
-  "slightly ahead".
+  "slightly ahead". (feature-34, PR #67)
 
 ### Changed — DORA tables open on their top rows
 - **The three long tables on DORA** — recent merged PRs, all tracked repositories, projects × cost — show their top
