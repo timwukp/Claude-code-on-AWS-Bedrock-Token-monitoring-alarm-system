@@ -167,6 +167,12 @@ export function ProjectsPage() {
   // reader sees 21 projects above 5 rows and cannot tell whether that is a bug. It is not, and the
   // foot says why.
   const rowSource = source === 'full' ? 'Athena' : 'rollups';
+  // "Ahead of the rollups" needs its size beside it. Both sides are all-time, so the measured
+  // difference is the traffic the rollups have not folded in yet.
+  const fullDelta = apiTotalUsd != null ? Math.round((rowsCost - apiTotalUsd) * 100) / 100 : null;
+  const fullVsFast = source === 'full' && !loading && !error && fullDelta !== null && apiTotalUsd
+    ? ` Right now the Athena rows total ${fmtUsd(rowsCost)}, ${fmtUsd(Math.abs(fullDelta))} (${(Math.abs(fullDelta) / apiTotalUsd * 100).toFixed(2)}%) ${fullDelta >= 0 ? 'above' : 'below'} the rollups' ${fmtUsd(apiTotalUsd)}${rollupsAsOf ? ` as of ${rollupsAsOf.slice(11, 16)} UTC` : ''}.`
+    : '';
   const srcChip = (text: string) => <span className="badge neutral">{text}</span>;
 
   return (
@@ -196,7 +202,7 @@ export function ProjectsPage() {
       </div>
 
       <Panel title="Usage by project"
-             desc="Attribution precedence per call: ① the project's application inference profile — the call is ROUTED through it, so the invocation log records the profile's ARN as modelId and the aggregator resolves its tums-project tag (config-routed, IAM-enforceable, zero per-call effort); ② requestMetadata.project_id set by the app; ③ identity hint for single-project principals; ④ untagged. Fast = managed DynamoDB rollups (all four tiers, incl. the one-time historical treatment). Full = async Athena over the immutable raw logs — live, call-time truth, so it can run slightly ahead of the 15-minute rollups. Full resolves tiers ① and ②; it cannot resolve ③, and pre-profile history stays 'untagged' there, because an identity hint and the historical treatment exist only as rollup state and no raw-log field carries them. So expect a larger 'untagged' share in Full — that gap is those two tiers, not lost usage.">
+             desc={"Attribution precedence per call: ① the project's application inference profile — the call is ROUTED through it, so the invocation log records the profile's ARN as modelId and the aggregator resolves its tums-project tag (config-routed, IAM-enforceable, zero per-call effort); ② requestMetadata.project_id set by the app; ③ identity hint for single-project principals; ④ untagged. Fast = managed DynamoDB rollups (all four tiers, incl. the one-time historical treatment). Full = async Athena over the immutable raw logs — live, call-time truth, so it can run ahead of the 15-minute rollups. Full resolves tiers ① and ②; it cannot resolve ③, and pre-profile history stays 'untagged' there, because an identity hint and the historical treatment exist only as rollup state and no raw-log field carries them. So expect a larger 'untagged' share in Full — that gap is those two tiers, not lost usage." + fullVsFast}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
           <div style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
             {(['fast', 'full'] as const).map((s) => (

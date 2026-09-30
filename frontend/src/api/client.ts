@@ -153,12 +153,18 @@ export interface LatencyProjects {
   source: string; scope: 'tenant'; window: number; rows: ProjectLatencyRow[];
   coverage: { invocations: number; withLatency: number; pct: number | null };
   note: string; estimateNote: string;
+  /** Per-project latency is a Fast-only (DynamoDB) figure; Full (Athena) cannot read it. */
+  storageNote: string;
 }
 export interface LatencyResponse {
   window: number; generatedAt: string; source: string; scope: string; scopeNote: string;
   fleet: { e2e: LatencyStat; ttft: LatencyStat; generation: LatencyStat };
   models: LatencyRow[]; projects: LatencyProjects; hops: LatencyHop[];
   coverage: { e2eSamples: number | null; ttftSamples: number | null; streamingPct: number | null; note: string };
+  /** Fleet minus the listed rows, so the By-model column sums to the fleet total. */
+  modelRemainder: { seriesNotShown: number; e2eSamples: number | null; note: string };
+  /** CloudWatch counts every caller in the account; the Usage page counts this tenant's logged calls. */
+  accountVsTenant: { accountInvocations: number | null; tenantInvocations: number; tenantPct: number | null; note: string };
   percentileNote: string; caveat: string;
 }
 

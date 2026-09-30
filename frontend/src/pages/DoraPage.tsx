@@ -230,7 +230,7 @@ export function DoraPage() {
         {selected && (
           <span className="muted" style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <span className={`badge ${STATUS_BADGE[selected.status].cls}`}>{STATUS_BADGE[selected.status].text}</span>
-            last sync {fmtAgo(selected.lastSyncedAt)} · {selected.prCount} PRs collected
+            last sync {fmtAgo(selected.lastSyncedAt)} · {selected.prCount} merged PRs stored for this repo since collection began, not only this window
           </span>
         )}
         <button className="btn-sm" onClick={refresh} style={{ marginLeft: 'auto' }}>Refresh</button>

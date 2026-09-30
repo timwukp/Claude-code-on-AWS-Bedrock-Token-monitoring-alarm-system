@@ -110,7 +110,7 @@ export function RoiModelDiagram({ row }: { row?: RoiProjectRow }) {
       {/* measured column */}
       <Box x={20} y={34} w={290} h={70} tag="measured" title="AI spend (inference profiles)"
         value={ai ? fmtUsd(ai.valueUsd) + ' / yr' : 'daily rollups × rate card'}
-        sub={ai ? `${num(fi(ai).windowSpendUsd, fmtUsd)} in window × ${num(fi(ai).annualizationFactor, plain)}` : 'annualised from the 30/90-day window'} />
+        sub={ai ? `${num(fi(ai).windowSpendUsd, fmtUsd)} in ${num(fi(ai).windowDays, plain)} days × 365/${num(fi(ai).windowDays, plain)}` : 'annualised from the 30/90-day window'} />
       <Box x={20} y={114} w={290} h={70} tag="measured" title="Delivery (DORA store)"
         value={tp ? `Δ ${num(fi(tp).deltaFeaturesPerYear, plain)} features / yr` : 'deployments · lead time'}
         sub="merged PRs, deployments, change fail rate, MTTR" />
