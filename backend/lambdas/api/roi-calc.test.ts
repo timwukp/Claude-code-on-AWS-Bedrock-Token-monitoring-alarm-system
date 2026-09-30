@@ -1,5 +1,5 @@
 import {
-  ROI_DEFAULTS, RoiAssumptions, RoiWindowAggregates, WeeklyPoint,
+  DAYS_PER_MONTH, DAYS_PER_YEAR, ROI_DEFAULTS, RoiAssumptions, RoiWindowAggregates, WeeklyPoint,
   baselineFromHalves, computeRoi, estimateForward, killFastFlag, referenceBands, weeklyFromProjday,
 } from './roi-calc';
 import { ProjdayItem } from './project-calc';
@@ -133,12 +133,23 @@ describe('computeRoi', () => {
   });
 
   it('(10) break-even arithmetic matches a hand fixture', () => {
-    // 900 over 90d → monthly 900/90×30.44 = 304.4; hourly 208000/2080 = 100 → 3.044 h/mo
+    // 900 over 90d → monthly 900/90×(365/12) = 304.2; hourly 208000/2080 = 100 → 3.042 h/mo
     const r = roi(agg(), assume());
     expect(r.breakEven.hoursPerMonth).toBeCloseTo(3.0, 1);
     // capacity: 4 × 173.33 = 693.3 h/mo → 3.044/693.3 ≈ 0.4%
     expect(r.breakEven.pctOfCapacity).toBeCloseTo(0.4, 1);
     expect(r.breakEven.verdict).toBe('within-rct-bracket');
+  });
+
+  it('(10b) monthly spend × 12 reproduces the annualised spend on one day-count basis', () => {
+    expect(DAYS_PER_MONTH * 12).toBeCloseTo(DAYS_PER_YEAR, 10);
+    const a = assume();
+    const r = roi(agg({ windowDays: 30, spendUsd: 839.33 }), a);
+    const monthly = (839.33 / 30) * DAYS_PER_MONTH;
+    const hourly = a.loadedCostPerYear / 2080;
+    expect(r.breakEven.hoursPerMonth).toBeCloseTo(monthly / hourly, 1);
+    expect(Math.round(monthly * 12)).toBe(r.investment.aiSpend.valueUsd);
+    expect(r.investment.aiSpend.formulaInputs).toMatchObject({ windowSpendUsd: 839.33, windowDays: 30 });
   });
 
   it('(11) revenueBase=0 → throughput 0 with a refusal string', () => {

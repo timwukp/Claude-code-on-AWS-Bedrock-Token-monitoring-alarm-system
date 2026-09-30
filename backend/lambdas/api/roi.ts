@@ -23,6 +23,7 @@ import { ProjdayItem, projdayRange } from './project-calc';
 import {
   RCT_BRACKET, ROI_DEFAULTS, ReferenceBands, RoiAssumptions, RoiResult, RoiWindowAggregates,
   WeeklyPoint, computeRoi, estimateForward, killFastFlag, referenceBands, weeklyFromProjday,
+  DAYS_PER_MONTH,
 } from './roi-calc';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -176,7 +177,7 @@ async function projects(event: APIGatewayProxyEvent): Promise<APIGatewayProxyRes
     return {
       projectId: p.projectId, name: p.name, category: p.roi?.category ?? null,
       assumptionsSource: source, roi, bands, killFast,
-      monthlySpendUsd: Math.round((spendUsd / windowDays) * 30.44 * 100) / 100,
+      monthlySpendUsd: Math.round((spendUsd / windowDays) * DAYS_PER_MONTH * 100) / 100,
       mergedPrs: dora.sample.mergedPrs,
     };
   }));
