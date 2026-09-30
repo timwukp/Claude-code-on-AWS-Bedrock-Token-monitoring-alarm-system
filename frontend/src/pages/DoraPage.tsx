@@ -470,7 +470,7 @@ export function DoraPage() {
                     {p.costCenter && <div className="muted" style={{ fontSize: 12 }}>{p.costCenter}</div>}</td>
                   <td className="num">{p.repos.length}</td>
                   <td className="num">{p.dora?.mergedPrs ?? '—'}</td>
-                  <td className="num">{p.dora ? perWeek(p.dora.df.value) : <span className="muted">no repos tracked</span>}</td>
+                  <td className="num">{p.dora ? perWeek(p.dora.df.value) : <span className="muted">{p.repos.length === 0 ? 'no repos linked' : 'repo not tracked in DORA'}</span>}</td>
                   <td className="num">{p.dora ? fmtHours(p.dora.lt.value) : <span className="muted">—</span>}</td>
                   <td className="num">{fmtPct(p.dora?.aiParticipationPct ?? null)}</td>
                   <td className="num">{fmtTokens(p.tokens)}</td>

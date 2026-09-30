@@ -172,19 +172,12 @@ export function LatencyPage() {
     [data, modelId],
   );
   const view = selected ?? (data ? { ...data.fleet, modelId: '', label: 'All models' } : null);
-  // Labels that appear more than once get their routing prefix back, so the table never shows two
-  // identically named rows with different numbers.
-  const ambiguous = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const m of data?.models ?? []) counts.set(m.label, (counts.get(m.label) ?? 0) + 1);
-    return new Set([...counts].filter(([, n]) => n > 1).map(([l]) => l));
-  }, [data]);
-  // What distinguishes two same-named rows: for profile-routed traffic the profile itself, since
-  // that is the actual route, and otherwise the region prefix.
+  // Every row carries its route. Showing it only when two visible rows share a label made the same
+  // series change name between windows, as the ranking decided which of its siblings was on screen.
+  // For profile-routed traffic the route is the profile itself; otherwise the region prefix.
   const routeOf = (m: LatencyRow): string =>
     m.via === 'inference-profile' ? (m.profileName ?? m.modelId) : scopeOf(m.modelId);
-  const nameOf = (m: LatencyRow): string =>
-    ambiguous.has(m.label) ? `${m.label} · ${routeOf(m)}` : m.label;
+  const nameOf = (m: LatencyRow): string => `${m.label} · ${routeOf(m)}`;
   // Profile names are deployment-chosen and can be long; the picker buttons sit in a row, so they
   // get a clipped form with the full value on hover rather than a name we invented.
   const shortRoute = (m: LatencyRow): string => {
@@ -228,9 +221,9 @@ export function LatencyPage() {
             <button
               key={m.modelId}
               className={modelId === m.modelId ? 'active' : ''}
-              title={ambiguous.has(m.label) ? `${m.label} · ${routeOf(m)}` : m.label}
+              title={nameOf(m)}
               onClick={() => setModelId(m.modelId)}>
-              {m.label.split('.').pop()}{ambiguous.has(m.label) ? ` · ${shortRoute(m)}` : ''}
+              {m.label.split('.').pop()} · {shortRoute(m)}
             </button>
           ))}
         </div>

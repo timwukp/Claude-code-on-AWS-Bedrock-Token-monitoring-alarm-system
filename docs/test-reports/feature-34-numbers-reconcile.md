@@ -4,7 +4,8 @@
 - **Origin:** qa findings F-PR65R3-001, F-PR66-002, F-PR66-003, F-PR66-004 (HIGH), F-PR66-005, F-PR66R2-001, and the
   owner's Latency 1c decision (state Fast-only on the page).
 - **Date:** 2026-09-30
-- **Verdict:** PASS on gates, live Lambda invocation on dev and the served bundle. qa pending.
+- **Verdict:** PASS on gates, live Lambda invocation on dev and the served bundle. qa round 1: 3 LOW findings, 2 fixed
+  here, 1 belongs to the next chain (see below).
 
 ## What this report has to say plainly
 - **The rate card change reprices history.** Cost is computed from stored tokens at read time. On dev the largest
@@ -76,3 +77,15 @@ Absent: "for a few minutes after a burst", "PRs collected", "slightly ahead of t
 ## Known limits, stated rather than fixed
 - The rate card prices no cache writes (Fable 5.1 lists $12.50 per MTok). This was true before this change as well.
 - Athena has no latency: the Glue table maps no response body. The page now says so.
+
+## qa round 1 (run 36699153705, head `8f9f08e`) — 3 LOW findings
+The workflow runs with `QA_RED_ON: FAIL`, so any finding turns the check red, whatever its severity.
+
+| Finding | Verdict | Action |
+|---|---|---|
+| F-PR67-002 `/latency`: the same series is named differently by window ("…opus-5-5 · us" at 7 d, bare at 30 d) | Real, and caused by this PR's ranking. The route suffix was added only when two *shown* rows shared a label. At 7 d `global…opus-5-5` (1 call) was shown beside `us…opus-5-5`; at 30 d it was ranked out, and the suffix disappeared | Every row and model button now carries its route (`us`, `global`, `direct` or the profile name), so a series keeps one name in every window |
+| F-PR67-003 `/dora` Projects: REPOS = 1 beside "no repos tracked" | Real. The cell said "no repos tracked" in both cases: no repo linked, and linked repos not tracked in DORA | The cell now says "no repos linked" or "repo not tracked in DORA", the same split `project-calc.ts` already makes in its notes |
+| F-PR67-001 `/costs`: duplicate model ids in a row's id list, and a "Models used" count that includes them | Real, and predates this PR. Neither `CostsPage.tsx` nor `lib/model-names.ts` is in this chain's plan | Left to the queued `cost-id-consistency` chain, which owns the id merge. The next qa run is expected to report it again |
+
+Frontend redeployed; the served bundle `assets/index-B9XZiXTs.js` contains "repo not tracked in DORA" and "no repos
+linked" and no longer contains "no repos tracked". Frontend `tsc` and `vite build` pass.
