@@ -172,19 +172,12 @@ export function LatencyPage() {
     [data, modelId],
   );
   const view = selected ?? (data ? { ...data.fleet, modelId: '', label: 'All models' } : null);
-  // Labels that appear more than once get their routing prefix back, so the table never shows two
-  // identically named rows with different numbers.
-  const ambiguous = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const m of data?.models ?? []) counts.set(m.label, (counts.get(m.label) ?? 0) + 1);
-    return new Set([...counts].filter(([, n]) => n > 1).map(([l]) => l));
-  }, [data]);
-  // What distinguishes two same-named rows: for profile-routed traffic the profile itself, since
-  // that is the actual route, and otherwise the region prefix.
+  // Every row carries its route. Showing it only when two visible rows share a label made the same
+  // series change name between windows, as the ranking decided which of its siblings was on screen.
+  // For profile-routed traffic the route is the profile itself; otherwise the region prefix.
   const routeOf = (m: LatencyRow): string =>
     m.via === 'inference-profile' ? (m.profileName ?? m.modelId) : scopeOf(m.modelId);
-  const nameOf = (m: LatencyRow): string =>
-    ambiguous.has(m.label) ? `${m.label} · ${routeOf(m)}` : m.label;
+  const nameOf = (m: LatencyRow): string => `${m.label} · ${routeOf(m)}`;
   // Profile names are deployment-chosen and can be long; the picker buttons sit in a row, so they
   // get a clipped form with the full value on hover rather than a name we invented.
   const shortRoute = (m: LatencyRow): string => {
@@ -228,9 +221,9 @@ export function LatencyPage() {
             <button
               key={m.modelId}
               className={modelId === m.modelId ? 'active' : ''}
-              title={ambiguous.has(m.label) ? `${m.label} · ${routeOf(m)}` : m.label}
+              title={nameOf(m)}
               onClick={() => setModelId(m.modelId)}>
-              {m.label.split('.').pop()}{ambiguous.has(m.label) ? ` · ${shortRoute(m)}` : ''}
+              {m.label.split('.').pop()} · {shortRoute(m)}
             </button>
           ))}
         </div>
@@ -276,8 +269,14 @@ export function LatencyPage() {
           foot={data.coverage.note}
         />
       </div>
+      {/* The fleet tiles count the whole AWS account; the Usage page counts this tenant. Say by how
+          much here, next to the numbers, so the two are never compared by eye. */}
+      <p className="muted" style={{ fontSize: 12, margin: '4px 0 16px' }}>
+        <span className="badge neutral" style={{ marginRight: 6 }}>account-wide</span>
+        {data.accountVsTenant.note}
+      </p>
 
-      <Panel title="By model" desc="Sorted by p95 end-to-end. A model with few samples has a noisy tail — read the sample count before the percentile. The rows and the fleet tiles above are separate CloudWatch series: for a few minutes after a burst the per-model rows can run ahead of the fleet total (or vice versa), so their sum need not equal it at any instant — the fleet series is the reference. Profile-routed calls are not counted twice; the two agree once both have caught up.">
+      <Panel title="By model" desc={`The ${data.models.length} busiest series by invocations, sorted by p95 end-to-end. A model with few samples has a noisy tail — read the sample count before the percentile. The last row is the fleet total minus these rows, so the Invocations column adds up to the fleet figure. Profile-routed calls are not counted twice.`}>
         <table className="data">
           <thead>
             <tr>
@@ -312,6 +311,16 @@ export function LatencyPage() {
                 <td className="num">{fmtMs(m.e2e.p99)}</td>
               </tr>
             ))}
+            {data.models.length > 0 && data.modelRemainder.e2eSamples !== null && (
+              <tr>
+                <td className="muted">
+                  {data.modelRemainder.e2eSamples < 0 ? 'Rows ahead of the fleet series' : 'Other traffic'}
+                  {data.modelRemainder.seriesNotShown > 0 ? ` · ${data.modelRemainder.seriesNotShown} more series` : ''}
+                </td>
+                <td className="num">{data.modelRemainder.e2eSamples}</td>
+                <td colSpan={5} className="muted">{data.modelRemainder.note}</td>
+              </tr>
+            )}
             {data.models.length === 0 && (
               <tr><td colSpan={7} className="muted">No invocations in this window.</td></tr>
             )}
@@ -321,7 +330,7 @@ export function LatencyPage() {
 
       <Panel
         title="By project"
-        desc={`${data.projects.note} Estimated from fixed buckets — see the note below the table; the fleet figures above are the exact reference.`}>
+        desc={`${data.projects.note} Estimated from fixed buckets — see the note below the table; the fleet figures above are the exact reference. ${data.projects.storageNote}`}>
         <table className="data">
           <thead>
             <tr>
@@ -399,7 +408,8 @@ export function LatencyPage() {
         </p>
         <p>
           <strong>No benchmark, no target.</strong> We show no “good” threshold because we hold no distribution
-          to compare against, and no per-project attribution because these metrics carry no project dimension.
+          to compare against. The fleet figures carry no per-project attribution because CloudWatch publishes
+          no project dimension; the By project table gets its attribution from this tenant's invocation logs instead.
         </p>
         <p><strong>{data.caveat}</strong></p>
       </Disclosure>

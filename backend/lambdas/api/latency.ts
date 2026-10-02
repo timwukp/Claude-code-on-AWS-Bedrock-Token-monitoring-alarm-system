@@ -46,6 +46,8 @@ const TTFT = 'TimeToFirstToken';
 const WINDOWS = [1, 7, 30] as const;
 const PERCENTILES = ['p50', 'p95', 'p99'] as const;
 const MAX_MODELS = 12;
+/** GetMetricData accepts at most 500 queries per call. */
+const MAX_QUERIES_PER_CALL = 500;
 
 export type Percentile = (typeof PERCENTILES)[number];
 
@@ -194,6 +196,67 @@ export function deriveGeneration(e2e: LatencyStat, ttft: LatencyStat): LatencySt
   };
 }
 
+/**
+ * Which series get a row of their own: the `limit` with the most end-to-end samples, ties broken by
+ * id so the choice is stable. Taking the first `limit` in ListMetrics order used to drop whichever
+ * series happened to come last — a busy model could vanish while an idle one kept its row.
+ */
+export function rankModelIds(samples: Map<string, number>, limit: number): { shown: string[]; hidden: string[] } {
+  const ranked = [...samples.entries()]
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([id]) => id);
+  return { shown: ranked.slice(0, limit), hidden: ranked.slice(limit) };
+}
+
+export interface ModelRemainder {
+  /** Series with traffic in the window that did not get a row of their own. */
+  seriesNotShown: number;
+  /** Fleet end-to-end samples minus the rows shown, so the column sums to the fleet figure. */
+  e2eSamples: number | null;
+  note: string;
+}
+
+/**
+ * The row that makes the per-model column add up to the fleet total. It is a difference, not a
+ * query: besides the series ranked out it holds traffic from series ListMetrics no longer returns
+ * (CloudWatch lists only metrics with data in the past two weeks, so a 30-day window can outlive
+ * them) and any moment where the per-model and fleet series are at different points after a burst.
+ */
+export function modelRemainder(fleetSamples: number | null, shownSamples: number[], hidden: number): ModelRemainder {
+  const shown = shownSamples.reduce((a, b) => a + b, 0);
+  const e2eSamples = fleetSamples === null ? null : fleetSamples - shown;
+  const parts: string[] = [];
+  if (hidden > 0) parts.push(`${hidden} smaller series not listed individually`);
+  parts.push('series CloudWatch no longer lists (it lists only metrics with data in the past two weeks)');
+  const note = e2eSamples !== null && e2eSamples < 0
+    ? `The rows above ran ${-e2eSamples} invocations ahead of the fleet series; the two CloudWatch series update separately and agree once both have caught up.`
+    : e2eSamples === 0
+    ? 'Nothing outside the rows above: they add up to the fleet figure.'
+    : `Fleet total minus the rows above, so the column adds up to the fleet figure. It holds ${parts.join(' and ')}.`;
+  return { seriesNotShown: hidden, e2eSamples, note };
+}
+
+/**
+ * Account-wide CloudWatch invocations set against this tenant's logged ones. CloudWatch counts every
+ * caller in the AWS account (CI agents included); the Usage page and the project rollups count only
+ * this tenant's invocation logs, so the fleet figure is expected to be larger and the page says by
+ * how much rather than leaving the two to be compared by eye.
+ */
+export function accountVsTenant(accountInvocations: number | null, tenantInvocations: number): {
+  accountInvocations: number | null; tenantInvocations: number; tenantPct: number | null; note: string;
+} {
+  if (accountInvocations === null || accountInvocations === 0) {
+    return { accountInvocations, tenantInvocations, tenantPct: null, note: 'No account-wide invocations in this window.' };
+  }
+  const tenantPct = Math.round((tenantInvocations / accountInvocations) * 100);
+  const other = accountInvocations - tenantInvocations;
+  const note = other >= 0
+    ? `${accountInvocations.toLocaleString('en-US')} invocations account-wide; ${tenantInvocations.toLocaleString('en-US')} (${tenantPct}%) are this tenant's logged calls, the figure the Usage page counts. The other ${other.toLocaleString('en-US')} were made by other callers in the AWS account, such as CI agents, which CloudWatch counts and this tenant's logs do not. The tenant count is per calendar day and the CloudWatch window is rolling, so the edges differ by up to a day.`
+    : `${tenantInvocations.toLocaleString('en-US')} tenant invocations exceed ${accountInvocations.toLocaleString('en-US')} account-wide: the tenant count is per calendar day and the CloudWatch window is rolling, so the day-aligned window reaches further back.`;
+  return { accountInvocations, tenantInvocations, tenantPct, note };
+}
+
 /** One CloudWatch datapoint: the bucket's start timestamp and its value. */
 export interface Point {
   ts: string;
@@ -255,11 +318,38 @@ function queriesFor(prefix: string, metricName: string, days: number, modelId?: 
 }
 
 async function listModelIds(): Promise<string[]> {
-  const res = await cw.send(new ListMetricsCommand({ Namespace: NAMESPACE, MetricName: E2E }));
-  const ids = (res.Metrics ?? [])
-    .map((m) => m.Dimensions?.find((d) => d.Name === 'ModelId')?.Value)
-    .filter((v): v is string => Boolean(v));
-  return [...new Set(ids)];
+  const ids = new Set<string>();
+  let nextToken: string | undefined;
+  do {
+    const res = await cw.send(new ListMetricsCommand({ Namespace: NAMESPACE, MetricName: E2E, NextToken: nextToken }));
+    for (const m of res.Metrics ?? []) {
+      const v = m.Dimensions?.find((d) => d.Name === 'ModelId')?.Value;
+      if (v) ids.add(v);
+    }
+    nextToken = res.NextToken;
+  } while (nextToken);
+  return [...ids];
+}
+
+/** Run queries in 500-query calls and keep every bucket of every result, keyed by query id. */
+async function fetchSeries(queries: MetricDataQuery[], start: Date, end: Date, into: Map<string, Point[]>): Promise<void> {
+  for (let i = 0; i < queries.length; i += MAX_QUERIES_PER_CALL) {
+    let nextToken: string | undefined;
+    do {
+      const res = await cw.send(new GetMetricDataCommand({
+        StartTime: start, EndTime: end, ScanBy: 'TimestampDescending', NextToken: nextToken,
+        MetricDataQueries: queries.slice(i, i + MAX_QUERIES_PER_CALL),
+      }));
+      for (const r of res.MetricDataResults ?? []) {
+        if (!r.Id) continue;
+        const points = (r.Timestamps ?? [])
+          .map((ts, k) => ({ ts: new Date(ts).toISOString(), v: (r.Values ?? [])[k] }))
+          .filter((p) => typeof p.v === 'number' && Number.isFinite(p.v));
+        into.set(r.Id, [...(into.get(r.Id) ?? []), ...points]);
+      }
+      nextToken = res.NextToken;
+    } while (nextToken);
+  }
 }
 
 /**
@@ -333,8 +423,20 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const names = new Map(registry.map((p) => [p.projectId, p.name] as [string, string]));
     const projectRows = buildProjectLatencyRows(projdayItems, names);
     const projectCoverage = latencyCoverage(projdayItems);
-    const modelIds = allModelIds.slice(0, MAX_MODELS);
 
+    // Pass 1: one sample count per listed series, so rows are chosen by traffic, not list order.
+    const period = windowDays * 86_400;
+    const countSeries = new Map<string, Point[]>();
+    await fetchSeries(allModelIds.map((id, i) => ({
+      Id: `c${i}`,
+      MetricStat: { Metric: { Namespace: NAMESPACE, MetricName: E2E, Dimensions: [{ Name: 'ModelId', Value: id }] }, Period: period, Stat: 'SampleCount' },
+      ReturnData: true,
+    })), start, end, countSeries);
+    const counts = new Map(allModelIds.map((id, i) => [id, (countSeries.get(`c${i}`) ?? []).reduce((a, p) => a + p.v, 0)] as [string, number]));
+    const { shown: modelIds, hidden } = rankModelIds(counts, MAX_MODELS);
+
+    // Pass 2: full statistics for the fleet and the ranked series. Every bucket is kept — a
+    // window-length period can still be split across CloudWatch's own boundaries; see combineBuckets.
     const queries: MetricDataQuery[] = [
       ...queriesFor('fleet_e2e', E2E, windowDays),
       ...queriesFor('fleet_ttft', TTFT, windowDays),
@@ -343,30 +445,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       queries.push(...queriesFor(`m${i}_e2e`, E2E, windowDays, id));
       queries.push(...queriesFor(`m${i}_ttft`, TTFT, windowDays, id));
     });
-
-    const res = await cw.send(
-      new GetMetricDataCommand({
-        StartTime: start,
-        EndTime: end,
-        MetricDataQueries: queries,
-        ScanBy: 'TimestampDescending',
-      }),
-    );
-
-    // Keep every bucket. A window-length period can still be split across CloudWatch's own period
-    // boundaries, and the trailing sliver is tiny — see combineBuckets.
     const series = new Map<string, Point[]>();
-    for (const r of res.MetricDataResults ?? []) {
-      if (!r.Id) continue;
-      const points = (r.Timestamps ?? []).map((ts, i) => ({
-        ts: new Date(ts).toISOString(),
-        v: (r.Values ?? [])[i],
-      }));
-      series.set(
-        r.Id,
-        points.filter((p) => typeof p.v === 'number' && Number.isFinite(p.v)),
-      );
-    }
+    await fetchSeries(queries, start, end, series);
 
     const fleetE2e = combineBuckets(series, 'fleet_e2e');
     const fleetTtft = combineBuckets(series, 'fleet_ttft');
@@ -384,6 +464,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       })
       .filter((r) => r.e2e.samples !== null && r.e2e.samples > 0)
       .sort((a, b) => (b.e2e.p95 ?? 0) - (a.e2e.p95 ?? 0));
+    const remainder = modelRemainder(fleetE2e.samples, models.map((m) => m.e2e.samples ?? 0), hidden.length);
 
     const streamingPct =
       fleetE2e.samples && fleetTtft.samples ? Math.round((fleetTtft.samples / fleetE2e.samples) * 100) : null;
@@ -394,10 +475,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       source: 'CloudWatch AWS/Bedrock (InvocationLatency, TimeToFirstToken)',
       scope: 'aws-account',
       scopeNote:
-        'Account-level. CloudWatch publishes no project, user or tenant dimension for these metrics, so the fleet section is a fleet view. Per-project latency is in `projects`, read from the invocation-log rollups for this tenant.',
+        'Account-level: every caller in the AWS account, not only this tenant. CloudWatch publishes no project, user or tenant dimension for these metrics, so the fleet section is a fleet view. Per-project latency is in `projects`, read from the invocation-log rollups for this tenant.',
       fleet: { e2e: fleetE2e, ttft: fleetTtft, generation: deriveGeneration(fleetE2e, fleetTtft) },
       models,
+      modelRemainder: remainder,
+      accountVsTenant: accountVsTenant(fleetE2e.samples, projectCoverage.invocations),
       projects: {
+        storageNote:
+          'Per-project latency exists only in the Fast (DynamoDB) rollups. The Full (Athena) view has no latency: the Glue table over the raw logs maps only outputContentType and outputTokenCount under output, not the response body that carries amazon-bedrock-invocationMetrics, so Athena cannot read it.',
         source: 'invocation-log rollups (PROJDAY): amazon-bedrock-invocationMetrics per call, count + sum + fixed buckets',
         scope: 'tenant',
         window: windowDays,

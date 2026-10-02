@@ -1,0 +1,135 @@
+# Feature 34 — every figure reconciles with the one beside it
+
+- **Chain:** `intent/numbers-reconcile/` · **Branch:** `fix/numbers-reconcile` off `main@3c60f41` (post-#66) · **PR:** #67
+- **Origin:** qa findings F-PR65R3-001, F-PR66-002, F-PR66-003, F-PR66-004 (HIGH), F-PR66-005, F-PR66R2-001, and the
+  owner's Latency 1c decision (state Fast-only on the page).
+- **Date:** 2026-09-30
+- **Verdict:** PASS on gates, live Lambda invocation on dev and the served bundle. qa rounds 1–3: seven findings in total; six
+  fixed here, one (F-PR67-001) belongs to the next chain (see below). Two of the six were regressions introduced by
+  my own round-2 fixes.
+
+## What this report has to say plainly
+- **The rate card change reprices history.** Cost is computed from stored tokens at read time. On dev the largest
+  tenant's all-time total moves −$530.85 (−3.6%), and all tenants together move from $19,808.97 to $19,253.12. It is a
+  correction: the five point releases were priced at their family rates, and `fable-5-1` cache reads at $1.00 instead
+  of the listed $0.25 per MTok.
+- **The /latency truncation was real, and the #64 disclosure blamed the wrong cause.** Rows were cut at 12 in
+  ListMetrics order. The column did not sum to the fleet total because a series was dropped, not because of a burst.
+  At 30 days two series are now ranked out. The remainder row carries their 32 invocations, and the column sums exactly.
+- **The /dora prCount diagnosis from #66 did not hold.** The stored count matched a live count for all six
+  repositories. qa had compared one repository's stored count with a two-repository 30-day sum. Only the label changes.
+- **Not covered: a browser walk.** Gates, direct Lambda invocation and the served bundle were checked by hand. The
+  rendered pages are left to qa's browser run on the PR.
+
+## Scope
+| File | Change |
+|---|---|
+| `backend/lambdas/api/roi-calc.ts` / `.test.ts` | `DAYS_PER_YEAR`, `DAYS_PER_MONTH = 365/12`; `windowDays` in `aiSpend.formulaInputs`; test (10b) monthly × 12 = annual |
+| `backend/lambdas/api/roi.ts` | `monthlySpendUsd` on `DAYS_PER_MONTH` |
+| `backend/lambdas/api/latency.ts` / `.test.ts` | `rankModelIds`, `modelRemainder`, `accountVsTenant`; paginated ListMetrics; `fetchSeries` in 500-query chunks; two-pass handler; `storageNote`; 11 new cases |
+| `backend/lambdas/api/cost-calc.ts` / `.test.ts` | five point-release rows above their families; rate, family and no-shadowing tests |
+| `frontend/src/api/client.ts` | response types |
+| `frontend/src/components/RoiModelDiagram.tsx`, `pages/RoiPage.tsx` | "× 365/N" |
+| `frontend/src/pages/LatencyPage.tsx` | account-vs-tenant line, remainder row, panel descriptions, Fast-only note |
+| `frontend/src/pages/DoraPage.tsx` | banner label |
+| `frontend/src/pages/ProjectsPage.tsx` | live Full − Fast difference |
+
+## Gates
+| Gate | Result |
+|---|---|
+| Backend `jest` / `tsc --noEmit` | PASS — 287/287, 25 suites |
+| Frontend `tsc --noEmit` / `vite build` | PASS |
+| `cdk synth -c env=ci` | PASS — 10 stacks |
+| `sdlc_ci_gate.py --require-active` | PASS — 13 source files, all named in the plan; approval bound to `3c60f41` |
+| Mutation: `fable-5` moved above `fable-5-1` | 2 tests fail (rate and no-shadowing); restored → 19/19 |
+
+## Rate rows — AWS Price List (`AmazonBedrockFoundationModels`, us-east-1, Global standard, USD per MTok)
+| Row | Input | Output | Cache read |
+|---|---|---|---|
+| `fable-5-1` | 10 | 50 | 0.25 |
+| `mythos-5-1` | 10 | 50 | 0.25 |
+| `opus-5-5` | 4 | 20 | 0.2 |
+| `sonnet-5-5`, `sonnet-5` | 2 | 10 | 0.2 |
+
+Measured repricing of the stored MODEL rollups on dev (old card → new card): `anthropic.claude-fable-5-1` $733.95 →
+$256.71 · its inference-profile route $79.99 → $34.18 · `global…sonnet-5-5` $50.57 → $33.71 · `global…sonnet-5` $24.46
+→ $16.31 · `us…opus-5-5` profile $15.33 → $7.53. No other model moves.
+
+## Live — dev, `Tums-dev-Api` deployed (code-only diff, no IAM change; owner-authorised)
+The deployed Lambdas were invoked directly with an API-Gateway event carrying the tenant's `custom:tenantId` and
+`admin` claims.
+
+| Check | Result |
+|---|---|
+| `/v1/latency?window=1` | 7 rows sum to 178; remainder 0; fleet 178 ✓ |
+| `/v1/latency?window=7` | 12 rows sum to 2,225; remainder 0; fleet 2,225 ✓ |
+| `/v1/latency?window=30` | 12 rows sum to 27,459; **2 series ranked out**; remainder 32; fleet 27,491 ✓ |
+| Account vs tenant (7 d) | "2,225 invocations account-wide; 1,178 (53%) are this tenant's logged calls … The other 1,047 were made by other callers …" |
+| Zero-remainder note | read live as "It holds series CloudWatch no longer lists" on an empty row, which is misleading. Fixed to "Nothing outside the rows above: they add up to the fleet figure.", with a test, then redeployed |
+| `storageNote`, `scopeNote` | present, as specified |
+| `/v1/roi/projects?window=30` and `90` | 21/21 projects: `round(windowSpend ÷ windowDays × 365/12 × 12) = aiSpend.valueUsd`, 0 mismatches |
+
+## Served bundle (CloudFront, invalidation completed; `assets/index-C4O4qiyw.js`)
+Present: "365/", "monthly = annual ÷ 12", "account-wide", "Other traffic", "adds up to the fleet figure", "since
+collection began, not only this window", "Right now the Athena rows total", "busiest series by invocations".
+Absent: "for a few minutes after a burst", "PRs collected", "slightly ahead of the 15-minute", "in window ×",
+"because these metrics carry no project dimension".
+
+## Known limits, stated rather than fixed
+- The rate card prices no cache writes (Fable 5.1 lists $12.50 per MTok). This was true before this change as well.
+- Athena has no latency: the Glue table maps no response body. The page now says so.
+
+## qa round 1 (run 36699153705, head `8f9f08e`) — 3 LOW findings
+The workflow runs with `QA_RED_ON: FAIL`, so any finding turns the check red, whatever its severity.
+
+| Finding | Verdict | Action |
+|---|---|---|
+| F-PR67-002 `/latency`: the same series is named differently by window ("…opus-5-5 · us" at 7 d, bare at 30 d) | Real, and caused by this PR's ranking. The route suffix was added only when two *shown* rows shared a label. At 7 d `global…opus-5-5` (1 call) was shown beside `us…opus-5-5`; at 30 d it was ranked out, and the suffix disappeared | Every row and model button now carries its route (`us`, `global`, `direct` or the profile name), so a series keeps one name in every window |
+| F-PR67-003 `/dora` Projects: REPOS = 1 beside "no repos tracked" | Real. The cell said "no repos tracked" in both cases: no repo linked, and linked repos not tracked in DORA | The cell now says "no repos linked" or "repo not tracked in DORA", the same split `project-calc.ts` already makes in its notes |
+| F-PR67-001 `/costs`: duplicate model ids in a row's id list, and a "Models used" count that includes them | Real, and predates this PR. Neither `CostsPage.tsx` nor `lib/model-names.ts` is in this chain's plan | Left to the queued `cost-id-consistency` chain, which owns the id merge. The next qa run is expected to report it again |
+
+Frontend redeployed; the served bundle `assets/index-B9XZiXTs.js` contains "repo not tracked in DORA" and "no repos
+linked" and no longer contains "no repos tracked". Frontend `tsc` and `vite build` pass.
+
+## qa round 2 (run 36717741116, head `af323a3`) — F-PR67-002 confirmed fixed, 001 and 003 still failing, one new
+| Finding | Verdict | Action |
+|---|---|---|
+| F-PR67-003 `/dora` | The reworded cell still sat beside a Repos column that counted *linked* repos | The column is now "Repos tracked / linked" (e.g. `0 / 1`), using the same tracked set the API pools DORA on |
+| F-PR67-004 `/roi`: "$362.09 in 30 days × 365/30" shown beside "$4,405.00 / yr" | Real. The annual figure was rounded to whole dollars and printed with cents. qa's own expected value ($4,405.50) was also wrong; the formula gives $4,405.43 | `aiSpend.valueUsd` is now the printed spend, in integer cents, × 365 ÷ window days, rounded to the cent. Tests 10b–10d |
+| F-PR67-001 `/costs` | Unchanged; out of this plan | Still with `cost-id-consistency` |
+
+**This fix took three deploys, and two of them were avoidable.** I validated each version against live data after it
+was deployed, rather than before:
+
+1. The first version rounded the output to cents but annualised the *unrounded* spend. Live result: 5 of 21 projects
+   were off by a few cents at 30 days and 8 of 21 at 90 days.
+2. The second version annualised the printed spend in floating point. Live result: 1 of 42 was off by a cent
+   ($140.01 × 365/30 = $1,703.455 exactly, computed as 1,703.4549…).
+
+The third version was checked *before* deploying, against all 42 live inputs with exact integer arithmetic: 0
+mismatches. After the deploy (`RoiFn` only; the diff showed no IAM or other resource change):
+
+| Check | Result |
+|---|---|
+| `/v1/roi/projects?window=30` and `90` | 42/42 annual figures equal the printed formula to the cent; monthly × 12 within 12 cents of annual on all 42 |
+| Size of the defect | At most $0.43 on $4,405 (0.01%). ROI % and payback are unchanged, because the investment total is whole dollars |
+| Served bundle `assets/index-DtRE67x_.js` | contains "Repos tracked / linked" |
+| Mutation | Unrounded annualisation fails 10c; float annualisation fails 10d |
+
+## qa round 3 (run 36953464429, head `3aaa971`) — 003 and 004 confirmed fixed, 001 still failing, three new
+Two of the three new findings were caused by my round-2 fixes.
+
+| Finding | Verdict | Action |
+|---|---|---|
+| R2-001 HIGH `/dora`: Token Usage Monitoring, Java Framework Upgrade Workshop and Kiro SDLC Scrum Best Practices show `0 / 1` tracked although DORA reports on them | Real, and introduced in round 2. The tracked test compared repo names case-sensitively; the DORA store keys repos trimmed and lower-cased (`dora/store.ts` `repoKey`), and the registry spells them differently | The page now applies the same `repoKey` normalisation before the membership test. Checked against live data before deploying: the tracked count agrees with the API's DORA presence on 21/21 projects |
+| R2-002 LOW `/roi`: investment total $20,005.00 beside components that sum to $20,005.43 | Real, and introduced in round 2: the annual spend gained cents, the totals stayed whole dollars | `value.totalUsd` and `investment.totalUsd` are now the cent-rounded sum of the printed components. Test 10e (fails on the old code) |
+| R2-003 LOW `/projects`: a $0.45 Full − Fast gap labelled as rounding | Real. Rounding can move a row sum by at most half a cent per row; the old threshold was a flat $0.50 | The "rounding" wording now applies only within `rows × $0.005`; a larger gap gets the Athena-vs-rollups explanation |
+| F-PR67-001 `/costs` | Unchanged; out of this plan (the bug-fix bot also declined it: `CostsPage.tsx` is not in the plan) | Still with `cost-id-consistency` |
+
+Live after the deploys (`RoiFn` only for R2-002; frontend for R2-001 and R2-003):
+
+| Check | Result |
+|---|---|
+| `/v1/roi/projects?window=30` and `90` | 42/42: `investment.totalUsd` and `value.totalUsd` equal the cent sum of their components; annual spend still equals the printed formula on 42/42 |
+| Example (Token Usage Monitoring, 30 d) | $4,405.43 + $600 + $15,000 = $20,005.43; ROI +149.9%, payback 4.8 months, unchanged |
+| Served bundle `assets/index-DDqV6Gt3.js` | replaces `index-DtRE67x_.js`; contains the lower-cased tracked test and the rounding bound |

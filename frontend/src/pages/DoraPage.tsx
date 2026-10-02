@@ -143,6 +143,10 @@ export function DoraPage() {
   const reposTop = useTopN(reposRanked);
   const projectsRanked = useMemo(() => [...(projectRows ?? [])].sort((a, b) => b.estimatedUsd - a.estimatedUsd), [projectRows]);
   const projTop = useTopN(projectsRanked);
+  // A project's linked repos that DORA actually tracks — the same membership test the API pools on,
+  // which keys repos trimmed and lower-cased (dora/store.ts repoKey); the registry and this list differ in case.
+  const repoKey = (r: string) => r.trim().toLowerCase();
+  const trackedSet = useMemo(() => new Set((repos ?? []).map((r) => repoKey(r.repo))), [repos]);
 
   // Selected repo: URL param if it is tracked, else the first tracked repo.
   const selected = useMemo(() => {
@@ -230,7 +234,7 @@ export function DoraPage() {
         {selected && (
           <span className="muted" style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <span className={`badge ${STATUS_BADGE[selected.status].cls}`}>{STATUS_BADGE[selected.status].text}</span>
-            last sync {fmtAgo(selected.lastSyncedAt)} · {selected.prCount} PRs collected
+            last sync {fmtAgo(selected.lastSyncedAt)} · {selected.prCount} merged PRs stored for this repo since collection began, not only this window
           </span>
         )}
         <button className="btn-sm" onClick={refresh} style={{ marginLeft: 'auto' }}>Refresh</button>
@@ -461,16 +465,16 @@ export function DoraPage() {
                desc={`${projectRows.length} projects, highest estimated spend first — each pools DORA across its repos and prices its Bedrock usage from daily rollups, last ${windowDays} days${projTop.hidden > 0 ? ` · showing the top ${projTop.visible.length}` : ''}`}>
           <table className="data">
             <thead>
-              <tr><th>Project</th><th className="num">Repos</th><th className="num">Merged PRs</th><th className="num">Deployment frequency</th><th className="num">Change lead time</th><th className="num">AI %</th><th className="num">Tokens</th><th className="num">Est. USD</th><th className="num">$ / merge</th></tr>
+              <tr><th>Project</th><th className="num">Repos tracked / linked</th><th className="num">Merged PRs</th><th className="num">Deployment frequency</th><th className="num">Change lead time</th><th className="num">AI %</th><th className="num">Tokens</th><th className="num">Est. USD</th><th className="num">$ / merge</th></tr>
             </thead>
             <tbody>
               {projTop.visible.map((p) => (
                 <tr key={p.projectId}>
                   <td><strong>{p.name}</strong> <span className="muted mono" style={{ fontSize: 12 }}>{p.projectId}</span>
                     {p.costCenter && <div className="muted" style={{ fontSize: 12 }}>{p.costCenter}</div>}</td>
-                  <td className="num">{p.repos.length}</td>
+                  <td className="num">{p.repos.filter((r) => trackedSet.has(repoKey(r))).length} / {p.repos.length}</td>
                   <td className="num">{p.dora?.mergedPrs ?? '—'}</td>
-                  <td className="num">{p.dora ? perWeek(p.dora.df.value) : <span className="muted">no repos tracked</span>}</td>
+                  <td className="num">{p.dora ? perWeek(p.dora.df.value) : <span className="muted">{p.repos.length === 0 ? 'no repos linked' : 'repo not tracked in DORA'}</span>}</td>
                   <td className="num">{p.dora ? fmtHours(p.dora.lt.value) : <span className="muted">—</span>}</td>
                   <td className="num">{fmtPct(p.dora?.aiParticipationPct ?? null)}</td>
                   <td className="num">{fmtTokens(p.tokens)}</td>

@@ -104,6 +104,12 @@ export interface RoiResult {
   notes: string[];
 }
 
+/**
+ * One day-count basis for every rate on the page: annual = window × 365/window and monthly =
+ * annual ÷ 12 exactly, so a reader multiplying the monthly figure by 12 lands on the annualised one.
+ */
+export const DAYS_PER_YEAR = 365;
+export const DAYS_PER_MONTH = DAYS_PER_YEAR / 12;
 const HOURS_PER_YEAR = 2080;
 const HOURS_PER_MONTH = HOURS_PER_YEAR / 12; // 173.33
 const round0 = (n: number) => Math.round(n);
@@ -157,7 +163,7 @@ export function baselineFromHalves(
   const second = weeklyDeployments.slice(half).reduce((t, w) => t + w.value, 0);
   if (first < 3 || second < 3) return null;
   const halfDays = windowDays / 2;
-  return { deploymentsPerYear: (first / halfDays) * 365, cfrPct: cfrFirstHalfPct, mttrHours: mttrFirstHalfHours };
+  return { deploymentsPerYear: (first / halfDays) * DAYS_PER_YEAR, cfrPct: cfrFirstHalfPct, mttrHours: mttrFirstHalfHours };
 }
 
 /**
@@ -173,7 +179,7 @@ export interface RoiComputeOptions {
 export function computeRoi(agg: RoiWindowAggregates, a: RoiAssumptions, opts: RoiComputeOptions = {}): RoiResult {
   const refusals: string[] = [];
   const notes: string[] = [];
-  const k = 365 / agg.windowDays;
+  const k = DAYS_PER_YEAR / agg.windowDays;
 
   // ---- Value: time saved (floor −100%) -----------------------------------------------------
   const netPct = Math.max(a.netTimeSavedPct, -100);
@@ -233,10 +239,13 @@ export function computeRoi(agg: RoiWindowAggregates, a: RoiAssumptions, opts: Ro
   };
 
   // ---- Investment ---------------------------------------------------------------------------
-  const aiSpendAnnual = agg.spendUsd * k;
+  // Annualise the cent-rounded spend the page prints, so its formula reproduces the figure exactly.
+  // Integer cents: $140.01 × 365/30 is exactly $1,703.455, which float arithmetic lands just below.
+  const spendCents = Math.round(agg.spendUsd * 100);
+  const aiSpendAnnual = Math.round((spendCents * DAYS_PER_YEAR) / agg.windowDays) / 100;
   const aiSpend: RoiComponent = {
-    valueUsd: round0(aiSpendAnnual),
-    formulaInputs: { windowSpendUsd: round2(agg.spendUsd), annualizationFactor: round2(k) },
+    valueUsd: aiSpendAnnual,
+    formulaInputs: { windowSpendUsd: round2(agg.spendUsd), windowDays: agg.windowDays, annualizationFactor: round2(k) },
     note: 'MEASURED per-project AI spend (daily rollups × rate card), annualized from the window.',
   };
   const training: RoiComponent = {
@@ -254,6 +263,7 @@ export function computeRoi(agg: RoiWindowAggregates, a: RoiAssumptions, opts: Ro
   };
 
   const valueTotal = timeSaved.valueUsd + throughput.valueUsd + stabilityDelta.valueUsd;
+  // Totals are the sum of the components as printed (cents), so the page's column adds up.
   const investmentTotal = aiSpend.valueUsd + training.valueUsd + jCurve.valueUsd;
 
   // A window with NO shipped output cannot evidence a return, however plausible the
@@ -297,7 +307,7 @@ export function computeRoi(agg: RoiWindowAggregates, a: RoiAssumptions, opts: Ro
   const paybackMonths = computable && valueTotal > 0 ? round1((investmentTotal / valueTotal) * 12) : null;
 
   // ---- Break-even (the skeptic-proof lead view: two inputs, no revenue guess) ---------------
-  const monthlySpend = (agg.spendUsd / agg.windowDays) * 30.44;
+  const monthlySpend = (agg.spendUsd / agg.windowDays) * DAYS_PER_MONTH;
   const hourly = a.loadedCostPerYear / HOURS_PER_YEAR;
   const hoursPerMonth = hourly > 0 ? monthlySpend / hourly : null;
   const pctOfCapacity = hoursPerMonth != null && a.teamSize > 0
@@ -323,8 +333,8 @@ export function computeRoi(agg: RoiWindowAggregates, a: RoiAssumptions, opts: Ro
   return {
     window: agg.windowDays,
     annualizationFactor: round2(k),
-    value: { timeSaved, throughput, stabilityDelta, totalUsd: round0(valueTotal) },
-    investment: { aiSpend, training, jCurve, totalUsd: round0(investmentTotal) },
+    value: { timeSaved, throughput, stabilityDelta, totalUsd: round2(valueTotal) },
+    investment: { aiSpend, training, jCurve, totalUsd: round2(investmentTotal) },
     roiPct,
     paybackMonths,
     breakEven: {

@@ -1,4 +1,4 @@
-import { matchRate, computeModelCost, summarizeCosts } from './cost-calc';
+import { matchRate, computeModelCost, summarizeCosts, RATE_CARD } from './cost-calc';
 
 const OPUS = 'arn:aws:bedrock:us-east-1:123456789012:inference-profile/us.anthropic.claude-opus-4-8';
 const FABLE = 'us.anthropic.claude-fable-5';
@@ -75,3 +75,37 @@ describe('summarizeCosts', () => {
     expect(opus.estimatedUsd).toBeCloseTo(0.01, 9); // (1000 + 1000) × 5e-6 summed into one row
   });
 });
+
+describe('point-release rates sit above their family row', () => {
+  // AWS Price List, AmazonBedrockFoundationModels, us-east-1, Global standard, per MTok.
+  it.each([
+    ['global.anthropic.claude-sonnet-5-5', 2, 10, 0.2],
+    ['us.anthropic.claude-sonnet-5-20260801-v1:0', 2, 10, 0.2],
+    ['global.anthropic.claude-opus-5-5', 4, 20, 0.2],
+    ['global.anthropic.claude-fable-5-1', 10, 50, 0.25],
+    ['global.anthropic.claude-mythos-5-1', 10, 50, 0.25],
+  ])('%s is priced %d / %d / %d per MTok', (id, inM, outM, crM) => {
+    const r = matchRate(id);
+    expect(r.inPerToken * 1e6).toBeCloseTo(inM, 9);
+    expect(r.outPerToken * 1e6).toBeCloseTo(outM, 9);
+    expect(r.cacheReadPerToken * 1e6).toBeCloseTo(crM, 9);
+  });
+
+  it.each([
+    ['global.anthropic.claude-fable-5', 'fable-5', 1],
+    ['global.anthropic.claude-opus-5', 'opus', 0.5],
+    ['anthropic.claude-sonnet-4-6', 'sonnet', 0.3],
+  ])('%s keeps its family rate', (id, key, crM) => {
+    const r = matchRate(id);
+    expect(r.key).toBe(key);
+    expect(r.cacheReadPerToken * 1e6).toBeCloseTo(crM, 9);
+  });
+
+  it('no row is shadowed by an earlier row whose key it contains', () => {
+    RATE_CARD.forEach((r, i) => {
+      const earlier = RATE_CARD.slice(0, i).find((e) => r.key.includes(e.key));
+      expect(earlier?.key).toBeUndefined();
+    });
+  });
+});
+

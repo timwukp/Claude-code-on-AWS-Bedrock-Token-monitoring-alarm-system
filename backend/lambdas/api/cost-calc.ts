@@ -15,10 +15,19 @@ export const RATE_CARD: ModelRate[] = [
   // Bedrock on-demand global-CRI pricing (aws.amazon.com/bedrock/pricing, us-east-1).
   // One rate per model family: us./geo cross-region runs ~10% higher, but the guard tests
   // pin family rates and a single card keeps estimates simple; treat as lower-bound estimate.
+  // matchRate takes the FIRST substring hit, so a point release must sit above its family row:
+  // 'fable-5' also matches 'fable-5-1', 'opus' matches 'opus-5-5', 'sonnet' matches 'sonnet-5-5'.
+  // Point-release rows below: AWS Price List (AmazonBedrockFoundationModels, us-east-1, Global
+  // standard), read 2026-09-30.
+  { key: 'fable-5-1', inPerToken: 0.00001, outPerToken: 0.00005, cacheReadPerToken: 0.00000025 },
   { key: 'fable-5', inPerToken: 0.00001, outPerToken: 0.00005, cacheReadPerToken: 0.000001 },
+  { key: 'mythos-5-1', inPerToken: 0.00001, outPerToken: 0.00005, cacheReadPerToken: 0.00000025 },
   { key: 'mythos', inPerToken: 0.00001, outPerToken: 0.00005, cacheReadPerToken: 0.000001 },
+  { key: 'opus-5-5', inPerToken: 0.000004, outPerToken: 0.00002, cacheReadPerToken: 0.0000002 },
   { key: 'opus-4-8', inPerToken: 0.000005, outPerToken: 0.000025, cacheReadPerToken: 0.0000005 },
   { key: 'opus', inPerToken: 0.000005, outPerToken: 0.000025, cacheReadPerToken: 0.0000005 },
+  { key: 'sonnet-5-5', inPerToken: 0.000002, outPerToken: 0.00001, cacheReadPerToken: 0.0000002 },
+  { key: 'sonnet-5', inPerToken: 0.000002, outPerToken: 0.00001, cacheReadPerToken: 0.0000002 },
   { key: 'sonnet', inPerToken: 0.000003, outPerToken: 0.000015, cacheReadPerToken: 0.0000003 },
   { key: 'haiku', inPerToken: 0.000001, outPerToken: 0.000005, cacheReadPerToken: 0.0000001 },
   // OpenAI models served on Bedrock (QA finding: gpt-5.6-sol usage priced to $0.00). Rates

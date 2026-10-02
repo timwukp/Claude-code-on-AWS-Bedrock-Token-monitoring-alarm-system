@@ -1,10 +1,13 @@
 import {
+  accountVsTenant,
   combineBuckets,
   deriveGeneration,
   hopModel,
   LatencyStat,
+  modelRemainder,
   Point,
   ProfileRef,
+  rankModelIds,
   resolveLabel,
 } from './latency';
 
@@ -280,5 +283,80 @@ describe('resolveLabel', () => {
   it('strips the region prefix off the resolved model too', () => {
     const m = profiles({ id: 'p1', name: 'p', models: ['eu.anthropic.claude-haiku-4-5-20251001-v1:0'] });
     expect(resolveLabel('p1', m).label).toBe('anthropic.claude-haiku-4-5-20251001-v1:0');
+  });
+});
+
+describe('rankModelIds', () => {
+  it('keeps the busiest series, not the first ones listed', () => {
+    const counts = new Map([['listed-first-idle', 3], ['b', 900], ['c', 40], ['listed-last-busy', 5000]]);
+    expect(rankModelIds(counts, 2)).toEqual({ shown: ['listed-last-busy', 'b'], hidden: ['c', 'listed-first-idle'] });
+  });
+
+  it('drops series with no traffic in the window from both lists', () => {
+    const r = rankModelIds(new Map([['a', 0], ['b', 7]]), 12);
+    expect(r).toEqual({ shown: ['b'], hidden: [] });
+  });
+
+  it('breaks ties by id so the choice does not depend on list order', () => {
+    const a = rankModelIds(new Map([['y', 10], ['x', 10], ['z', 10]]), 2);
+    const b = rankModelIds(new Map([['z', 10], ['x', 10], ['y', 10]]), 2);
+    expect(a).toEqual(b);
+    expect(a.shown).toEqual(['x', 'y']);
+  });
+});
+
+describe('modelRemainder', () => {
+  it('makes the column add up to the fleet total', () => {
+    const shown = [1200, 800, 300];
+    const r = modelRemainder(2500, shown, 1);
+    expect(r.e2eSamples).toBe(200);
+    expect(shown.reduce((a, b) => a + b, 0) + (r.e2eSamples ?? 0)).toBe(2500);
+    expect(r.seriesNotShown).toBe(1);
+    expect(r.note).toContain('1 smaller series');
+  });
+
+  it('still explains a remainder when every listed series has a row', () => {
+    const r = modelRemainder(1000, [990], 0);
+    expect(r.e2eSamples).toBe(10);
+    expect(r.note).not.toContain('smaller series');
+    expect(r.note).toContain('past two weeks');
+  });
+
+  it('reports rows running ahead of the fleet as that, not as a negative share', () => {
+    const r = modelRemainder(1000, [1004], 0);
+    expect(r.e2eSamples).toBe(-4);
+    expect(r.note).toContain('ran 4 invocations ahead');
+  });
+
+  it('says the rows add up when nothing is left over, rather than naming causes of an empty row', () => {
+    const r = modelRemainder(1000, [600, 400], 0);
+    expect(r.e2eSamples).toBe(0);
+    expect(r.note).toBe('Nothing outside the rows above: they add up to the fleet figure.');
+  });
+
+  it('has no remainder when the fleet series returned nothing', () => {
+    expect(modelRemainder(null, [], 0).e2eSamples).toBeNull();
+  });
+});
+
+describe('accountVsTenant', () => {
+  it('states the tenant share and the other callers as numbers', () => {
+    const r = accountVsTenant(27396, 23794);
+    expect(r.tenantPct).toBe(87);
+    expect(r.note).toContain('27,396 invocations account-wide');
+    expect(r.note).toContain('23,794 (87%)');
+    expect(r.note).toContain('other 3,602');
+  });
+
+  it('explains a tenant count above the account count by the window edges', () => {
+    const r = accountVsTenant(100, 120);
+    expect(r.tenantPct).toBe(120);
+    expect(r.note).toContain('rolling');
+    expect(r.note).not.toContain('other callers');
+  });
+
+  it('refuses a share when there was no account traffic', () => {
+    expect(accountVsTenant(0, 5).tenantPct).toBeNull();
+    expect(accountVsTenant(null, 0).tenantPct).toBeNull();
   });
 });

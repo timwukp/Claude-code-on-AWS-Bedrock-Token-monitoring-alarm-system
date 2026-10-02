@@ -160,6 +160,8 @@ export function ProjectsPage() {
   const totalTokens = apiTotalTokens ?? rowsTokens;
   const totalCost   = apiTotalUsd ?? rowsCost;
   const centDrift   = apiTotalUsd != null ? Math.round(Math.abs(apiTotalUsd - rowsCost) * 100) / 100 : 0;
+  // Rounding alone can move the row sum by at most half a cent per row; any gap past that has a cause.
+  const roundingBound = rows.length * 0.005;
 
   // Every header tile names where its number comes from. With Full selected the tiles are bound to
   // the rollups (so the header is one dataset — the F-PR53-104 fix) while the table below is Athena
@@ -167,6 +169,12 @@ export function ProjectsPage() {
   // reader sees 21 projects above 5 rows and cannot tell whether that is a bug. It is not, and the
   // foot says why.
   const rowSource = source === 'full' ? 'Athena' : 'rollups';
+  // "Ahead of the rollups" needs its size beside it. Both sides are all-time, so the measured
+  // difference is the traffic the rollups have not folded in yet.
+  const fullDelta = apiTotalUsd != null ? Math.round((rowsCost - apiTotalUsd) * 100) / 100 : null;
+  const fullVsFast = source === 'full' && !loading && !error && fullDelta !== null && apiTotalUsd
+    ? ` Right now the Athena rows total ${fmtUsd(rowsCost)}, ${fmtUsd(Math.abs(fullDelta))} (${(Math.abs(fullDelta) / apiTotalUsd * 100).toFixed(2)}%) ${fullDelta >= 0 ? 'above' : 'below'} the rollups' ${fmtUsd(apiTotalUsd)}${rollupsAsOf ? ` as of ${rollupsAsOf.slice(11, 16)} UTC` : ''}.`
+    : '';
   const srcChip = (text: string) => <span className="badge neutral">{text}</span>;
 
   return (
@@ -186,7 +194,7 @@ export function ProjectsPage() {
                : 'sum of the rows in the table below'} />
         <Kpi label="Total est. cost" value={fmtUsd(totalCost)} accent="var(--accent-green)"
              chip={srcChip(apiTotalUsd != null ? 'rollups' : rowSource)}
-             foot={apiTotalUsd != null && Math.abs(apiTotalUsd - rowsCost) > 0.5
+             foot={apiTotalUsd != null && Math.abs(apiTotalUsd - rowsCost) > roundingBound + 1e-9
                ? (source === 'full'
                    ? `Athena rows ${fmtUsd(rowsCost)} vs rollups ${fmtUsd(apiTotalUsd)}${rollupsAsOf ? ` (as of ${rollupsAsOf.slice(11, 16)} UTC)` : ''} — Athena reads raw logs live; rollups refresh every 15 min, so the ${fmtUsd(Math.abs(rowsCost - apiTotalUsd))} difference is traffic since the last rollup. Token figures count input + output only; prompt-cache reads are priced but not counted, so a small token gap can carry a larger cost gap`
                    : `rows sum ${fmtUsd(rowsCost)} vs model rollups ${fmtUsd(apiTotalUsd)} — residual ${fmtUsd(Math.abs(apiTotalUsd - rowsCost))} predates per-project tracking`)
@@ -196,7 +204,7 @@ export function ProjectsPage() {
       </div>
 
       <Panel title="Usage by project"
-             desc="Attribution precedence per call: ① the project's application inference profile — the call is ROUTED through it, so the invocation log records the profile's ARN as modelId and the aggregator resolves its tums-project tag (config-routed, IAM-enforceable, zero per-call effort); ② requestMetadata.project_id set by the app; ③ identity hint for single-project principals; ④ untagged. Fast = managed DynamoDB rollups (all four tiers, incl. the one-time historical treatment). Full = async Athena over the immutable raw logs — live, call-time truth, so it can run slightly ahead of the 15-minute rollups. Full resolves tiers ① and ②; it cannot resolve ③, and pre-profile history stays 'untagged' there, because an identity hint and the historical treatment exist only as rollup state and no raw-log field carries them. So expect a larger 'untagged' share in Full — that gap is those two tiers, not lost usage.">
+             desc={"Attribution precedence per call: ① the project's application inference profile — the call is ROUTED through it, so the invocation log records the profile's ARN as modelId and the aggregator resolves its tums-project tag (config-routed, IAM-enforceable, zero per-call effort); ② requestMetadata.project_id set by the app; ③ identity hint for single-project principals; ④ untagged. Fast = managed DynamoDB rollups (all four tiers, incl. the one-time historical treatment). Full = async Athena over the immutable raw logs — live, call-time truth, so it can run ahead of the 15-minute rollups. Full resolves tiers ① and ②; it cannot resolve ③, and pre-profile history stays 'untagged' there, because an identity hint and the historical treatment exist only as rollup state and no raw-log field carries them. So expect a larger 'untagged' share in Full — that gap is those two tiers, not lost usage." + fullVsFast}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
           <div style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
             {(['fast', 'full'] as const).map((s) => (

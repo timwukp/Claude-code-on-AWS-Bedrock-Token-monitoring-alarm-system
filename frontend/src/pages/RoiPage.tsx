@@ -250,7 +250,7 @@ export function RoiPage() {
         return (
           <Panel key={p.projectId}
                  title={`${p.name} — ROI ${r.roiPct != null ? `${r.roiPct > 0 ? '+' : ''}${r.roiPct}%` : 'not computable'}`}
-                 desc={`Annualized from ${r.window} days (×${r.annualizationFactor}) · assumptions: ${p.assumptionsSource}${r.paybackMonths != null ? ` · payback ~${r.paybackMonths} months` : ''}${p.killFast.flagged ? ' · ⚠ review recommended' : ''}`}>
+                 desc={`Annualized from ${r.window} days (× 365/${r.window}; monthly = annual ÷ 12) · assumptions: ${p.assumptionsSource}${r.paybackMonths != null ? ` · payback ~${r.paybackMonths} months` : ''}${p.killFast.flagged ? ' · ⚠ review recommended' : ''}`}>
             <ChartTable label={`${p.name} ROI components`} rows={waterfall} rowKey={(w) => w.name}
               columns={[
                 { header: 'Component', cell: (w) => w.name },
