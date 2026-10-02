@@ -143,8 +143,10 @@ export function DoraPage() {
   const reposTop = useTopN(reposRanked);
   const projectsRanked = useMemo(() => [...(projectRows ?? [])].sort((a, b) => b.estimatedUsd - a.estimatedUsd), [projectRows]);
   const projTop = useTopN(projectsRanked);
-  // A project's linked repos that DORA actually tracks — the same membership test the API pools on.
-  const trackedSet = useMemo(() => new Set((repos ?? []).map((r) => r.repo)), [repos]);
+  // A project's linked repos that DORA actually tracks — the same membership test the API pools on,
+  // which keys repos trimmed and lower-cased (dora/store.ts repoKey); the registry and this list differ in case.
+  const repoKey = (r: string) => r.trim().toLowerCase();
+  const trackedSet = useMemo(() => new Set((repos ?? []).map((r) => repoKey(r.repo))), [repos]);
 
   // Selected repo: URL param if it is tracked, else the first tracked repo.
   const selected = useMemo(() => {
@@ -470,7 +472,7 @@ export function DoraPage() {
                 <tr key={p.projectId}>
                   <td><strong>{p.name}</strong> <span className="muted mono" style={{ fontSize: 12 }}>{p.projectId}</span>
                     {p.costCenter && <div className="muted" style={{ fontSize: 12 }}>{p.costCenter}</div>}</td>
-                  <td className="num">{p.repos.filter((r) => trackedSet.has(r)).length} / {p.repos.length}</td>
+                  <td className="num">{p.repos.filter((r) => trackedSet.has(repoKey(r))).length} / {p.repos.length}</td>
                   <td className="num">{p.dora?.mergedPrs ?? '—'}</td>
                   <td className="num">{p.dora ? perWeek(p.dora.df.value) : <span className="muted">{p.repos.length === 0 ? 'no repos linked' : 'repo not tracked in DORA'}</span>}</td>
                   <td className="num">{p.dora ? fmtHours(p.dora.lt.value) : <span className="muted">—</span>}</td>

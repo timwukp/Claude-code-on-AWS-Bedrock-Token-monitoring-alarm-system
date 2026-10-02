@@ -168,6 +168,14 @@ describe('computeRoi', () => {
     expect(roi(agg({ windowDays: 30, spendUsd: 140.01 }), assume()).investment.aiSpend.valueUsd).toBe(1703.46);
   });
 
+  it('(10e) the investment total is the sum of its printed components, to the cent', () => {
+    // Live case: $4,405.43 + $600.00 + $15,000.00 was shown as $20,005.00.
+    const r = roi(agg({ windowDays: 30, spendUsd: 362.09 }), assume({ trainingCostPerUser: 300, teamSize: 2 }));
+    const inv = r.investment;
+    expect(inv.totalUsd).toBe(Math.round((inv.aiSpend.valueUsd + inv.training.valueUsd + inv.jCurve.valueUsd) * 100) / 100);
+    expect(inv.totalUsd % 1).not.toBe(0);
+  });
+
   it('(11) revenueBase=0 → throughput 0 with a refusal string', () => {
     const r = roi(agg(), assume({ baseline: { deploymentsPerYear: 60, cfrPct: 5, mttrHours: 2 } }));
     expect(r.value.throughput.valueUsd).toBe(0);

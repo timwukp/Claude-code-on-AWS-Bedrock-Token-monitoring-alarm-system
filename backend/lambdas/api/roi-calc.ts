@@ -263,6 +263,7 @@ export function computeRoi(agg: RoiWindowAggregates, a: RoiAssumptions, opts: Ro
   };
 
   const valueTotal = timeSaved.valueUsd + throughput.valueUsd + stabilityDelta.valueUsd;
+  // Totals are the sum of the components as printed (cents), so the page's column adds up.
   const investmentTotal = aiSpend.valueUsd + training.valueUsd + jCurve.valueUsd;
 
   // A window with NO shipped output cannot evidence a return, however plausible the
@@ -332,8 +333,8 @@ export function computeRoi(agg: RoiWindowAggregates, a: RoiAssumptions, opts: Ro
   return {
     window: agg.windowDays,
     annualizationFactor: round2(k),
-    value: { timeSaved, throughput, stabilityDelta, totalUsd: round0(valueTotal) },
-    investment: { aiSpend, training, jCurve, totalUsd: round0(investmentTotal) },
+    value: { timeSaved, throughput, stabilityDelta, totalUsd: round2(valueTotal) },
+    investment: { aiSpend, training, jCurve, totalUsd: round2(investmentTotal) },
     roiPct,
     paybackMonths,
     breakEven: {

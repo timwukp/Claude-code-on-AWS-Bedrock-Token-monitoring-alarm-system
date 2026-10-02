@@ -160,6 +160,8 @@ export function ProjectsPage() {
   const totalTokens = apiTotalTokens ?? rowsTokens;
   const totalCost   = apiTotalUsd ?? rowsCost;
   const centDrift   = apiTotalUsd != null ? Math.round(Math.abs(apiTotalUsd - rowsCost) * 100) / 100 : 0;
+  // Rounding alone can move the row sum by at most half a cent per row; any gap past that has a cause.
+  const roundingBound = rows.length * 0.005;
 
   // Every header tile names where its number comes from. With Full selected the tiles are bound to
   // the rollups (so the header is one dataset — the F-PR53-104 fix) while the table below is Athena
@@ -192,7 +194,7 @@ export function ProjectsPage() {
                : 'sum of the rows in the table below'} />
         <Kpi label="Total est. cost" value={fmtUsd(totalCost)} accent="var(--accent-green)"
              chip={srcChip(apiTotalUsd != null ? 'rollups' : rowSource)}
-             foot={apiTotalUsd != null && Math.abs(apiTotalUsd - rowsCost) > 0.5
+             foot={apiTotalUsd != null && Math.abs(apiTotalUsd - rowsCost) > roundingBound + 1e-9
                ? (source === 'full'
                    ? `Athena rows ${fmtUsd(rowsCost)} vs rollups ${fmtUsd(apiTotalUsd)}${rollupsAsOf ? ` (as of ${rollupsAsOf.slice(11, 16)} UTC)` : ''} — Athena reads raw logs live; rollups refresh every 15 min, so the ${fmtUsd(Math.abs(rowsCost - apiTotalUsd))} difference is traffic since the last rollup. Token figures count input + output only; prompt-cache reads are priced but not counted, so a small token gap can carry a larger cost gap`
                    : `rows sum ${fmtUsd(rowsCost)} vs model rollups ${fmtUsd(apiTotalUsd)} — residual ${fmtUsd(Math.abs(apiTotalUsd - rowsCost))} predates per-project tracking`)

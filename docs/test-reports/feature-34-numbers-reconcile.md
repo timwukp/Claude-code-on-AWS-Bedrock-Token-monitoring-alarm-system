@@ -4,8 +4,9 @@
 - **Origin:** qa findings F-PR65R3-001, F-PR66-002, F-PR66-003, F-PR66-004 (HIGH), F-PR66-005, F-PR66R2-001, and the
   owner's Latency 1c decision (state Fast-only on the page).
 - **Date:** 2026-09-30
-- **Verdict:** PASS on gates, live Lambda invocation on dev and the served bundle. qa rounds 1–2: four LOW findings in total; three
-  fixed here, one (F-PR67-001) belongs to the next chain (see below).
+- **Verdict:** PASS on gates, live Lambda invocation on dev and the served bundle. qa rounds 1–3: seven findings in total; six
+  fixed here, one (F-PR67-001) belongs to the next chain (see below). Two of the six were regressions introduced by
+  my own round-2 fixes.
 
 ## What this report has to say plainly
 - **The rate card change reprices history.** Cost is computed from stored tokens at read time. On dev the largest
@@ -36,7 +37,7 @@
 ## Gates
 | Gate | Result |
 |---|---|
-| Backend `jest` / `tsc --noEmit` | PASS — 286/286, 25 suites |
+| Backend `jest` / `tsc --noEmit` | PASS — 287/287, 25 suites |
 | Frontend `tsc --noEmit` / `vite build` | PASS |
 | `cdk synth -c env=ci` | PASS — 10 stacks |
 | `sdlc_ci_gate.py --require-active` | PASS — 13 source files, all named in the plan; approval bound to `3c60f41` |
@@ -114,3 +115,21 @@ mismatches. After the deploy (`RoiFn` only; the diff showed no IAM or other reso
 | Size of the defect | At most $0.43 on $4,405 (0.01%). ROI % and payback are unchanged, because the investment total is whole dollars |
 | Served bundle `assets/index-DtRE67x_.js` | contains "Repos tracked / linked" |
 | Mutation | Unrounded annualisation fails 10c; float annualisation fails 10d |
+
+## qa round 3 (run 36953464429, head `3aaa971`) — 003 and 004 confirmed fixed, 001 still failing, three new
+Two of the three new findings were caused by my round-2 fixes.
+
+| Finding | Verdict | Action |
+|---|---|---|
+| R2-001 HIGH `/dora`: Token Usage Monitoring, Java Framework Upgrade Workshop and Kiro SDLC Scrum Best Practices show `0 / 1` tracked although DORA reports on them | Real, and introduced in round 2. The tracked test compared repo names case-sensitively; the DORA store keys repos trimmed and lower-cased (`dora/store.ts` `repoKey`), and the registry spells them differently | The page now applies the same `repoKey` normalisation before the membership test. Checked against live data before deploying: the tracked count agrees with the API's DORA presence on 21/21 projects |
+| R2-002 LOW `/roi`: investment total $20,005.00 beside components that sum to $20,005.43 | Real, and introduced in round 2: the annual spend gained cents, the totals stayed whole dollars | `value.totalUsd` and `investment.totalUsd` are now the cent-rounded sum of the printed components. Test 10e (fails on the old code) |
+| R2-003 LOW `/projects`: a $0.45 Full − Fast gap labelled as rounding | Real. Rounding can move a row sum by at most half a cent per row; the old threshold was a flat $0.50 | The "rounding" wording now applies only within `rows × $0.005`; a larger gap gets the Athena-vs-rollups explanation |
+| F-PR67-001 `/costs` | Unchanged; out of this plan (the bug-fix bot also declined it: `CostsPage.tsx` is not in the plan) | Still with `cost-id-consistency` |
+
+Live after the deploys (`RoiFn` only for R2-002; frontend for R2-001 and R2-003):
+
+| Check | Result |
+|---|---|
+| `/v1/roi/projects?window=30` and `90` | 42/42: `investment.totalUsd` and `value.totalUsd` equal the cent sum of their components; annual spend still equals the printed formula on 42/42 |
+| Example (Token Usage Monitoring, 30 d) | $4,405.43 + $600 + $15,000 = $20,005.43; ROI +149.9%, payback 4.8 months, unchanged |
+| Served bundle `assets/index-DDqV6Gt3.js` | replaces `index-DtRE67x_.js`; contains the lower-cased tracked test and the rounding bound |
