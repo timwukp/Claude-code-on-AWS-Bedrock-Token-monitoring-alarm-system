@@ -4,8 +4,8 @@
 - **Origin:** qa findings F-PR65R3-001, F-PR66-002, F-PR66-003, F-PR66-004 (HIGH), F-PR66-005, F-PR66R2-001, and the
   owner's Latency 1c decision (state Fast-only on the page).
 - **Date:** 2026-09-30
-- **Verdict:** PASS on gates, live Lambda invocation on dev and the served bundle. qa round 1: 3 LOW findings, 2 fixed
-  here, 1 belongs to the next chain (see below).
+- **Verdict:** PASS on gates, live Lambda invocation on dev and the served bundle. qa rounds 1–2: four LOW findings in total; three
+  fixed here, one (F-PR67-001) belongs to the next chain (see below).
 
 ## What this report has to say plainly
 - **The rate card change reprices history.** Cost is computed from stored tokens at read time. On dev the largest
@@ -36,7 +36,7 @@
 ## Gates
 | Gate | Result |
 |---|---|
-| Backend `jest` / `tsc --noEmit` | PASS — 284/284, 25 suites |
+| Backend `jest` / `tsc --noEmit` | PASS — 286/286, 25 suites |
 | Frontend `tsc --noEmit` / `vite build` | PASS |
 | `cdk synth -c env=ci` | PASS — 10 stacks |
 | `sdlc_ci_gate.py --require-active` | PASS — 13 source files, all named in the plan; approval bound to `3c60f41` |
@@ -89,3 +89,28 @@ The workflow runs with `QA_RED_ON: FAIL`, so any finding turns the check red, wh
 
 Frontend redeployed; the served bundle `assets/index-B9XZiXTs.js` contains "repo not tracked in DORA" and "no repos
 linked" and no longer contains "no repos tracked". Frontend `tsc` and `vite build` pass.
+
+## qa round 2 (run 36717741116, head `af323a3`) — F-PR67-002 confirmed fixed, 001 and 003 still failing, one new
+| Finding | Verdict | Action |
+|---|---|---|
+| F-PR67-003 `/dora` | The reworded cell still sat beside a Repos column that counted *linked* repos | The column is now "Repos tracked / linked" (e.g. `0 / 1`), using the same tracked set the API pools DORA on |
+| F-PR67-004 `/roi`: "$362.09 in 30 days × 365/30" shown beside "$4,405.00 / yr" | Real. The annual figure was rounded to whole dollars and printed with cents. qa's own expected value ($4,405.50) was also wrong; the formula gives $4,405.43 | `aiSpend.valueUsd` is now the printed spend, in integer cents, × 365 ÷ window days, rounded to the cent. Tests 10b–10d |
+| F-PR67-001 `/costs` | Unchanged; out of this plan | Still with `cost-id-consistency` |
+
+**This fix took three deploys, and two of them were avoidable.** I validated each version against live data after it
+was deployed, rather than before:
+
+1. The first version rounded the output to cents but annualised the *unrounded* spend. Live result: 5 of 21 projects
+   were off by a few cents at 30 days and 8 of 21 at 90 days.
+2. The second version annualised the printed spend in floating point. Live result: 1 of 42 was off by a cent
+   ($140.01 × 365/30 = $1,703.455 exactly, computed as 1,703.4549…).
+
+The third version was checked *before* deploying, against all 42 live inputs with exact integer arithmetic: 0
+mismatches. After the deploy (`RoiFn` only; the diff showed no IAM or other resource change):
+
+| Check | Result |
+|---|---|
+| `/v1/roi/projects?window=30` and `90` | 42/42 annual figures equal the printed formula to the cent; monthly × 12 within 12 cents of annual on all 42 |
+| Size of the defect | At most $0.43 on $4,405 (0.01%). ROI % and payback are unchanged, because the investment total is whole dollars |
+| Served bundle `assets/index-DtRE67x_.js` | contains "Repos tracked / linked" |
+| Mutation | Unrounded annualisation fails 10c; float annualisation fails 10d |

@@ -239,9 +239,12 @@ export function computeRoi(agg: RoiWindowAggregates, a: RoiAssumptions, opts: Ro
   };
 
   // ---- Investment ---------------------------------------------------------------------------
-  const aiSpendAnnual = agg.spendUsd * k;
+  // Annualise the cent-rounded spend the page prints, so its formula reproduces the figure exactly.
+  // Integer cents: $140.01 × 365/30 is exactly $1,703.455, which float arithmetic lands just below.
+  const spendCents = Math.round(agg.spendUsd * 100);
+  const aiSpendAnnual = Math.round((spendCents * DAYS_PER_YEAR) / agg.windowDays) / 100;
   const aiSpend: RoiComponent = {
-    valueUsd: round0(aiSpendAnnual),
+    valueUsd: aiSpendAnnual,
     formulaInputs: { windowSpendUsd: round2(agg.spendUsd), windowDays: agg.windowDays, annualizationFactor: round2(k) },
     note: 'MEASURED per-project AI spend (daily rollups × rate card), annualized from the window.',
   };

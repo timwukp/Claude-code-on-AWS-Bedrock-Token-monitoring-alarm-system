@@ -148,8 +148,24 @@ describe('computeRoi', () => {
     const monthly = (839.33 / 30) * DAYS_PER_MONTH;
     const hourly = a.loadedCostPerYear / 2080;
     expect(r.breakEven.hoursPerMonth).toBeCloseTo(monthly / hourly, 1);
-    expect(Math.round(monthly * 12)).toBe(r.investment.aiSpend.valueUsd);
+    expect(Math.round(monthly * 12 * 100) / 100).toBe(r.investment.aiSpend.valueUsd);
+    // The page prints "$<windowSpendUsd> in <windowDays> days × 365/<windowDays>" beside the figure.
+    const fi = r.investment.aiSpend.formulaInputs as { windowSpendUsd: number; windowDays: number };
+    expect(r.investment.aiSpend.valueUsd).toBe(Math.round(fi.windowSpendUsd * DAYS_PER_YEAR / fi.windowDays * 100) / 100);
     expect(r.investment.aiSpend.formulaInputs).toMatchObject({ windowSpendUsd: 839.33, windowDays: 30 });
+  });
+
+  it('(10c) the annual figure is what the printed formula gives, even for a sub-cent window spend', () => {
+    // Live case: $362.088… printed as $362.09; annualising the unrounded value gave $4,405.41 beside a
+    // formula that reads $4,405.43.
+    const r = roi(agg({ windowDays: 30, spendUsd: 362.088 }), assume());
+    expect(r.investment.aiSpend.formulaInputs).toMatchObject({ windowSpendUsd: 362.09, windowDays: 30 });
+    expect(r.investment.aiSpend.valueUsd).toBe(4405.43);
+  });
+
+  it('(10d) a half-cent annual figure rounds up, as the printed formula does', () => {
+    // Live case: 140.01 × 365 / 30 = 1,703.455 exactly; float arithmetic gave 1,703.45.
+    expect(roi(agg({ windowDays: 30, spendUsd: 140.01 }), assume()).investment.aiSpend.valueUsd).toBe(1703.46);
   });
 
   it('(11) revenueBase=0 → throughput 0 with a refusal string', () => {
