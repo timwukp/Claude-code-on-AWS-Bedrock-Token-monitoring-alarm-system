@@ -4,7 +4,7 @@
 - **Origin:** qa F-PR66-001 (MEDIUM, "34 ids" in the window vs "28 model ids" all-time), F-PR66-006 and F-PR67-001
   (LOW, a merged row lists the same id twice; "Models used 11 · 17 ids" counts the repeats — 15 distinct).
 - **Date:** 2026-10-02
-- **Verdict:** PASS on gates and the local authenticated render; live via qa recorded below.
+- **Verdict:** PASS on gates, the owner's local review and qa (no finding on the Cost page's ids; four findings elsewhere, triaged below).
 
 ## What this report has to say plainly
 - **One defect, three findings.** The window rows (`/v1/overview.byModel`) carry inference-profile ARNs; the page
@@ -36,5 +36,11 @@ Reviewed by the owner in their own browser on 2026-10-05 against the live page: 
 footer counts consistent across 7 / 30 / 90 / mtd; dollar and token figures unchanged from live main. Owner's go: "ok 推".
 Gates (`tsc`, `vite build`, SDLC gate) PASS as above.
 
-## Live (after push — qa)
-_To be filled from the qa report on the PR._
+## Live — qa on `c75a885` (10/10 pages, 4 findings, none on the Cost id fix)
+| Finding | Verdict | Facts |
+|---|---|---|
+| F-PR68-001 MEDIUM — "rollups ~16 h stale although the UI states they refresh every 15 minutes" | **Misreading invited by our copy; aggregator healthy.** Not this PR | CloudWatch for `AggregatorFn`: it ran every 15 min all night and logged "Processed 0 objects" from 09:09 UTC to 01:06 UTC — **no new Bedrock invocation logs arrived** (a quiet Saturday night), so there was nothing to roll up. At 01:21 it processed 1 object and at 01:36 188 objects (the qa run's own calls); watermark now `2026-10-05T01:36:35Z`. The footer's "Data as of" is the timestamp of the **newest processed log object** — i.e. the last traffic — not the last run, so "16 h ago · refresh every 15 minutes" read as a contradiction. Fix (follow-up `rollup-freshness`, Overview/Projects copy — feature-23 lineage, mine): say "latest logged call HH:MM (N ago) · new logs are rolled up every 15 minutes", and expose the aggregator's last-run time alongside (needs `lastRunAt` on the watermark + `/v1/overview` — ingestion owner) |
+| F-PR68-002 LOW — "Unknown <id>" rows, one priced $0.00, zero-token ids in "Models used" | Not this PR | Three application-inference-profile ids the registry cannot resolve (`pj21d310s69b`, `12jjg23nnft1`, `wn91zu880oo3`); pricing is the rate card / profile-resolution path (ingestion + cost-calc). The id-count part of this PR counts distinct ids correctly; whether zero-usage rows should be dropped from `/v1/overview.byModel` (as `/v1/costs` already does) is a one-line backend filter — flagged to the ingestion owner |
+| F-PR68-003 LOW — Latency by-project "untagged" exactly 10,000 calls, only two projects | Not this PR | A query cap in the latency-projects read — latency owner |
+| F-PR68-004 LOW — `/v1/quotas` 6–7 s, "also fetched on Settings" | Not this PR | Only `UsagePage.tsx` calls `api.quotas()`; the Settings timing is the in-flight request carried across the SPA navigation. The 6 s itself is the quotas Lambda (Service Quotas + CloudWatch) — backend |
+| Cost id fix | **no finding**; F-PR67-001 not re-filed | |
