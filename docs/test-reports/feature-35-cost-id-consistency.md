@@ -1,6 +1,6 @@
 # Feature 35 — Cost page id consistency
 
-- **Chain:** `intent/cost-id-consistency/` · **Branch:** `feat/cost-id-consistency` off `main@1ce4726` (post-#67) · **PR:** TBD
+- **Chain:** `intent/cost-id-consistency/` · **Branch:** `feat/cost-id-consistency` off `main@1ce4726` (post-#67) · **PR:** #68
 - **Origin:** qa F-PR66-001 (MEDIUM, "34 ids" in the window vs "28 model ids" all-time), F-PR66-006 and F-PR67-001
   (LOW, a merged row lists the same id twice; "Models used 11 · 17 ids" counts the repeats — 15 distinct).
 - **Date:** 2026-10-02
