@@ -3,7 +3,7 @@
 - **Intent:** ./intent.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Status:** signed-off
+- **Status:** shipped
 
 ## 1. /roi — one day-count basis
 `roi-calc.ts` exports `DAYS_PER_YEAR = 365` and `DAYS_PER_MONTH = DAYS_PER_YEAR / 12`. Annual = window spend × 365/window,

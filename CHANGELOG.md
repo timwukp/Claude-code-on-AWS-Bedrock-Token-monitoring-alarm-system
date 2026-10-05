@@ -6,6 +6,14 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Fixed — the Cost page counts models and ids one way
+- **A merged model row listed the same id twice and the two id counts contradicted each other** ("Models used … 17 ids"
+  in the window vs fewer in the all-time footer): the window rows from `/v1/overview` carry inference-profile ARNs,
+  which the page shortened but never de-duplicated against the bare id, while `/v1/costs` is normalised by the API.
+  `lib/model-names.ts` now applies the API's `normalizeModelId` rule before merging and exposes each row's distinct
+  `ids`; the tile and the footer count models and ids by that one definition. No dollar or token figure changes.
+  (qa F-PR66-001 / F-PR66-006 / F-PR67-001; feature-35, PR TBD)
+
 ### Fixed — every figure reconciles with the one beside it (feature-34)
 - **/roi:** monthly spend and the annual figure now share one day-count basis (365/window and 365/12), so monthly × 12
   reproduces the annual number exactly. Before, monthly used a 30.44-day month and the page showed a rounded ×12.17.
