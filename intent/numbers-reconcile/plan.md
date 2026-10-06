@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** 3c60f41d42ab1a45b4558fbbef39b24aee833876
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #66 (dora-tables-topn), the merge base at branch time. Nothing else is in
 flight. The next chain, `cost-id-consistency`, waits for this one to merge.

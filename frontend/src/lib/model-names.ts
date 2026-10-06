@@ -44,6 +44,15 @@ function friendlyFor(vendor: string, model: string): { family: ModelFamily; frie
   return { family: 'other', friendly: `${titleCase(vendor)} ${titleCase(base)}` };
 }
 
+/**
+ * Strip an inference-profile ARN down to the id it routes — the same rule as the API's
+ * `normalizeModelId` in cost-calc.ts, so a frontend list of ids matches a backend one.
+ * `arn:aws:bedrock:…:inference-profile/us.anthropic.claude-opus-5` → `us.anthropic.claude-opus-5`.
+ */
+export function normalizeModelId(id: string): string {
+  return id.replace(/^arn:[^/]+\/(?=.)/, '');
+}
+
 export function parseModelId(raw: string): ParsedModel {
   const regionMatch = raw.match(REGION_PREFIX);
   const region = (regionMatch?.[1] as ParsedModel['region']) ?? null;
@@ -60,18 +69,29 @@ export interface MergedModelRow<T> {
   friendly: string;
   family: ModelFamily;
   regions: string[];
+  /** Distinct normalised ids behind this row — an ARN and the id it routes count once. */
+  ids: string[];
   rows: T[];
 }
 
-/** Group rows by canonical model, preserving the input rows for the caller to sum. */
+/**
+ * Group rows by canonical model, preserving the input rows for the caller to sum. Ids are normalised
+ * first (ARN → routed id), so two source rows that name the same id — one as an inference-profile
+ * ARN, one bare — land in one row and list that id once.
+ */
 export function mergeModelRows<T extends { modelId: string }>(rows: readonly T[]): MergedModelRow<T>[] {
   const by = new Map<string, MergedModelRow<T>>();
   for (const r of rows) {
-    const p = parseModelId(r.modelId);
-    const e = by.get(p.canonical) ?? { canonical: p.canonical, friendly: p.friendly, family: p.family, regions: [], rows: [] };
+    const id = normalizeModelId(r.modelId);
+    const p = parseModelId(id);
+    const e = by.get(p.canonical) ?? { canonical: p.canonical, friendly: p.friendly, family: p.family, regions: [], ids: [], rows: [] };
     if (p.region && !e.regions.includes(p.region)) e.regions.push(p.region);
+    if (!e.ids.includes(id)) e.ids.push(id);
     e.rows.push(r);
     by.set(p.canonical, e);
   }
   return [...by.values()];
 }
+
+/** How many distinct normalised ids a set of merged rows spans — the one "ids" count every caption should use. */
+export const countModelIds = <T>(merged: readonly MergedModelRow<T>[]): number => merged.reduce((n, g) => n + g.ids.length, 0);

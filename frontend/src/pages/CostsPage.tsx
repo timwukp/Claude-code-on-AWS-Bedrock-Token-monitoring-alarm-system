@@ -4,12 +4,16 @@ import { EmptyState } from '../components/EmptyState';
 import { KpiTile } from '../components/KpiTile';
 import { Panel } from '../components/Layout';
 import { fmtUsd, fmtTokens } from '../lib/format';
-import { mergeModelRows } from '../lib/model-names';
+import { countModelIds, mergeModelRows } from '../lib/model-names';
 import { useTimeRange } from '../lib/time-range';
 
 type ModelRow = OverviewResponse['byModel'][number];
 interface MergedRow { canonical: string; friendly: string; regions: string[]; ids: string[]; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheSavingsUsd: number | null; estimatedUsd: number }
 interface AllTime { byModel: { modelId: string; estimatedUsd?: number }[]; totalEstimatedUsd: number }
+// One definition of "model" and "id" for the tile and the footer: rows merged by canonical model after ARN→id
+// normalisation (qa F-PR66-001: the window said 34 ids, the all-time footer 28; F-PR66-006/F-PR67-001: a row
+// listed the same id twice because the ARN and the bare id were counted as two).
+const modelCounts = (rows: readonly { modelId: string }[]) => { const m = mergeModelRows(rows); return { models: m.length, ids: countModelIds(m) }; };
 
 const ZERO_COST_THRESHOLD = 0.01;
 type SortKey = 'estimatedUsd' | 'inputTokens' | 'outputTokens' | 'cacheReadTokens' | 'cacheSavingsUsd';
@@ -43,9 +47,9 @@ export function CostsPage() {
   const merged: MergedRow[] = useMemo(() => {
     if (!ov) return [];
     const sum = (rows: ModelRow[], k: 'inputTokens' | 'outputTokens' | 'cacheReadTokens' | 'estimatedUsd') => rows.reduce((s, r) => s + Number(r[k] ?? 0), 0);
-    return mergeModelRows(ov.byModel.map((m) => ({ ...m, modelId: String(m.modelId).split('/').pop() ?? String(m.modelId) })))
+    return mergeModelRows(ov.byModel)
       .map((g) => ({
-        canonical: g.canonical, friendly: g.friendly, regions: g.regions, ids: g.rows.map((r) => r.modelId),
+        canonical: g.canonical, friendly: g.friendly, regions: g.regions, ids: g.ids,
         inputTokens: sum(g.rows, 'inputTokens'), outputTokens: sum(g.rows, 'outputTokens'), cacheReadTokens: sum(g.rows, 'cacheReadTokens'),
         estimatedUsd: sum(g.rows, 'estimatedUsd'),
         cacheSavingsUsd: savingsKnown ? g.rows.reduce((s, r) => s + Number(r.cacheSavingsUsd ?? 0), 0) : null,
@@ -76,8 +80,10 @@ export function CostsPage() {
   // Rows are rounded per model; their sum can miss the window total by a cent. Say so rather than let a reader hunt for it.
   const centGap = Math.round(Math.abs(sum('estimatedUsd') - totalEstimatedUsd) * 100);
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
-  const footer = (allTime
-    ? `All time: ${fmtUsd(allTime.totalEstimatedUsd)} across ${allTime.byModel.length} model ids · the same rate card prices the By project and Overview pages, so their totals reconcile with this one.`
+  const windowIds = countModelIds(mergeModelRows(ov.byModel));
+  const allTimeCounts = allTime ? modelCounts(allTime.byModel) : null;
+  const footer = (allTimeCounts
+    ? `All time: ${fmtUsd(allTime!.totalEstimatedUsd)} across ${plural(allTimeCounts.models, 'model')} (${plural(allTimeCounts.ids, 'id')}, counted the same way as the tile above) · the same rate card prices the By project and Overview pages, so their totals reconcile with this one.`
     : 'All-time total unavailable — the costs endpoint did not respond.')
     + (centGap > 0 ? ` The shown rows sum to ${fmtUsd(sum('estimatedUsd'))}, ${plural(centGap, 'cent')} from the tile — per-model rounding${!showZero && zeroRows.length ? ` and ${plural(zeroRows.length, 'folded model')} below $${ZERO_COST_THRESHOLD.toFixed(2)}` : ''}.` : '');
 
@@ -97,7 +103,7 @@ export function CostsPage() {
             : 'not available for this time range until the API is redeployed with per-window cache savings'} />
         <KpiTile label="Models used" helpId="cost.models-used" accent="var(--accent-blue)"
           value={String(merged.length)}
-          definition={`${windowLabel} · ${merged.length !== ov.byModel.length ? `${ov.byModel.length} ids — regional variants of one model merged` : 'distinct model ids'}`} />
+          definition={`${windowLabel} · ${windowIds !== merged.length ? `${plural(windowIds, 'distinct id')} — regional variants and inference-profile ARNs of one model merged` : 'one id per model'}`} />
         <KpiTile label="Cache-read tokens" helpId="cost.cache-read-tokens" accent="var(--accent-amber)"
           value={fmtTokens(totalCacheRead)} definition={`${windowLabel} · billed at 0.1×`} />
       </div>
