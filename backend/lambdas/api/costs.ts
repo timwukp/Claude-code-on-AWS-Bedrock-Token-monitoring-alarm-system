@@ -4,6 +4,7 @@ import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { ok, serverError } from '../shared/response';
 import { getTenantId } from '../shared/tenant';
 import { cacheWriteOf, summarizeCosts, normalizeModelId, TokenCounts } from './cost-calc';
+import { profileModelMap } from '../shared/project-registry';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = process.env.AGGREGATES_TABLE!;
@@ -30,8 +31,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     // Normalization, duplicate-merging (bare id vs inference-profile ARN), and zero-usage
     // filtering all live in summarizeCosts — keep raw rows here.
+    // Rows keyed by an inference-profile ARN resolve to their model here (qa F-PR69-004), the way the
+    // aggregator resolves them at ingest since feature-36; an unreadable cache leaves ids as stored.
+    const profiles = await profileModelMap();
     const items: TokenCounts[] = (res.Items ?? []).map((i) => ({
-      modelId: String(i.modelId ?? i.sk ?? ''),
+      modelId: profiles.get(String(i.modelId ?? i.sk ?? '')) ?? String(i.modelId ?? i.sk ?? ''),
       inputTokens: Number(i.inputTokens ?? 0),
       outputTokens: Number(i.outputTokens ?? 0),
       cacheReadTokens: Number(i.cacheReadTokens ?? 0),

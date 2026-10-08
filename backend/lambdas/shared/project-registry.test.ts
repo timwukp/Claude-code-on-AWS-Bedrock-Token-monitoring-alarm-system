@@ -1,4 +1,4 @@
-import { parseSeedJson, shouldSeed, validateProject, validateRoiConfig, profileResolvesModel } from './project-registry';
+import { parseSeedJson, shouldSeed, validateProject, validateRoiConfig, profileResolvesModel, profileModelMapFrom } from './project-registry';
 
 describe('validateProject', () => {
   it('normalizes id/repos/identityArns to lowercase and de-dups', () => {
@@ -77,6 +77,19 @@ describe('validateRoiConfig (#14)', () => {
     expect(bad.error).toMatch(/teamSize/);
     const none = validateProject({ id: 'p1', name: 'P' }, 't');
     expect(none.project!.roi).toBeUndefined();
+  });
+});
+
+describe('profileModelMapFrom (feature-36, qa F-PR69-004)', () => {
+  it('maps only profiles whose model is known, tagged or not', () => {
+    const A = 'arn:aws:bedrock:us-east-1:111122223333:application-inference-profile/aaaaaaaaaaaa';
+    const B = 'arn:aws:bedrock:us-east-1:111122223333:application-inference-profile/bbbbbbbbbbbb';
+    const m = profileModelMapFrom([
+      { arn: A, underlyingModelId: 'amazon.nova-micro-v1:0' },      // untagged but resolved → mapped
+      { arn: B, underlyingModelId: 'bbbbbbbbbbbb' },                 // failed resolution → not mapped
+    ]);
+    expect(m.get(A)).toBe('amazon.nova-micro-v1:0');
+    expect(m.has(B)).toBe(false);
   });
 });
 

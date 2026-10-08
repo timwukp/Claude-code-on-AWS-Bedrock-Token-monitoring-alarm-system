@@ -26,7 +26,8 @@ are grouped by development milestone rather than strict semver releases.
 - **Runaway guard** prices cache writes, so a cache-heavy single request can trip it.
 - **Three inference profiles priced at $0** (qa F-PR68-002): they resolved to Amazon Nova Micro but carried no project
   tag, and model resolution was coupled to tagging. An untagged profile now still rewrites the model id, the project
-  falls through to the lower tiers, and Nova Micro is on the card ($0.035 / $0.14 / $0.00875 / $0 per MTok).
+  falls through to the lower tiers, and Nova Micro is on the card ($0.035 / $0.14 / $0.00875 / $0 per MTok). Rows
+  written under a profile ARN before this fix resolve to their model at read time on every cost endpoint (qa F-PR69-004).
 - **`/v1/overview.rollupsLastRunAt`** (from `SYSTEM#WATERMARK.lastRunAt`, written on every aggregator run) separates
   "the aggregator ran" from "the newest log folded in" (`rollupsAsOf`), which qa F-PR68-001 conflated.
 - **Still a lower bound:** the standard-route premium (×1.1 on `us.`/geo/inference-profile calls, ≈9% here) is a

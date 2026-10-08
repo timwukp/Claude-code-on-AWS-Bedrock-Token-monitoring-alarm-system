@@ -6,7 +6,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { ok, serverError } from '../shared/response';
 import { cacheWriteOf, computeModelCost, normalizeModelId, summarizeCosts, TokenCounts } from './cost-calc';
-import { listProfiles, listProjects } from '../shared/project-registry';
+import { listProfiles, listProjects, profileModelMap } from '../shared/project-registry';
 import { getTenantId } from '../shared/tenant';
 
 const athena = new AthenaClient({});
@@ -221,8 +221,9 @@ async function modelTotals(tenantId: string): Promise<{ totalTokens: number; tot
     KeyConditionExpression: 'pk = :pk',
     ExpressionAttributeValues: { ':pk': `TENANT#${tenantId}#MODEL` },
   }));
+  const profiles = await profileModelMap(); // profile-ARN-keyed rows price as their model (qa F-PR69-004)
   const items: TokenCounts[] = (res.Items ?? []).map((i: any) => ({
-    modelId: String(i.modelId ?? ''),
+    modelId: profiles.get(String(i.modelId ?? '')) ?? String(i.modelId ?? ''),
     inputTokens: Number(i.inputTokens ?? 0),
     outputTokens: Number(i.outputTokens ?? 0),
     cacheReadTokens: Number(i.cacheReadTokens ?? 0),
@@ -243,7 +244,7 @@ async function rollupWatermark(): Promise<string | null> {
 }
 
 async function fastProjects(tenantId: string): Promise<any[]> {
-  const [res, registryProjects] = await Promise.all([
+  const [res, registryProjects, profiles] = await Promise.all([
     ddb.send(new QueryCommand({
       TableName: AGGREGATES_TABLE,
       KeyConditionExpression: 'pk = :pk',
@@ -251,6 +252,7 @@ async function fastProjects(tenantId: string): Promise<any[]> {
     })),
     // Registry names/cost centers (#13); tolerate an empty/missing registry.
     listProjects().catch(() => []),
+    profileModelMap(),
   ]);
   const names = new Map(registryProjects.map((p) => [p.projectId, { name: p.name, costCenter: p.costCenter ?? '—' }]));
   const byProject = new Map<string, { tokens: number; estimatedUsd: number; users: Set<string> }>();
@@ -260,7 +262,7 @@ async function fastProjects(tenantId: string): Promise<any[]> {
     e.tokens += Number(it.inputTokens ?? 0) + Number(it.outputTokens ?? 0);
     // Per-model pricing (#13): the sk has always carried modelId — use the real rate card.
     e.estimatedUsd += computeModelCost({
-      modelId: normalizeModelId(String(it.modelId ?? '')),
+      modelId: normalizeModelId(profiles.get(String(it.modelId ?? '')) ?? String(it.modelId ?? '')),
       inputTokens: Number(it.inputTokens ?? 0),
       outputTokens: Number(it.outputTokens ?? 0),
       cacheReadTokens: Number(it.cacheReadTokens ?? 0),

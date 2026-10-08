@@ -280,6 +280,28 @@ export function profileResolvesModel(p: { arn: string; underlyingModelId?: strin
   return !!m && m !== p.arn && !p.arn.endsWith(`/${m}`);
 }
 
+/** Profile ARN → underlying model id, for every cached profile whose model is known (pure; tested). */
+export function profileModelMapFrom(profiles: { arn: string; underlyingModelId?: string }[]): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const p of profiles) if (profileResolvesModel(p)) m.set(p.arn, p.underlyingModelId!);
+  return m;
+}
+
+/**
+ * The same map from the live cache, for READ paths that price rollup rows. Rows written before the
+ * aggregator learned to resolve untagged profiles (feature-36) are keyed by the opaque profile ARN,
+ * which no rate matches; mapping them at read time prices them and lets the Cost page merge them
+ * into their model's row. Empty when the registry is undeployed or unreadable — rows then keep their
+ * stored id, exactly as before — so this can never fail a request.
+ */
+export async function profileModelMap(): Promise<Map<string, string>> {
+  if (!process.env.TENANTS_TABLE) return new Map();
+  try { return profileModelMapFrom(await listProfiles()); } catch (err) {
+    console.warn('profileModelMap: cache unreadable; rows keep their stored model id', (err as Error).message);
+    return new Map();
+  }
+}
+
 export async function loadAttributionMaps(): Promise<AttributionMaps> {
   const [profiles, hints] = await Promise.all([listProfiles(), listIdentityHints()]);
   const profileMap = new Map<string, { projectId: string; underlyingModelId: string }>();

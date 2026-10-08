@@ -225,6 +225,7 @@ export class ApiStack extends cdk.Stack {
     // Least-privilege grants.
     tables.aggregates.grantReadData(usageFn);
     tables.aggregates.grantReadData(costsFn);
+    tables.tenants.grantReadData(costsFn); // feature-36: resolve profile-ARN-keyed rows to their model at read time
     tables.anomalies.grantReadData(anomaliesFn);
 
     // Functions that run Athena over the raw-log table need: Athena exec, Glue catalog read,

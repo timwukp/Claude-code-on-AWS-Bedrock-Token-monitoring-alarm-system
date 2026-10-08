@@ -15,6 +15,7 @@ import { badRequest, ok, serverError } from '../shared/response';
 import { getTenantId } from '../shared/tenant';
 import * as registry from '../shared/project-registry';
 import { cacheWriteOf } from './cost-calc';
+import { profileModelMap } from '../shared/project-registry';
 import { ProjdayItem } from './project-calc';
 import { WindowKind, buildOverview, windowBounds } from './overview-calc';
 
@@ -29,6 +30,7 @@ function parseKind(raw: string | undefined): WindowKind | null {
 
 async function queryProjday(tenantId: string, fromDay: string, toDay: string): Promise<ProjdayItem[]> {
   const out: ProjdayItem[] = [];
+  const profiles = await profileModelMap(); // profile-ARN-keyed rows price as their model (qa F-PR69-004)
   let key: Record<string, unknown> | undefined;
   do {
     const res = await ddb.send(new QueryCommand({
@@ -40,7 +42,7 @@ async function queryProjday(tenantId: string, fromDay: string, toDay: string): P
     for (const it of (res.Items ?? []) as Record<string, unknown>[]) {
       out.push({
         day: String(it.day ?? ''), projectId: String(it.projectId ?? 'untagged'),
-        modelId: String(it.modelId ?? ''), inputTokens: Number(it.inputTokens ?? 0),
+        modelId: profiles.get(String(it.modelId ?? '')) ?? String(it.modelId ?? ''), inputTokens: Number(it.inputTokens ?? 0),
         outputTokens: Number(it.outputTokens ?? 0), cacheReadTokens: Number(it.cacheReadTokens ?? 0),
         ...cacheWriteOf(it), invocations: Number(it.invocations ?? 0),
       });

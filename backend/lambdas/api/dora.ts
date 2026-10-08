@@ -25,6 +25,7 @@ import { GhRepo, GithubHttpError, createGithubClient } from '../dora/github-clie
 import { loadGithubToken } from '../dora/secret';
 import * as store from '../dora/store';
 import { cacheWriteOf } from './cost-calc';
+import { profileModelMap } from '../shared/project-registry';
 import { buildProjectRows, projdayRange, DoraProjectRow, ProjdayItem } from './project-calc';
 import * as projectRegistry from '../shared/project-registry';
 import { AssistedBy, PrItem, RepoItem, SyncStatus } from '../dora/types';
@@ -297,6 +298,7 @@ async function projectRows(event: APIGatewayProxyEvent): Promise<APIGatewayProxy
 async function queryProjday(tenantId: string, now: Date, windowDays: number): Promise<ProjdayItem[]> {
   const { fromSk, toSk } = projdayRange(now, windowDays);
   const out: ProjdayItem[] = [];
+  const profiles = await profileModelMap(); // profile-ARN-keyed rows price as their model (qa F-PR69-004)
   let key: Record<string, unknown> | undefined;
   do {
     const res = await ddbAgg.send(new QueryCommand({
@@ -309,7 +311,7 @@ async function queryProjday(tenantId: string, now: Date, windowDays: number): Pr
       out.push({
         day: String(it.day ?? ''),
         projectId: String(it.projectId ?? 'untagged'),
-        modelId: String(it.modelId ?? ''),
+        modelId: profiles.get(String(it.modelId ?? '')) ?? String(it.modelId ?? ''),
         inputTokens: Number(it.inputTokens ?? 0),
         outputTokens: Number(it.outputTokens ?? 0),
         cacheReadTokens: Number(it.cacheReadTokens ?? 0),

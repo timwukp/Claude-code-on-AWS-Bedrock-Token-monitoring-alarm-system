@@ -56,6 +56,11 @@
   `cacheWriteUsd` (rounded to cents like `estimatedUsd`).
 - Athena: `queries.ts` `rateCase` accepts `cacheWrite5mPerToken`; `byProject` and `projects.ts` `buildFullSql` add a
   `cacheWriteInputTokenCount` term at the 5-minute rate. `buildModelExpr` includes every profile whose model is known.
+- Read-time profile resolution (qa F-PR69-004): `profileModelMap()` (registry) maps every cached profile ARN whose
+  model is known to that model; `costs`, `projects` (fast path + model totals), `overview`, `roi` and `dora` apply it to
+  each rollup row's `modelId` before pricing, so rows written under an opaque profile ARN before feature-36 price and
+  merge as their model. Unreadable cache → rows keep their stored id (never a failure). `CostsFn` gains the tenants-table
+  read grant the other four already hold.
 - `/v1/overview` returns `rollupsLastRunAt` (from `SYSTEM#WATERMARK.lastRunAt`, null until the new build has run)
   beside `rollupsAsOf`. `/v1/usage` points gain `cacheWrite5mTokens`, `cacheWrite1hTokens`.
 

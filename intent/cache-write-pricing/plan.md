@@ -37,6 +37,9 @@ it creates.
     `backend/lambdas/api/roi-calc.test.ts`, `backend/lambdas/api/overview-calc.ts`,
     `backend/lambdas/api/overview-calc.test.ts` — `ProjdayItem` fields passed to pricing; `OverviewModelRow.cacheWriteTokens`.
 11. `frontend/src/api/client.ts`, `frontend/src/pages/CostsPage.tsx`.
+12. `infra/lib/stacks/api-stack.ts` — one read grant: `tables.tenants.grantReadData(costsFn)` (qa F-PR69-004: the
+    Costs Lambda resolves profile-ARN-keyed rows to their model through the registry's profile cache at read time, as
+    `projects`, `overview`, `roi` and `dora` already may — they held the grant).
 
 Non-source riders: `.sdlc/active` (handover from `cost-id-consistency`), `intent/cost-id-consistency/*` → shipped,
 `intent/cache-write-pricing/*`, `docs/research-cache-write-pricing.md`, `CHANGELOG.md`,
