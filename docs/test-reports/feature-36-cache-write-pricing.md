@@ -17,13 +17,16 @@
   0.04% per model. The earlier "unexplained" residuals were June 1–3 spend before logging began (2026-06-03T06:54Z).
 - **One line stays open, and the page says so:** the standard-route premium (×1.1 on `us.`/geo/profile calls) is a
   separate chain; until it lands the figures are a lower bound, about 9% under the bill-equivalent.
-- **Two card rows changed during validation,** in the direction the bill dictated: OpenAI-model cache writes are $0
-  (no Cost Explorer line for them), and Amazon Nova Micro was added (three profiles had been pricing at $0).
+- **Two card rows changed during validation:** Amazon Nova Micro was added (three profiles had been pricing at $0),
+  and the GPT-5.6 row's cache write went 1.25× → 0 → **1.25×**: a first reading took Cost Explorer's silence as "$0",
+  the peer pointed at the Bedrock prompt-caching guide (GPT-5.6-and-later writes = 1.25× uncached input, one 30-minute
+  TTL), and the guide was then read directly. Cost Explorer carries no line of any kind for that model under the
+  Bedrock service filter, so it never was evidence either way.
 
 ## Scope
 | File | Change |
 |---|---|
-| `backend/lambdas/api/cost-calc.ts` / `.test.ts` | `cacheWrite5mPerToken` / `cacheWrite1hPerToken` on every row via `rate()`; `cacheWriteOf`; `ModelCost` gains `cacheWriteTokens`, `cacheWriteUnknownTtlTokens`, `cacheWriteUsd`, `estimatedUsdUpperBound`, `cacheReadUsd`, `cacheNetUsd`; totals; `nova-micro` row; gpt rows charge $0 for writes; 16 new cases |
+| `backend/lambdas/api/cost-calc.ts` / `.test.ts` | `cacheWrite5mPerToken` / `cacheWrite1hPerToken` on every row via `rate()`; `cacheWriteOf`; `ModelCost` gains `cacheWriteTokens`, `cacheWriteUnknownTtlTokens`, `cacheWriteUsd`, `estimatedUsdUpperBound`, `cacheReadUsd`, `cacheNetUsd`; totals; `nova-micro` row; `gpt-5.6-sol` writes 1.25×, `gpt-5` 0; 16 new cases |
 | `backend/lambdas/ingestion/parse.ts` / `parse-cache-write.test.ts` (new) / `parse-attribution.test.ts` | `cacheWriteTtlOf` (stream first chunk / InvokeModel object / Converse `cacheDetails`; null unless the split sums to the record's count); `CacheWriteCounters`, `foldCacheWrite`, `mergeCacheWrite` on all three aggregates; runaway guard takes the counters; untagged-profile fall-through in `deriveProject`; 15 + 4 cases |
 | `backend/lambdas/ingestion/aggregator.ts` | `CW_CLAUSE` ADDs the three counters on all four writers; `priceRecordUsd` prices writes; `setWatermark` on every run with `lastRunAt`; untagged profiles mapped for their model, tagged ones alone count as "known" |
 | `backend/lambdas/ingestion/cache-write-ddb.ts` / `.test.ts` (new) | the backfill's add-only expression (`if_not_exists` keys; USAGE gets the split only) |
@@ -58,7 +61,8 @@
 ## Rates — AWS Price List, read 2026-10-05 and independently re-read 2026-10-06 (USD per MTok)
 Cache write is 1.25 × input (5-minute TTL) and 2 × input (1-hour) on every Claude row; e.g. `fable-5-1` 12.50 / 20.00,
 `opus-5-5` 5.00 / 8.00, `sonnet-4-6` 3.75 / 6.00, `haiku` 1.25 / 2.00. `nova-micro` 0.035 / 0.14 / 0.00875 / 0 / 0
-(`AmazonBedrock`, `USE1-NovaMicro-*`). `gpt-*` cache write 0 / 0 (no Cost Explorer line).
+(`AmazonBedrock`, `USE1-NovaMicro-*`). `gpt-5.6-sol` cache write 1.5625 / 1.5625 (1.25× input, one 30-minute TTL —
+Bedrock prompt-caching guide); `gpt-5` 0 / 0 (implicit caching only, no published write fee, 0 logged write tokens).
 
 ## Reconciliation against the bill — BEFORE any deploy
 Athena per model × route (28.96 GB, ≈ $0.14) priced with the new card at the 5-minute rate, × 1.0 (`global.`) or × 1.1
@@ -74,7 +78,7 @@ Athena per model × route (28.96 GB, ≈ $0.14) priced with the new card at the 
 | opus-5-5 (standard) | $63.44 | $63.44 | 0.00% |
 | haiku-4-5 (standard) | $5.05 | $5.05 | 0.00% |
 | opus-4-6 | $0.00 | $0.52 | not in the logs |
-| gpt-5.6-sol | $0.00 (was $2.03 at 1.25×) | $0.00 | not billed → row set to 0 |
+| gpt-5.6-sol | $2.03 at 1.25× | — | no CE line of any kind for the model (not even input/output) → the guide, not the bill, prices it |
 | **Total** | **$12,216.11** | **$12,216.63** | **−0.00%** |
 
 Cost Explorer paginates; all pages were read (200 lines, 94 usage types, $33,515 total). No usage type names a 1-hour
@@ -144,6 +148,7 @@ Deployed Lambdas invoked directly with an API-Gateway event carrying the tenant'
 | per model cache write | fable-5 $6,453.24 · opus-5 $2,147.38 · sonnet-4-6 $800.88 · fable-5-1 $1,275.09 · opus-4-8 $368.20 — fable-5 and opus-4-8 equal the pre-deploy Athena figures to the cent; the others carry 10-06 → 10-08 traffic |
 | unknown-TTL share | 44,444,131 of 1,264,385,187 tokens (3.5%) |
 | `/v1/overview?window=7` | 200; `rollupsAsOf` 2026-10-08T05:38:56Z, **`rollupsLastRunAt` 2026-10-08T05:51:30Z**; byModel rows carry `cacheReadUsd` / `cacheWriteUsd` / `cacheWriteTokens` |
+| GPT-5.6 cache-write rate | the Api deployed 10-08 05:36Z still prices GPT-5.6 writes at 0; the 1.25× row landed in the branch afterwards and needs one more code-only Api deploy (≈ $2.31 on the largest tenant's all-time total) |
 | Nova profiles (qa F-PR68-002) | new traffic resolves to `amazon.nova-micro-v1:0` and prices; the historical MODEL row keyed by one profile ARN holds 580 in / 80 out tokens and stays at $0.00 (immaterial, stated) |
 
 ## Served bundle (CloudFront, invalidation completed; `assets/index-BsMPCYw_.js`)

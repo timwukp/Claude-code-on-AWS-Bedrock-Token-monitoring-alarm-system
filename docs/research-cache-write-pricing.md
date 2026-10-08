@@ -70,8 +70,10 @@ days both sources fully cover (logging began **2026-06-03T06:54Z**; the bill beg
 | **Total, 2026-06-04 → 10-05** | **$12,216.11** | **$12,216.63** | **−0.00%** |
 
 Two lines do not reconcile and are explained rather than averaged away: Opus 4.6 ($0.52 billed, no logged tokens) and
-the GPT model on Bedrock (1.5M logged cache-write tokens, **no** cache-write line on the bill → its card row charges
-$0 for writes). The research's earlier "unexplained" residuals — Opus 4.8 +$126, Opus 4.7 $24.80 — were June 1–3
+the GPT model on Bedrock (1.5M logged cache-write tokens; Cost Explorer under the Bedrock service filter carries **no
+line of any kind** for it — not input, not output — so the bill is silent, not negative. The Bedrock prompt-caching
+guide prices GPT-5.6-and-later writes at 1.25× the uncached input rate with a single 30-minute TTL, and the card follows
+the guide). The research's earlier "unexplained" residuals — Opus 4.8 +$126, Opus 4.7 $24.80 — were June 1–3
 spend that predates the logs; the reconciliation window above removes them exactly.
 
 ## 2. Where the TTL can and cannot be read
@@ -130,7 +132,7 @@ tenant. The Cost page states this beside the table.
 | The TTL is unknowable per call | Raw S3 log bodies | Refuted — present on 4/4 records, aggregator-readable only |
 | The account uses 1-hour caching too | CE usage types; reconciliation at 5 m | Refuted for this account; kept observable for others |
 | Unexplained residuals mean mis-pricing | First log timestamp vs CE daily | Refuted — Jun 1–3 spend predates logging |
-| OpenAI-on-Bedrock cache writes cost 1.25× | CE lines for the model | Refuted — no cache-write line; $0 |
+| OpenAI-on-Bedrock cache writes cost 1.25× | CE lines for the model; then the prompt-caching guide | CE is silent (no lines at all for the model, so "no cache-write line" meant nothing); the guide confirms 1.25× for GPT-5.6+, one 30-minute TTL |
 | "Unresolved" profiles cannot be priced | Profile cache contents | Refuted — resolved to Nova Micro, merely untagged |
 
 ## Sources

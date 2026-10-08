@@ -132,6 +132,8 @@ describe('cache writes are priced (feature-36)', () => {
       expect(r.cacheWrite5mPerToken).toBeCloseTo(r.inPerToken * 1.25, 12);
       expect(r.cacheWrite1hPerToken).toBeCloseTo(r.inPerToken * 2, 12);
     }
+    // The 1-hour column must still exist for rows whose model has a single TTL (GPT-5.6: 30 minutes).
+    expect(matchRate('openai.gpt-5.6-sol').cacheWrite1hPerToken).toBe(matchRate('openai.gpt-5.6-sol').cacheWrite5mPerToken);
   });
 
   it('unknown models price cache writes at zero like every other kind', () => {
@@ -216,11 +218,15 @@ describe('cache writes are priced (feature-36)', () => {
     expect(s.totalCacheNetUsd).toBeCloseTo(-(12.5 - 2_000_000 * 5e-6), 6);
   });
 
-  it('OpenAI rows have no cache-write charge (Cost Explorer bills none for them)', () => {
-    const r = matchRate('openai.gpt-5.6-sol');
-    expect(r.inPerToken).toBeGreaterThan(0);
-    expect(r.cacheWrite5mPerToken).toBe(0);
-    expect(r.cacheWrite1hPerToken).toBe(0);
+  it('GPT-5.6 writes cost 1.25× input on both TTL columns (one 30-minute TTL); earlier GPT rows cost 0', () => {
+    // Bedrock prompt-caching guide, "GPT-5.6 and later models": writes billed at 1.25× the uncached input rate.
+    const sol = matchRate('openai.gpt-5.6-sol');
+    expect(sol.cacheWrite5mPerToken * 1e6).toBeCloseTo(1.5625, 9);
+    expect(sol.cacheWrite1hPerToken * 1e6).toBeCloseTo(1.5625, 9);
+    const old = matchRate('openai.gpt-5-2025');
+    expect(old.key).toBe('gpt-5');
+    expect(old.cacheWrite5mPerToken).toBe(0);
+    expect(old.cacheWrite1hPerToken).toBe(0);
   });
 });
 

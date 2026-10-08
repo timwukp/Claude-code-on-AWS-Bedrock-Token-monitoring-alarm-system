@@ -72,10 +72,13 @@ export const RATE_CARD: ModelRate[] = [
   rate('nova-micro', 0.000000035, 0.00000014, 0.00000000875, { m5: 0, h1: 0 }),
   // OpenAI models served on Bedrock (QA finding: gpt-5.6-sol usage priced to $0.00). Rates
   // follow the published GPT-5-family on-demand pricing ($1.25/M in, $10/M out, 0.1× cache
-  // reads); confirm against aws.amazon.com/bedrock/pricing when adding successors. No cache-write
-  // charge: Cost Explorer shows no cache-write line for these models (Jun–Oct 2026, 1.5M logged
-  // cache-write tokens), matching OpenAI's published no-write-fee caching.
-  rate('gpt-5.6-sol', 0.00000125, 0.00001, 0.000000125, { m5: 0, h1: 0 }),
+  // reads); confirm against aws.amazon.com/bedrock/pricing when adding successors. Cache writes:
+  // the Bedrock prompt-caching guide (read 2026-10-08) bills GPT-5.6-and-later writes at 1.25× the
+  // uncached input rate with one 30-minute TTL, so both TTL columns carry 1.25×; earlier GPT models
+  // have implicit caching only, no published write fee, and 0 logged write tokens here → 0. (Cost
+  // Explorer is silent on these models under the Bedrock service filter — no lines of any kind — so
+  // it neither confirms nor refutes; the guide is the source.)
+  rate('gpt-5.6-sol', 0.00000125, 0.00001, 0.000000125, { m5: 0.0000015625, h1: 0.0000015625 }),
   rate('gpt-5', 0.00000125, 0.00001, 0.000000125, { m5: 0, h1: 0 }),
 ];
 

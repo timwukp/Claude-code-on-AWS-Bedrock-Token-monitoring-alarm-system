@@ -36,7 +36,9 @@ All three resolve to Amazon Nova Micro, which the card also lacked.
   `ephemeral_1h_input_tokens`; on the first chunk of a stream, on the object for InvokeModel). 4/4 sampled records
   carried it; the 5-minute figure equalled `cacheWriteInputTokenCount`. The Glue table maps no response body, so only
   the aggregator can read it (the feature-28 extract-then-discard pattern); Athena cannot.
-- No Cost Explorer line for OpenAI-model cache writes (1.5M logged tokens) → those are not charged.
+- GPT-5.6 cache writes: 1.25× uncached input per the Bedrock prompt-caching guide (one 30-minute TTL). Cost Explorer under
+  the Bedrock service filter shows no line of any kind for this model, so it cannot confirm or refute; a first reading
+  took that silence as "$0" and was corrected against the guide.
 
 ## Desired outcome
 

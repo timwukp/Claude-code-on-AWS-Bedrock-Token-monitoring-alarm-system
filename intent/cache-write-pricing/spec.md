@@ -10,8 +10,9 @@
 ### 1. Rate card — `backend/lambdas/api/cost-calc.ts`
 - `ModelRate` gains `cacheWrite5mPerToken` and `cacheWrite1hPerToken`. Rows are built by `rate()`, which defaults them
   to `inPerToken × CACHE_WRITE_5M_MULT (1.25)` and `× CACHE_WRITE_1H_MULT (2)`, rounded to 12 decimals so derived
-  rates render as exact decimals in Athena SQL. Rows may override: `gpt-*` and `nova-micro` set both to 0 (no
-  cache-write charge on the bill / Price List). New row `nova-micro` (0.035 / 0.14 / 0.00875 per MTok).
+  rates render as exact decimals in Athena SQL. Rows may override: `gpt-5.6-sol` carries 1.25× on both columns (one
+  30-minute TTL, Bedrock prompt-caching guide); `gpt-5` and `nova-micro` set both to 0 (implicit caching, no published
+  write fee). New row `nova-micro` (0.035 / 0.14 / 0.00875 per MTok).
 - `TokenCounts` gains `cacheWriteTokens`, `cacheWrite5mTokens`, `cacheWrite1hTokens`. Unknown-TTL tokens =
   `max(0, total − 5m − 1h)`.
 - `ModelCost` gains `cacheWriteTokens`, `cacheWriteUnknownTtlTokens`, `cacheReadUsd`, `cacheWriteUsd`,

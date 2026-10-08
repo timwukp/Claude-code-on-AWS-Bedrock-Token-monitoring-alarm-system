@@ -23,7 +23,8 @@ it creates.
 5. `backend/scripts/backfill-cache-write.ts` (new); `backend/scripts/verify-cache-write-backfill.ts` (new, read-only:
    USAGE vs MODEL/PROJECT/PROJDAY sums, split ≤ total, marker census); `backend/scripts/reconcile-cache-write.ts` (new:
    truth from every raw object vs stored, per item; ADDs positive deltas, refuses negative ones unless
-   `--correct-over-counts`); `backend/scripts/repair-projday-day.ts` (`COUNTERS`).
+   `--correct-over-counts`); `backend/scripts/repair-projday-day.ts` (`COUNTERS`); `backend/scripts/backfill-projday.ts`
+   (header only: marked superseded for the cache-write counters).
 6. `backend/lambdas/shared/project-registry.ts`, `backend/lambdas/shared/project-registry.test.ts` —
    `profileResolvesModel`, `loadAttributionMaps`.
 7. `backend/lambdas/api/queries.ts`, `backend/lambdas/api/queries.test.ts` — `rateCase` cache-write field, `byProject`
