@@ -6,6 +6,32 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Fixed — prompt-cache writes are priced (feature-36)
+- **The bill's largest token line was shown as $0.** Cost Explorer for this account (2026-06-01 → 10-05): input $4,285 ·
+  output $5,163 · cache read $11,666 · **cache write $12,398 (37.0%)** — and the rate card priced no cache writes. The
+  card now carries `cacheWrite5mPerToken` (1.25× input) and `cacheWrite1hPerToken` (2× input) per row, from the AWS
+  Price List; the estimate reconciles with Cost Explorer's cache-write lines to −0.00% in total and within 0.04% per
+  model inside the logging window (2026-06-04 → 10-05). **Cost is computed from stored tokens at read time, so every
+  page reprices history:** the largest tenant's all-time total moves from $14,408 to $25,540 (+77%).
+- **The TTL is read per call.** The aggregator lifts `usage.cache_creation.{ephemeral_5m,1h}_input_tokens` from the
+  logged response body (and discards the body, as it does for latency) and stores `cacheWrite5mTokens` /
+  `cacheWrite1hTokens` beside `cacheWriteTokens` on all four rollups. Writes whose TTL is not logged — history before
+  the backfill, body-less records, the Athena/Full view — are priced at the 5-minute rate with the 1-hour price as
+  `estimatedUsdUpperBound`. New fields: `cacheReadUsd`, `cacheWriteUsd`, `cacheWriteUnknownTtlTokens`, `cacheNetUsd`
+  (cache-read savings minus the write premium), and the matching totals. The Cost page shows the two cache lines in
+  dollars beside their token counts, so a row reads like the bill's four lines.
+- **MODEL / PROJECT / PROJDAY never stored cache-write tokens**; `scripts/backfill-cache-write.ts` adds history onto
+  them (dry run by default, one conditional marker per log object, stuck claims reported not re-added), and the
+  repair script's `COUNTERS` include the three.
+- **Runaway guard** prices cache writes, so a cache-heavy single request can trip it.
+- **Three inference profiles priced at $0** (qa F-PR68-002): they resolved to Amazon Nova Micro but carried no project
+  tag, and model resolution was coupled to tagging. An untagged profile now still rewrites the model id, the project
+  falls through to the lower tiers, and Nova Micro is on the card ($0.035 / $0.14 / $0.00875 / $0 per MTok).
+- **`/v1/overview.rollupsLastRunAt`** (from `SYSTEM#WATERMARK.lastRunAt`, written on every aggregator run) separates
+  "the aggregator ran" from "the newest log folded in" (`rollupsAsOf`), which qa F-PR68-001 conflated.
+- **Still a lower bound:** the standard-route premium (×1.1 on `us.`/geo/inference-profile calls, ≈9% here) is a
+  separate chain; the Cost page states it. Research: `docs/research-cache-write-pricing.md`. (feature-36, PR #69)
+
 ### Fixed — the Cost page counts models and ids one way
 - **A merged model row listed the same id twice and the two id counts contradicted each other** ("Models used … 17 ids"
   in the window vs fewer in the all-time footer): the window rows from `/v1/overview` carry inference-profile ARNs,
