@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** 1ce47263ba2d5c16db8cea03aded32b907de9cd2
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is bound at branch time to the tip of `main` after PR #67 (numbers-reconcile, feature-34) merges; this
 chain waits for it so that nothing is in flight alongside. Built locally beforehand on `3c60f41`; the two source files
