@@ -86,7 +86,10 @@ export function CostsPage() {
   const centGap = Math.round(Math.abs(sum('estimatedUsd') - totalEstimatedUsd) * 100);
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
   const windowIds = countModelIds(mergeModelRows(ov.byModel));
-  const allTimeCounts = allTime ? modelCounts(allTime.byModel) : null;
+  // All time includes every window, so every id seen in the window counts too. /v1/costs can list fewer ids
+  // than the PROJDAY rollups behind the window (qa F-PR69-005: 90d said 24/33, all-time said 20/29).
+  // Count the union so the longer window is never smaller.
+  const allTimeCounts = allTime ? modelCounts([...allTime.byModel, ...ov.byModel]) : null;
   const footer = (allTimeCounts
     ? `All time: ${fmtUsd(allTime!.totalEstimatedUsd)} across ${plural(allTimeCounts.models, 'model')} (${plural(allTimeCounts.ids, 'id')}, counted the same way as the tile above) · the same rate card prices the By project and Overview pages, so their totals reconcile with this one.`
     : 'All-time total unavailable — the costs endpoint did not respond.')
