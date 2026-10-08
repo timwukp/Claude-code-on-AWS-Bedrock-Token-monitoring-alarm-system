@@ -8,7 +8,7 @@ import { countModelIds, mergeModelRows } from '../lib/model-names';
 import { useTimeRange } from '../lib/time-range';
 
 type ModelRow = OverviewResponse['byModel'][number];
-interface MergedRow { canonical: string; friendly: string; regions: string[]; ids: string[]; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheSavingsUsd: number | null; estimatedUsd: number }
+interface MergedRow { canonical: string; friendly: string; regions: string[]; ids: string[]; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; cacheSavingsUsd: number | null; cacheReadUsd: number | null; cacheWriteUsd: number | null; estimatedUsd: number }
 interface AllTime { byModel: { modelId: string; estimatedUsd?: number }[]; totalEstimatedUsd: number }
 // One definition of "model" and "id" for the tile and the footer: rows merged by canonical model after ARN→id
 // normalisation (qa F-PR66-001: the window said 34 ids, the all-time footer 28; F-PR66-006/F-PR67-001: a row
@@ -16,7 +16,7 @@ interface AllTime { byModel: { modelId: string; estimatedUsd?: number }[]; total
 const modelCounts = (rows: readonly { modelId: string }[]) => { const m = mergeModelRows(rows); return { models: m.length, ids: countModelIds(m) }; };
 
 const ZERO_COST_THRESHOLD = 0.01;
-type SortKey = 'estimatedUsd' | 'inputTokens' | 'outputTokens' | 'cacheReadTokens' | 'cacheSavingsUsd';
+type SortKey = 'estimatedUsd' | 'inputTokens' | 'outputTokens' | 'cacheReadTokens' | 'cacheWriteTokens' | 'cacheSavingsUsd' | 'cacheReadUsd' | 'cacheWriteUsd';
 
 /**
  * Estimated spend per model for the selected time range, from the same PROJDAY rollups and rate card
@@ -41,20 +41,24 @@ export function CostsPage() {
   }, [range.window]);
   useEffect(() => { api.costs().then((d) => setAllTime(d as AllTime)).catch(() => setAllTime(null)); }, []);
 
-  // Older API builds do not return cacheSavingsUsd; the column then reads "—" rather than a false zero.
+  // Older API builds do not return cacheSavingsUsd (pre feature-27) or the two cache dollar lines (pre feature-36);
+  // those columns then read "—" rather than a false zero.
   const savingsKnown = Boolean(ov && ov.byModel.every((m) => typeof m.cacheSavingsUsd === 'number'));
+  const cacheUsdKnown = Boolean(ov && ov.byModel.every((m) => typeof m.cacheReadUsd === 'number' && typeof m.cacheWriteUsd === 'number'));
 
   const merged: MergedRow[] = useMemo(() => {
     if (!ov) return [];
-    const sum = (rows: ModelRow[], k: 'inputTokens' | 'outputTokens' | 'cacheReadTokens' | 'estimatedUsd') => rows.reduce((s, r) => s + Number(r[k] ?? 0), 0);
+    const sum = (rows: ModelRow[], k: 'inputTokens' | 'outputTokens' | 'cacheReadTokens' | 'cacheWriteTokens' | 'estimatedUsd') => rows.reduce((s, r) => s + Number(r[k] ?? 0), 0);
     return mergeModelRows(ov.byModel)
       .map((g) => ({
         canonical: g.canonical, friendly: g.friendly, regions: g.regions, ids: g.ids,
         inputTokens: sum(g.rows, 'inputTokens'), outputTokens: sum(g.rows, 'outputTokens'), cacheReadTokens: sum(g.rows, 'cacheReadTokens'),
-        estimatedUsd: sum(g.rows, 'estimatedUsd'),
+        cacheWriteTokens: sum(g.rows, 'cacheWriteTokens'), estimatedUsd: sum(g.rows, 'estimatedUsd'),
         cacheSavingsUsd: savingsKnown ? g.rows.reduce((s, r) => s + Number(r.cacheSavingsUsd ?? 0), 0) : null,
+        cacheReadUsd: cacheUsdKnown ? g.rows.reduce((s, r) => s + Number(r.cacheReadUsd ?? 0), 0) : null,
+        cacheWriteUsd: cacheUsdKnown ? g.rows.reduce((s, r) => s + Number(r.cacheWriteUsd ?? 0), 0) : null,
       }));
-  }, [ov, savingsKnown]);
+  }, [ov, savingsKnown, cacheUsdKnown]);
 
   if (error) return <EmptyState kind="error" title="Costs could not be loaded" detail={error} action={{ label: 'Retry', onClick: () => location.reload() }} />;
   if (!ov) return <EmptyState kind="loading" title={`Loading costs for the ${range.label.toLowerCase()}…`} />;
@@ -73,8 +77,9 @@ export function CostsPage() {
   const toggleSort = (key: SortKey) => setSort((s) => (s.key === key ? { key, dir: (s.dir * -1) as 1 | -1 } : { key, dir: -1 }));
   const caret = (key: SortKey) => (sort.key === key ? (sort.dir === -1 ? ' ▾' : ' ▴') : '');
   const ariaSort = (key: SortKey): 'ascending' | 'descending' | 'none' => (sort.key === key ? (sort.dir === -1 ? 'descending' : 'ascending') : 'none');
-  const sum = (k: Exclude<SortKey, 'cacheSavingsUsd'>) => visible.reduce((s, r) => s + r[k], 0);
+  const sum = (k: Exclude<SortKey, 'cacheSavingsUsd' | 'cacheReadUsd' | 'cacheWriteUsd'>) => visible.reduce((s, r) => s + r[k], 0);
   const sumSavings = savingsKnown ? visible.reduce((s, r) => s + (r.cacheSavingsUsd ?? 0), 0) : null;
+  const sumNullable = (k: 'cacheReadUsd' | 'cacheWriteUsd') => (cacheUsdKnown ? visible.reduce((s, r) => s + (r[k] ?? 0), 0) : null);
   const usdOrDash = (v: number | null) => (v == null ? <span className="muted" aria-label="not available">—</span> : fmtUsd(v));
 
   // Rows are rounded per model; their sum can miss the window total by a cent. Say so rather than let a reader hunt for it.
@@ -86,6 +91,13 @@ export function CostsPage() {
     ? `All time: ${fmtUsd(allTime!.totalEstimatedUsd)} across ${plural(allTimeCounts.models, 'model')} (${plural(allTimeCounts.ids, 'id')}, counted the same way as the tile above) · the same rate card prices the By project and Overview pages, so their totals reconcile with this one.`
     : 'All-time total unavailable — the costs endpoint did not respond.')
     + (centGap > 0 ? ` The shown rows sum to ${fmtUsd(sum('estimatedUsd'))}, ${plural(centGap, 'cent')} from the tile — per-model rounding${!showZero && zeroRows.length ? ` and ${plural(zeroRows.length, 'folded model')} below $${ZERO_COST_THRESHOLD.toFixed(2)}` : ''}.` : '');
+  // What the estimate does and does not price, in one place. Cache writes are the bill's largest token
+  // line and were priced at $0 until feature-36; the standard-route premium is the one line still open.
+  const pricingNote = 'Est. cost is the sum of the four billed token kinds — input, output, cache-read (0.1× input) and cache-write; the '
+    + 'two cache columns show those two lines in dollars, already inside Est. cost. Cache-write is priced at '
+    + '1.25× input for the 5-minute TTL, 2× for 1-hour, read per call from the logged response; writes whose TTL is not '
+    + 'logged are priced at the 5-minute rate. Not yet applied: the ~10% standard-route premium on us./geo and '
+    + 'inference-profile calls — treat these figures as a lower bound.';
 
   return (
     <>
@@ -122,6 +134,9 @@ export function CostsPage() {
                 <th className="num" aria-sort={ariaSort('inputTokens')}><button className="th-sort" onClick={() => toggleSort('inputTokens')}>Input tokens{caret('inputTokens')}</button></th>
                 <th className="num" aria-sort={ariaSort('outputTokens')}><button className="th-sort" onClick={() => toggleSort('outputTokens')}>Output tokens{caret('outputTokens')}</button></th>
                 <th className="num" aria-sort={ariaSort('cacheReadTokens')}><button className="th-sort" onClick={() => toggleSort('cacheReadTokens')}>Cache-read{caret('cacheReadTokens')}</button></th>
+                <th className="num" aria-sort={ariaSort('cacheWriteTokens')}><button className="th-sort" onClick={() => toggleSort('cacheWriteTokens')}>Cache-write{caret('cacheWriteTokens')}</button></th>
+                <th className="num" aria-sort={ariaSort('cacheReadUsd')}><button className="th-sort" onClick={() => toggleSort('cacheReadUsd')} disabled={!cacheUsdKnown}>Cache-read (USD){caret('cacheReadUsd')}</button></th>
+                <th className="num" aria-sort={ariaSort('cacheWriteUsd')}><button className="th-sort" onClick={() => toggleSort('cacheWriteUsd')} disabled={!cacheUsdKnown}>Cache-write (USD){caret('cacheWriteUsd')}</button></th>
                 <th className="num" aria-sort={ariaSort('cacheSavingsUsd')}><button className="th-sort" onClick={() => toggleSort('cacheSavingsUsd')} disabled={!savingsKnown}>Cache savings (USD){caret('cacheSavingsUsd')}</button></th>
                 <th className="num" aria-sort={ariaSort('estimatedUsd')}><button className="th-sort" onClick={() => toggleSort('estimatedUsd')}>Est. cost (USD){caret('estimatedUsd')}</button></th>
               </tr>
@@ -139,6 +154,9 @@ export function CostsPage() {
                   <td className="num">{fmtTokens(m.inputTokens)}</td>
                   <td className="num">{fmtTokens(m.outputTokens)}</td>
                   <td className="num muted">{fmtTokens(m.cacheReadTokens)}</td>
+                  <td className="num muted">{fmtTokens(m.cacheWriteTokens)}</td>
+                  <td className="num">{usdOrDash(m.cacheReadUsd)}</td>
+                  <td className="num">{usdOrDash(m.cacheWriteUsd)}</td>
                   <td className="num">{usdOrDash(m.cacheSavingsUsd)}</td>
                   <td className="num"><strong>{fmtUsd(m.estimatedUsd)}</strong></td>
                 </tr>
@@ -150,6 +168,9 @@ export function CostsPage() {
                 <td className="num">{fmtTokens(sum('inputTokens'))}</td>
                 <td className="num">{fmtTokens(sum('outputTokens'))}</td>
                 <td className="num muted">{fmtTokens(sum('cacheReadTokens'))}</td>
+                <td className="num muted">{fmtTokens(sum('cacheWriteTokens'))}</td>
+                <td className="num">{usdOrDash(sumNullable('cacheReadUsd'))}</td>
+                <td className="num">{usdOrDash(sumNullable('cacheWriteUsd'))}</td>
                 <td className="num">{usdOrDash(sumSavings)}</td>
                 <td className="num"><strong>{fmtUsd(sum('estimatedUsd'))}</strong></td>
               </tr>
@@ -162,6 +183,7 @@ export function CostsPage() {
           </button>
         )}
         <p className="muted" style={{ fontSize: 12, marginTop: 12, marginBottom: 0 }}>{footer}</p>
+        <p className="muted" style={{ fontSize: 12, marginTop: 8, marginBottom: 0 }}>{pricingNote}</p>
       </Panel>
     </>
   );
