@@ -1,4 +1,4 @@
-import { parseSeedJson, shouldSeed, validateProject, validateRoiConfig } from './project-registry';
+import { parseSeedJson, shouldSeed, validateProject, validateRoiConfig, profileResolvesModel } from './project-registry';
 
 describe('validateProject', () => {
   it('normalizes id/repos/identityArns to lowercase and de-dups', () => {
@@ -77,5 +77,18 @@ describe('validateRoiConfig (#14)', () => {
     expect(bad.error).toMatch(/teamSize/);
     const none = validateProject({ id: 'p1', name: 'P' }, 't');
     expect(none.project!.roi).toBeUndefined();
+  });
+});
+
+describe('profileResolvesModel (feature-36)', () => {
+  const ARN = 'arn:aws:bedrock:us-east-1:111122223333:application-inference-profile/pj21d310s69b';
+  it('is true when the cache holds a real model id', () => {
+    expect(profileResolvesModel({ arn: ARN, underlyingModelId: 'amazon.nova-micro-v1:0' })).toBe(true);
+  });
+  it('is false for a failed resolution, which stored the profile\'s own id as the model', () => {
+    expect(profileResolvesModel({ arn: ARN, underlyingModelId: 'pj21d310s69b' })).toBe(false); // normalizeModelId(arn)
+    expect(profileResolvesModel({ arn: ARN, underlyingModelId: ARN })).toBe(false);
+    expect(profileResolvesModel({ arn: ARN, underlyingModelId: '' })).toBe(false);
+    expect(profileResolvesModel({ arn: ARN })).toBe(false);
   });
 });

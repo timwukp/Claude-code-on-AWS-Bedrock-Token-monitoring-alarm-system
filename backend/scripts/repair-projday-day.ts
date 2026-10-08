@@ -27,9 +27,10 @@
  * Safety:
  *  - DRY RUN BY DEFAULT; `--apply` required.
  *  - Three assertions must hold or nothing is written: every moved project row has truth 0 (it is
- *    purely a treatment row); every per-model surplus is ≥ 0 for all four counters; and Σ surplus
+ *    purely a treatment row); every per-model surplus is ≥ 0 for every counter; and Σ surplus
  *    invocations equals EXPECT_DELTA_INV when given (the independently confirmed figure).
- *  - Only the four token counters are touched (inputTokens, outputTokens, cacheReadTokens,
+ *  - Only the token counters are touched (inputTokens, outputTokens, cacheReadTokens, the three
+ *    cacheWrite* counters since feature-36,
  *    invocations), by negative ADD. Latency attributes are never read or written.
  *  - Guarded by marker `SYSTEM#REPAIR#projday` / `<day>` with attribute_not_exists; a second run
  *    refuses. Truth rows that have no PROJDAY item are reported, not created.
@@ -53,7 +54,7 @@ const TENANT = process.env.TENANT!;
 const DAY = process.env.DAY!;
 const EXPECT = process.env.EXPECT_DELTA_INV ? Number(process.env.EXPECT_DELTA_INV) : null;
 const APPLY = process.argv.includes('--apply');
-const COUNTERS = ['inputTokens', 'outputTokens', 'cacheReadTokens', 'invocations'] as const;
+const COUNTERS = ['inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'cacheWrite5mTokens', 'cacheWrite1hTokens', 'invocations'] as const;
 type Counter = (typeof COUNTERS)[number];
 
 async function listPrefix(prefix: string): Promise<string[]> {
@@ -124,7 +125,11 @@ async function main(): Promise<void> {
   await Promise.all(Array.from({ length: Math.min(Number(process.env.CONCURRENCY ?? '12') || 12, keys.length) }, worker));
   const truth = new Map<string, Record<Counter, number>>();
   for (const a of aggregateByProjectDay(records, maps).values()) {
-    truth.set(`${a.day}#${a.projectId}#${a.modelId}`, { inputTokens: a.inputTokens, outputTokens: a.outputTokens, cacheReadTokens: a.cacheReadTokens, invocations: a.invocations });
+    truth.set(`${a.day}#${a.projectId}#${a.modelId}`, {
+      inputTokens: a.inputTokens, outputTokens: a.outputTokens, cacheReadTokens: a.cacheReadTokens,
+      cacheWriteTokens: a.cacheWriteTokens, cacheWrite5mTokens: a.cacheWrite5mTokens, cacheWrite1hTokens: a.cacheWrite1hTokens,
+      invocations: a.invocations,
+    });
   }
   const truthInv = [...truth.values()].reduce((s, t) => s + t.invocations, 0);
   console.log(`truth: ${records.length} record(s) → ${truth.size} (project, model) row(s), ${truthInv} invocation(s)`);

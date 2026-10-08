@@ -270,12 +270,27 @@ export const listIdentityHints = (): Promise<IdentityHintItem[]> => queryAll<Ide
 
 /** Build the parser's attribution maps. Negative-cached profiles are excluded on purpose so
  * requestMetadata / identity hints still apply to traffic through an untagged profile. */
+/**
+ * Whether the cache knows the model behind a profile. A failed resolution stores the profile's own
+ * (normalized) ARN as the model, which no rate matches; a successful one stores the real model id
+ * whether or not the profile carries a project tag.
+ */
+export function profileResolvesModel(p: { arn: string; underlyingModelId?: string }): boolean {
+  const m = p.underlyingModelId;
+  return !!m && m !== p.arn && !p.arn.endsWith(`/${m}`);
+}
+
 export async function loadAttributionMaps(): Promise<AttributionMaps> {
   const [profiles, hints] = await Promise.all([listProfiles(), listIdentityHints()]);
   const profileMap = new Map<string, { projectId: string; underlyingModelId: string }>();
   for (const p of profiles) {
-    if (p.projectId && p.projectId !== 'untagged') {
-      profileMap.set(p.arn, { projectId: p.projectId, underlyingModelId: p.underlyingModelId });
+    // A profile earns a map entry for EITHER thing it can tell us: the owning project (its tag) or
+    // the real model behind it (for pricing). Until feature-36 only tagged profiles were mapped, so
+    // an untagged profile's calls kept the opaque ARN as their model id and priced at $0 (qa
+    // F-PR68-002: three such profiles, every one of them resolved to a known model).
+    const tagged = !!p.projectId && p.projectId !== 'untagged';
+    if (tagged || profileResolvesModel(p)) {
+      profileMap.set(p.arn, { projectId: tagged ? p.projectId : 'untagged', underlyingModelId: p.underlyingModelId });
     }
   }
   const identityMap = new Map<string, string>();

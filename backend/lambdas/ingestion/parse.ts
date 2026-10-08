@@ -37,6 +37,69 @@ export interface InvocationRecord {
   };
   /** Service-side latency for this call, lifted out of the body by `parseLogFile`. */
   latency?: LatencySample | null;
+  /** TTL split of the cache-write tokens, lifted out of the body by `parseLogFile`; null = unknown. */
+  cacheWriteTtl?: CacheWriteTtl | null;
+}
+
+/**
+ * How many of this call's cache-write tokens were written with each TTL. Bedrock bills the two
+ * differently (1.25× vs 2× input), and the top-level `cacheWriteInputTokenCount` does not say
+ * which — only the logged response body does. `m5 + h1 === cacheWriteInputTokenCount` by
+ * construction (see `cacheWriteTtlOf`).
+ */
+export interface CacheWriteTtl {
+  m5: number;
+  h1: number;
+}
+
+/**
+ * Pull the cache-write TTL split out of a logged response body. The Anthropic body carries
+ * `usage.cache_creation.{ephemeral_5m_input_tokens, ephemeral_1h_input_tokens}` — on the object
+ * for InvokeModel, on the FIRST chunk's `message.usage` for a stream (the `message_start` event);
+ * Converse bodies carry `usage.cacheDetails[].{ttl, inputTokens}` instead. Null when the body was
+ * not logged, has no split, or the split does not sum to the record's own cache-write count — a
+ * null is "TTL unknown", which the card prices at the 5-minute rate with a 1-hour upper bound,
+ * never as zero writes.
+ */
+export function cacheWriteTtlOf(r: InvocationRecord): CacheWriteTtl | null {
+  const total = r.input?.cacheWriteInputTokenCount ?? 0;
+  if (total <= 0) return { m5: 0, h1: 0 };
+  const body = r.output?.outputBodyJson;
+  const usage = usageOf(Array.isArray(body) ? body[0] : body);
+  if (!usage) return null;
+  const nonneg = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null);
+  let m5: number | null = null;
+  let h1: number | null = null;
+  const cc = usage.cache_creation;
+  if (cc && typeof cc === 'object') {
+    m5 = nonneg((cc as Record<string, unknown>).ephemeral_5m_input_tokens);
+    h1 = nonneg((cc as Record<string, unknown>).ephemeral_1h_input_tokens);
+  } else if (Array.isArray(usage.cacheDetails)) {
+    m5 = 0; h1 = 0;
+    for (const d of usage.cacheDetails as Record<string, unknown>[]) {
+      const n = nonneg(d?.inputTokens);
+      if (n === null) return null;
+      if (d.ttl === '5m') m5 += n;
+      else if (d.ttl === '1h') h1 += n;
+      else return null;
+    }
+  }
+  if (m5 === null || h1 === null || m5 + h1 !== total) return null;
+  return { m5, h1 };
+}
+
+/** The `usage` object of one body node — at the top level (InvokeModel) or under `message` (stream). */
+function usageOf(node: unknown): Record<string, unknown> | null {
+  if (!node || typeof node !== 'object') return null;
+  const n = node as Record<string, unknown>;
+  const direct = n.usage;
+  if (direct && typeof direct === 'object') return direct as Record<string, unknown>;
+  const msg = n.message;
+  if (msg && typeof msg === 'object') {
+    const u = (msg as Record<string, unknown>).usage;
+    if (u && typeof u === 'object') return u as Record<string, unknown>;
+  }
+  return null;
 }
 
 /**
@@ -153,6 +216,31 @@ export function percentileFromBuckets(buckets: readonly number[], p: number): nu
   return null;
 }
 
+/** The three cache-write counters every rollup carries (feature-36). */
+export interface CacheWriteCounters {
+  cacheWriteTokens: number;
+  cacheWrite5mTokens: number;
+  cacheWrite1hTokens: number;
+}
+
+/**
+ * Fold one call's cache writes into an aggregate: the total always, the TTL split only when the
+ * body yielded one. An unknown split adds to the total alone, so `total − 5m − 1h` is exactly the
+ * unknown-TTL count the card prices at 5 m with a 1 h upper bound.
+ */
+export function foldCacheWrite(agg: CacheWriteCounters, r: InvocationRecord): void {
+  const total = r.input?.cacheWriteInputTokenCount ?? 0;
+  agg.cacheWriteTokens += total;
+  const ttl = r.cacheWriteTtl === undefined ? cacheWriteTtlOf(r) : r.cacheWriteTtl;
+  if (ttl) { agg.cacheWrite5mTokens += ttl.m5; agg.cacheWrite1hTokens += ttl.h1; }
+}
+
+export function mergeCacheWrite(target: CacheWriteCounters, src: CacheWriteCounters): void {
+  target.cacheWriteTokens += src.cacheWriteTokens;
+  target.cacheWrite5mTokens += src.cacheWrite5mTokens;
+  target.cacheWrite1hTokens += src.cacheWrite1hTokens;
+}
+
 /** One rolled-up bucket of usage, ready to upsert into DynamoDB. */
 export interface UsageAggregate {
   tenant: string; // requestMetadata.tenant if set, else the caller IAM ARN, else "unknown"
@@ -162,6 +250,8 @@ export interface UsageAggregate {
   outputTokens: number;
   cacheReadTokens: number;
   cacheWriteTokens: number;
+  cacheWrite5mTokens: number; // TTL split of cacheWriteTokens (feature-36); the remainder is "unknown"
+  cacheWrite1hTokens: number;
   invocations: number;
   latency: LatencyStats; // service-side latency of the calls in this bucket (#13 phase 1b)
   requestIds: Set<string>; // for idempotency / de-dup
@@ -176,8 +266,9 @@ export function parseLogFile(contents: string): InvocationRecord[] {
     try {
       const r = JSON.parse(t) as InvocationRecord;
       if (!(r.requestId && r.timestamp)) continue;
-      // Extract-then-discard: keep the one number we need from the body, never the body itself.
+      // Extract-then-discard: keep the few numbers we need from the body, never the body itself.
       r.latency = latencyOf(r);
+      r.cacheWriteTtl = cacheWriteTtlOf(r);
       if (r.output && 'outputBodyJson' in r.output) delete r.output.outputBodyJson;
       out.push(r);
     } catch {
@@ -216,23 +307,26 @@ export interface AttributionMaps {
 /**
  * Attribute one record to a project (#13). Precedence:
  *   1. application inference profile the call came through (authoritative — IAM-enforceable);
- *      also rewrites the model id to the real underlying model so rate cards match;
  *   2. caller-supplied requestMetadata.project_id;
  *   3. admin identity hint for the caller ARN;
  *   4. "untagged".
+ * The model id is a separate question from the project: a profile whose underlying model is known
+ * rewrites the model id so rate cards match, even when the profile carries no project tag — in
+ * that case the project falls through to the lower tiers (feature-36, qa F-PR68-002).
  */
 export function deriveProject(
   r: InvocationRecord,
   maps?: AttributionMaps,
 ): { projectId: string; effectiveModelId: string } {
   const viaProfile = maps?.profiles.get(r.modelId);
-  if (viaProfile) return { projectId: viaProfile.projectId, effectiveModelId: viaProfile.underlyingModelId };
+  const effectiveModelId = viaProfile?.underlyingModelId ?? r.modelId;
+  if (viaProfile && viaProfile.projectId !== 'untagged') return { projectId: viaProfile.projectId, effectiveModelId };
   const viaMetadata = r.requestMetadata?.project_id;
-  if (viaMetadata) return { projectId: viaMetadata, effectiveModelId: r.modelId };
+  if (viaMetadata) return { projectId: viaMetadata, effectiveModelId };
   const arn = r.identity?.arn?.toLowerCase();
   const viaIdentity = arn ? maps?.identities.get(arn) : undefined;
-  if (viaIdentity) return { projectId: viaIdentity, effectiveModelId: r.modelId };
-  return { projectId: 'untagged', effectiveModelId: r.modelId };
+  if (viaIdentity) return { projectId: viaIdentity, effectiveModelId };
+  return { projectId: 'untagged', effectiveModelId };
 }
 
 /** Calendar-day bucket (UTC): "2026-06-03T06:54:27Z" -> "2026-06-03". */
@@ -248,6 +342,9 @@ export interface ProjectAggregate {
   inputTokens: number;
   outputTokens: number;
   cacheReadTokens: number;
+  cacheWriteTokens: number;
+  cacheWrite5mTokens: number;
+  cacheWrite1hTokens: number;
   invocations: number;
   latency: LatencyStats;
   users: Set<string>; // distinct user_id values seen
@@ -273,6 +370,7 @@ export function aggregateByProject(
       agg = {
         tenant, projectId, modelId: effectiveModelId,
         inputTokens: 0, outputTokens: 0, cacheReadTokens: 0,
+        cacheWriteTokens: 0, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0,
         invocations: 0, latency: emptyLatencyStats(), users: new Set(), requestIds: new Set(),
       };
       map.set(key, agg);
@@ -283,6 +381,7 @@ export function aggregateByProject(
     agg.inputTokens += r.input?.inputTokenCount ?? 0;
     agg.outputTokens += r.output?.outputTokenCount ?? 0;
     agg.cacheReadTokens += r.input?.cacheReadInputTokenCount ?? 0;
+    foldCacheWrite(agg, r);
     foldLatency(agg.latency, r.latency ?? latencyOf(r));
     const userId = r.requestMetadata?.user_id;
     if (userId) agg.users.add(userId);
@@ -308,7 +407,8 @@ export function aggregate(
     if (!agg) {
       agg = {
         tenant, modelId, hourBucket: hour,
-        inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0,
+        inputTokens: 0, outputTokens: 0, cacheReadTokens: 0,
+        cacheWriteTokens: 0, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0,
         invocations: 0, latency: emptyLatencyStats(), requestIds: new Set(),
       };
       map.set(key, agg);
@@ -319,7 +419,7 @@ export function aggregate(
     agg.inputTokens += r.input?.inputTokenCount ?? 0;
     agg.outputTokens += r.output?.outputTokenCount ?? 0;
     agg.cacheReadTokens += r.input?.cacheReadInputTokenCount ?? 0;
-    agg.cacheWriteTokens += r.input?.cacheWriteInputTokenCount ?? 0;
+    foldCacheWrite(agg, r);
     foldLatency(agg.latency, r.latency ?? latencyOf(r));
   }
   return map;
@@ -334,6 +434,9 @@ export interface ProjectDayAggregate {
   inputTokens: number;
   outputTokens: number;
   cacheReadTokens: number;
+  cacheWriteTokens: number;
+  cacheWrite5mTokens: number;
+  cacheWrite1hTokens: number;
   invocations: number;
   latency: LatencyStats;
   requestIds: Set<string>;
@@ -358,6 +461,7 @@ export function aggregateByProjectDay(
       agg = {
         tenant, day, projectId, modelId: effectiveModelId,
         inputTokens: 0, outputTokens: 0, cacheReadTokens: 0,
+        cacheWriteTokens: 0, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0,
         invocations: 0, latency: emptyLatencyStats(), requestIds: new Set(),
       };
       map.set(key, agg);
@@ -368,6 +472,7 @@ export function aggregateByProjectDay(
     agg.inputTokens += r.input?.inputTokenCount ?? 0;
     agg.outputTokens += r.output?.outputTokenCount ?? 0;
     agg.cacheReadTokens += r.input?.cacheReadInputTokenCount ?? 0;
+    foldCacheWrite(agg, r);
     foldLatency(agg.latency, r.latency ?? latencyOf(r));
   }
   return map;
@@ -393,7 +498,9 @@ export function detectRunaways(
   records: readonly InvocationRecord[],
   maps: AttributionMaps | undefined,
   thresholdUsd: number,
-  priceUsd: (modelId: string, input: number, output: number, cacheRead: number) => number,
+  priceUsd: (
+    modelId: string, input: number, output: number, cacheRead: number, cacheWrite: CacheWriteCounters,
+  ) => number,
 ): RunawayHit[] {
   if (!(thresholdUsd > 0)) return [];
   const hits: RunawayHit[] = [];
@@ -402,11 +509,14 @@ export function detectRunaways(
     if (seen.has(r.requestId)) continue;
     seen.add(r.requestId);
     const { projectId, effectiveModelId } = deriveProject(r, maps);
+    const cw: CacheWriteCounters = { cacheWriteTokens: 0, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0 };
+    foldCacheWrite(cw, r);
     const usd = priceUsd(
       effectiveModelId,
       r.input?.inputTokenCount ?? 0,
       r.output?.outputTokenCount ?? 0,
       r.input?.cacheReadInputTokenCount ?? 0,
+      cw,
     );
     if (usd > thresholdUsd) {
       hits.push({
