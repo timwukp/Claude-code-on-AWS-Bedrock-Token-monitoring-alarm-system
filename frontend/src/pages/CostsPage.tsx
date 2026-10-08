@@ -29,6 +29,7 @@ export function CostsPage() {
   const range = useTimeRange([7, 30, 90, 'mtd']);
   const [ov, setOv] = useState<OverviewResponse | null>(null);
   const [allTime, setAllTime] = useState<AllTime | null>(null);
+  const [widest, setWidest] = useState<OverviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'estimatedUsd', dir: -1 });
   const [showZero, setShowZero] = useState(false);
@@ -40,6 +41,9 @@ export function CostsPage() {
     return () => { cancelled = true; };
   }, [range.window]);
   useEffect(() => { api.costs().then((d) => setAllTime(d as AllTime)).catch(() => setAllTime(null)); }, []);
+  // The widest selectable window is fetched once, whatever the selection, so the all-time union is
+  // window-independent and never smaller than any window's tile (qa F-PR69-005).
+  useEffect(() => { api.overview(90).then(setWidest).catch(() => setWidest(null)); }, []);
 
   // Older API builds do not return cacheSavingsUsd (pre feature-27) or the two cache dollar lines (pre feature-36);
   // those columns then read "—" rather than a false zero.
@@ -88,8 +92,9 @@ export function CostsPage() {
   const windowIds = countModelIds(mergeModelRows(ov.byModel));
   // All time includes every window, so every id seen in the window counts too. /v1/costs can list fewer ids
   // than the PROJDAY rollups behind the window (qa F-PR69-005: 90d said 24/33, all-time said 20/29).
-  // Count the union so the longer window is never smaller.
-  const allTimeCounts = allTime ? modelCounts([...allTime.byModel, ...ov.byModel]) : null;
+  // Count the union with the widest window (not the selected one) so the figure does not move with the
+  // selector and is never smaller than any window.
+  const allTimeCounts = allTime ? modelCounts([...allTime.byModel, ...(widest?.byModel ?? []), ...ov.byModel]) : null;
   const footer = (allTimeCounts
     ? `All time: ${fmtUsd(allTime!.totalEstimatedUsd)} across ${plural(allTimeCounts.models, 'model')} (${plural(allTimeCounts.ids, 'id')}, counted the same way as the tile above) · the same rate card prices the By project and Overview pages, so their totals reconcile with this one.`
     : 'All-time total unavailable — the costs endpoint did not respond.')

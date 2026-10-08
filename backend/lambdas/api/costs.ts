@@ -34,13 +34,22 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Rows keyed by an inference-profile ARN resolve to their model here (qa F-PR69-004), the way the
     // aggregator resolves them at ingest since feature-36; an unreadable cache leaves ids as stored.
     const profiles = await profileModelMap();
-    const items: TokenCounts[] = (res.Items ?? []).map((i) => ({
-      modelId: profiles.get(String(i.modelId ?? i.sk ?? '')) ?? String(i.modelId ?? i.sk ?? ''),
+    // Rows may store the bare profile id while the map is keyed by full ARN (or vice versa): also match on the id suffix.
+    const byProfileId = new Map<string, string>();
+    profiles.forEach((v, k) => byProfileId.set(String(k).split('/').pop()!.toLowerCase(), v));
+    const resolveModel = (raw: string) => profiles.get(raw) ?? byProfileId.get(raw.split('/').pop()!.toLowerCase()) ?? raw;
+    // qa F-PR69-006: rows whose token counters are all zero must not be listed or counted in
+    // 'Models used'. Check every numeric counter (input/output/cache-read and every
+    // cache-write field from cacheWriteOf), so a row with only cache-write usage is still kept.
+    const hasUsage = (t: TokenCounts) =>
+      Object.entries(t).some(([k, v]) => k !== 'modelId' && Number(v) > 0);
+    const items: TokenCounts[] = (res.Items ?? []).map((i): TokenCounts => ({
+      modelId: resolveModel(String(i.modelId ?? i.sk ?? '')),
       inputTokens: Number(i.inputTokens ?? 0),
       outputTokens: Number(i.outputTokens ?? 0),
       cacheReadTokens: Number(i.cacheReadTokens ?? 0),
       ...cacheWriteOf(i),
-    }));
+    })).filter(hasUsage);
 
     if (modelId) {
       const match = items.find((i) => normalizeModelId(i.modelId) === normalizeModelId(modelId));
