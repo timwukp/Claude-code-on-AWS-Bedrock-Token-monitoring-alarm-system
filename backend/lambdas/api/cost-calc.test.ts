@@ -79,7 +79,7 @@ describe('summarizeCosts', () => {
 describe('point-release rates sit above their family row', () => {
   // AWS Price List, AmazonBedrockFoundationModels, us-east-1, Global standard, per MTok.
   it.each([
-    ['global.anthropic.claude-sonnet-5-5', 2, 10, 0.2],
+    ['global.anthropic.claude-sonnet-5-5', 2, 10, 0.1], // cache read 0.05× since the 2026-10-01 list term
     ['us.anthropic.claude-sonnet-5-20260801-v1:0', 2, 10, 0.2],
     ['global.anthropic.claude-opus-5-5', 4, 20, 0.2],
     ['global.anthropic.claude-fable-5-1', 10, 50, 0.25],

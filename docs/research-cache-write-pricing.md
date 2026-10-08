@@ -41,13 +41,15 @@ consequential error to catch: there are two primary sources, both machine-readab
   | Fable 5 | 10 | 50 | 1.00 | 12.50 | 20.00 |
   | Opus 5.5 | 4 | 20 | 0.20 | 5.00 | 8.00 |
   | Opus 5 / Opus 4.8 | 5 | 25 | 0.50 | 6.25 | 10.00 |
-  | Sonnet 5.5 / Sonnet 5 | 2 | 10 | 0.20 | 2.50 | 4.00 |
+  | Sonnet 5.5 | 2 | 10 | 0.10 (0.20 before the 2026-10-01 term) | 2.50 | 4.00 |
+  | Sonnet 5 | 2 | 10 | 0.20 | 2.50 | 4.00 |
   | Sonnet 4.6 | 3 | 15 | 0.30 | 3.75 | 6.00 |
   | Haiku 4.5 | 1 | 5 | 0.10 | 1.25 | 2.00 |
   | Nova Micro | 0.035 | 0.14 | 0.00875 | 0 | 0 |
 
-  Cache write is **1.25 × input (5-minute TTL) and 2 × input (1-hour TTL) on every Claude model**. All 33 input /
-  output / cache-read rates already on the card matched the list to the cent.
+  Cache write is **1.25 × input (5-minute TTL) and 2 × input (1-hour TTL) on every Claude model**. 32 of the 33 input /
+  output / cache-read rates already on the card matched the list to the cent; Sonnet 5.5's cache read moved from $0.20
+  to $0.10 in the list term effective 2026-10-01 and was corrected here (the peer's drift check caught it).
 
 - **Cost Explorer** names the kind and the route in the usage type:
   `USE1-anthropic.claude-<model>-mantle-cache-write-tokens-standard` (older models:

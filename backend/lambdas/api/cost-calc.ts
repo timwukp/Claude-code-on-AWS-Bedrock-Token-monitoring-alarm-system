@@ -62,7 +62,9 @@ export const RATE_CARD: ModelRate[] = [
   rate('opus-5-5', 0.000004, 0.00002, 0.0000002),
   rate('opus-4-8', 0.000005, 0.000025, 0.0000005),
   rate('opus', 0.000005, 0.000025, 0.0000005),
-  rate('sonnet-5-5', 0.000002, 0.00001, 0.0000002),
+  // sonnet-5-5 cache read is $0.10/MTok (0.05× input, like opus-5-5) since the 2026-10-01 price-list term;
+  // it read $0.20 until then. Caught by the peer's drift check two days before merge; verified 2026-10-08.
+  rate('sonnet-5-5', 0.000002, 0.00001, 0.0000001),
   rate('sonnet-5', 0.000002, 0.00001, 0.0000002),
   rate('sonnet', 0.000003, 0.000015, 0.0000003),
   rate('haiku', 0.000001, 0.000005, 0.0000001),

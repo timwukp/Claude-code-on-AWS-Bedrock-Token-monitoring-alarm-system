@@ -58,7 +58,9 @@
 | `parseLogFile` skips the lift | 5 |
 | `deriveProject` returns an untagged profile outright (old behaviour) | 2 |
 
-## Rates — AWS Price List, read 2026-10-05 and independently re-read 2026-10-06 (USD per MTok)
+## Rates — AWS Price List, read 2026-10-05 and independently re-read 2026-10-06 and 10-08 (USD per MTok)
+`sonnet-5-5` cache read corrected $0.20 → **$0.10** (0.05× input; list term effective 2026-10-01, verified against the
+Price List API on 10-08 — the first drift the peer's rate-card check caught in the wild).
 Cache write is 1.25 × input (5-minute TTL) and 2 × input (1-hour) on every Claude row; e.g. `fable-5-1` 12.50 / 20.00,
 `opus-5-5` 5.00 / 8.00, `sonnet-4-6` 3.75 / 6.00, `haiku` 1.25 / 2.00. `nova-micro` 0.035 / 0.14 / 0.00875 / 0 / 0
 (`AmazonBedrock`, `USE1-NovaMicro-*`). `gpt-5.6-sol` cache write 1.5625 / 1.5625 (1.25× input, one 30-minute TTL —
