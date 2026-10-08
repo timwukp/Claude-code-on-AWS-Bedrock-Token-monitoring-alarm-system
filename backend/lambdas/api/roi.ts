@@ -19,6 +19,7 @@ import { isAdmin } from '../shared/admin';
 import { computeDora } from '../dora/dora-calc';
 import * as doraStore from '../dora/store';
 import * as registry from '../shared/project-registry';
+import { cacheWriteOf } from './cost-calc';
 import { ProjdayItem, projdayRange } from './project-calc';
 import {
   RCT_BRACKET, ROI_DEFAULTS, ReferenceBands, RoiAssumptions, RoiResult, RoiWindowAggregates,
@@ -98,7 +99,7 @@ async function queryProjday(tenantId: string, now: Date, windowDays: number): Pr
         day: String(it.day ?? ''), projectId: String(it.projectId ?? 'untagged'),
         modelId: String(it.modelId ?? ''), inputTokens: Number(it.inputTokens ?? 0),
         outputTokens: Number(it.outputTokens ?? 0), cacheReadTokens: Number(it.cacheReadTokens ?? 0),
-        invocations: Number(it.invocations ?? 0),
+        ...cacheWriteOf(it), invocations: Number(it.invocations ?? 0),
       });
     }
     key = res.LastEvaluatedKey as Record<string, unknown> | undefined;

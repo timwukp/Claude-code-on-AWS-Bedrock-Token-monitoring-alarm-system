@@ -3,7 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { ok, serverError } from '../shared/response';
 import { getTenantId } from '../shared/tenant';
-import { summarizeCosts, normalizeModelId, TokenCounts } from './cost-calc';
+import { cacheWriteOf, summarizeCosts, normalizeModelId, TokenCounts } from './cost-calc';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = process.env.AGGREGATES_TABLE!;
@@ -35,11 +35,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       inputTokens: Number(i.inputTokens ?? 0),
       outputTokens: Number(i.outputTokens ?? 0),
       cacheReadTokens: Number(i.cacheReadTokens ?? 0),
+      ...cacheWriteOf(i),
     }));
 
     if (modelId) {
       const match = items.find((i) => normalizeModelId(i.modelId) === normalizeModelId(modelId));
-      if (!match) return ok({ tenantId, modelId, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, totalCost: 0, cacheSavings: 0 });
+      if (!match) return ok({ tenantId, modelId, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, totalCost: 0, cacheSavings: 0 });
       const summary = summarizeCosts([match]);
       return ok({ tenantId, modelId, ...summary });
     }

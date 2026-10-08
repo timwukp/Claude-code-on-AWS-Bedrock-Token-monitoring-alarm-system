@@ -63,3 +63,22 @@ describe('projectExprFrom / byProject attribution tiers', () => {
     expect(sql).toContain("COALESCE(m.project_name, l.requestMetadata['project_id'], 'untagged') AS project");
   });
 });
+
+describe('byProject prices cache writes (feature-36)', () => {
+  const sql = TEMPLATES.byProject('arn:aws:iam::111111111111:user/demo', 90, { modelExpr: 'l.modelId', projectExpr: null });
+  it('adds a cacheWriteInputTokenCount term priced from the card\'s 5-minute cache-write rate', () => {
+    expect(sql).toContain("SUM(COALESCE(l.input.cacheWriteInputTokenCount, 0))");
+    // fable-5-1: $12.50 per MTok = 1.25e-5 per token; the CASE must carry that rate, not the input rate
+    const cwTerm = sql.slice(sql.indexOf('cacheWriteInputTokenCount'), sql.indexOf('AS est_usd'));
+    expect(cwTerm).toContain("LIKE '%fable-5-1%' THEN 0.0000125");
+    expect(cwTerm).toContain("LIKE '%opus-4-8%' THEN 0.00000625");
+  });
+  it('still prices the other three kinds, each from its own rate column', () => {
+    const est = sql.slice(sql.indexOf('COALESCE(SUM(COALESCE(l.input.inputTokenCount'), sql.indexOf('AS est_usd'));
+    expect(est.match(/CASE WHEN/g)).toHaveLength(4);
+    expect(est).toContain("cacheReadInputTokenCount, 0)), 0) * (CASE WHEN l.modelId LIKE '%fable-5-1%' THEN 2.5e-7");
+    // derived rates render as exact decimals, not float artefacts (4e-6 × 1.25 must not become 4.999…e-6)
+    expect(est).toContain("LIKE '%opus-5-5%' THEN 0.000005 ");
+    expect(est).not.toMatch(/9999999/);
+  });
+});

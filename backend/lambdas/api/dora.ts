@@ -24,6 +24,7 @@ import { newRepoItem } from '../dora/collector';
 import { GhRepo, GithubHttpError, createGithubClient } from '../dora/github-client';
 import { loadGithubToken } from '../dora/secret';
 import * as store from '../dora/store';
+import { cacheWriteOf } from './cost-calc';
 import { buildProjectRows, projdayRange, DoraProjectRow, ProjdayItem } from './project-calc';
 import * as projectRegistry from '../shared/project-registry';
 import { AssistedBy, PrItem, RepoItem, SyncStatus } from '../dora/types';
@@ -312,6 +313,7 @@ async function queryProjday(tenantId: string, now: Date, windowDays: number): Pr
         inputTokens: Number(it.inputTokens ?? 0),
         outputTokens: Number(it.outputTokens ?? 0),
         cacheReadTokens: Number(it.cacheReadTokens ?? 0),
+        ...cacheWriteOf(it),
         invocations: Number(it.invocations ?? 0),
       });
     }
