@@ -153,9 +153,18 @@ Deployed Lambdas invoked directly with an API-Gateway event carrying the tenant'
 | GPT-5.6 cache-write rate | the Api deployed 10-08 05:36Z still prices GPT-5.6 writes at 0; the 1.25× row landed in the branch afterwards and needs one more code-only Api deploy (≈ $2.31 on the largest tenant's all-time total) |
 | Nova profiles (qa F-PR68-002) | new traffic resolves to `amazon.nova-micro-v1:0` and prices; the historical MODEL row keyed by one profile ARN holds 580 in / 80 out tokens and stays at $0.00 (immaterial, stated) |
 
-## Served bundle (CloudFront, invalidation completed; `assets/index-BsMPCYw_.js`)
+## Served bundle (CloudFront, invalidation completed; `assets/index-D9phSWGr.js`, replacing `index-BsMPCYw_.js`)
 Present: "Cache-write (USD)", "Cache-read (USD)", "standard-route premium", "treat these figures as a lower bound",
-`cacheWriteUsd`. Browser render not walked by hand this round (left to qa's browser run on the PR, as in #67).
+"0.025×–0.1×", `cacheWriteUsd`. Absent: "billed at 0.1×". Browser render not walked by hand this round (left to qa's
+browser run on the PR, as in #67).
+
+## qa round 1 (head `40bd781`) — 4 findings, 1 of them this chain's
+| Finding | Verdict | Action |
+|---|---|---|
+| F-PR69-001 MEDIUM `/costs`: cache read is 0.025× (Fable 5.1) and 0.05× (Opus 5.5) of input, but the tile says "billed at 0.1×" and the new note said "cache-read (0.1× input)" | **Real, and partly this chain's**: the tile copy pre-dates it, the note repeated the error. The card itself is right (Price List rates per model); the words were wrong | Tile and note now say "at each model's cache-read rate (0.025×–0.1× input)"; cost-calc.ts comments corrected the same way; frontend redeployed |
+| F-PR69-002 LOW `/costs` vs `/usage` vs `/`: 958.6k vs 958.7k output tokens (7 d), $24,829.50 vs $24,829.51 | Pre-existing. Usage reads hourly USAGE items, Cost/Overview read daily PROJDAY items, so a window's edge hour sits on different sides; the cent gap is per-model rounding, which the footer already states | Out of this plan; left as stated |
+| F-PR69-003 LOW `/dora` lead-time axis tick "25h" | Pre-existing; `DoraPage.tsx` is not in this plan | Left for a DORA chain |
+| F-PR69-004 LOW `/costs`, `/latency`: three profile ids shown as "Unknown", one with 580 / 80 tokens at $0.00 | Known and stated above: historical MODEL rows keyed by the profile ARN; new traffic resolves to Nova Micro (this chain). The names come from `lib/model-names.ts`, which belongs to the peer's chain | Historical rows left ($0.00002 of tokens); naming handed to the peer |
 
 ## Known limits, stated rather than fixed
 - Standard-route premium (×1.1) not applied — separate chain; the Cost page says "lower bound".

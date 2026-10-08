@@ -93,7 +93,10 @@ export function CostsPage() {
     + (centGap > 0 ? ` The shown rows sum to ${fmtUsd(sum('estimatedUsd'))}, ${plural(centGap, 'cent')} from the tile — per-model rounding${!showZero && zeroRows.length ? ` and ${plural(zeroRows.length, 'folded model')} below $${ZERO_COST_THRESHOLD.toFixed(2)}` : ''}.` : '');
   // What the estimate does and does not price, in one place. Cache writes are the bill's largest token
   // line and were priced at $0 until feature-36; the standard-route premium is the one line still open.
-  const pricingNote = 'Est. cost is the sum of the four billed token kinds — input, output, cache-read (0.1× input) and cache-write; the '
+  // Cache-read rates are per model: 0.1× input on most Claude rows, 0.05× on Opus 5.5 / Sonnet 5.5, 0.025× on
+  // Fable 5.1 / Mythos 5.1 (AWS Price List). The page must not state one multiple as if it held for all (qa F-PR69-001).
+  const pricingNote = 'Est. cost is the sum of the four billed token kinds — input, output, cache-read (at each model\'s cache-read rate, '
+    + '0.025×–0.1× of its input rate) and cache-write; the '
     + 'two cache columns show those two lines in dollars, already inside Est. cost. Cache-write is priced at '
     + '1.25× input for the 5-minute TTL, 2× for 1-hour, read per call from the logged response; writes whose TTL is not '
     + 'logged are priced at the 5-minute rate. Not yet applied: the ~10% standard-route premium on us./geo and '
@@ -117,7 +120,7 @@ export function CostsPage() {
           value={String(merged.length)}
           definition={`${windowLabel} · ${windowIds !== merged.length ? `${plural(windowIds, 'distinct id')} — regional variants and inference-profile ARNs of one model merged` : 'one id per model'}`} />
         <KpiTile label="Cache-read tokens" helpId="cost.cache-read-tokens" accent="var(--accent-amber)"
-          value={fmtTokens(totalCacheRead)} definition={`${windowLabel} · billed at 0.1×`} />
+          value={fmtTokens(totalCacheRead)} definition={`${windowLabel} · billed at each model's cache-read rate (0.025×–0.1× input)`} />
       </div>
 
       <Panel title="Spend by model" helpId="cost.estimated-spend"

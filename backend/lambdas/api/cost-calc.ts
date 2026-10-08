@@ -2,7 +2,8 @@
  * Pure cost-calculation logic (no AWS calls) so it can be unit-tested offline.
  *
  * A Bedrock bill has FOUR token lines per model, and the card must price all four:
- *   input · output · cache read (0.1× input) · cache write (1.25× input for a 5-minute TTL,
+ *   input · output · cache read (per model: 0.1× input on most Claude rows, 0.05× on Opus 5.5 / Sonnet 5.5,
+ *   0.025× on Fable 5.1 / Mythos 5.1) · cache write (1.25× input for a 5-minute TTL,
  *   2× input for a 1-hour TTL — the two `cacheWrite*PerToken` rates below).
  * Until feature-36 the card priced no cache writes at all; on this account's Jun–Oct bill that line
  * was the LARGEST of the four (36.9%), so every total shown was roughly half the invoice.
@@ -130,7 +131,7 @@ export interface ModelCost {
   estimatedUsd: number;
   /** `estimatedUsd` with the unknown-TTL writes priced at the 1-hour rate. */
   estimatedUsdUpperBound: number;
-  /** What the cache reads cost (the 0.1× line). */
+  /** What the cache reads cost (the cache-read line, at the model's own cache-read rate). */
   cacheReadUsd: number;
   /** What the cache writes cost (the whole line, premium included). */
   cacheWriteUsd: number;
@@ -147,7 +148,7 @@ const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
 
 /**
  * Cost for one model's token counts, all four billed lines. Savings = cache-read tokens priced
- * at full input rate minus their actual 0.1× cache rate — i.e. the money prompt caching saved.
+ * at full input rate minus their actual cache-read rate — i.e. the money prompt caching saved.
  */
 export function computeModelCost(t: TokenCounts, card: ModelRate[] = RATE_CARD): ModelCost {
   const rate = matchRate(t.modelId, card);
