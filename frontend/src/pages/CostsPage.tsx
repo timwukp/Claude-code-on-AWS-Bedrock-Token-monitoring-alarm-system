@@ -89,7 +89,13 @@ export function CostsPage() {
   // Rows are rounded per model; their sum can miss the window total by a cent. Say so rather than let a reader hunt for it.
   const centGap = Math.round(Math.abs(sum('estimatedUsd') - totalEstimatedUsd) * 100);
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
-  const windowIds = countModelIds(mergeModelRows(ov.byModel));
+  // "Models used" counts models that moved tokens in the window. A PROJDAY row can exist with zero tokens
+  // (calls that were throttled or returned nothing), and such a row is not a model "used" (qa F-PR69-006).
+  const hasTokens = (r: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens?: number }) =>
+    r.inputTokens + r.outputTokens + r.cacheReadTokens + (r.cacheWriteTokens ?? 0) > 0;
+  const usedRows = ov.byModel.filter(hasTokens);
+  const usedModels = mergeModelRows(usedRows).length;
+  const windowIds = countModelIds(mergeModelRows(usedRows));
   // All time includes every window, so every id seen in the window counts too. /v1/costs can list fewer ids
   // than the PROJDAY rollups behind the window (qa F-PR69-005: 90d said 24/33, all-time said 20/29).
   // Count the union with the widest window (not the selected one) so the figure does not move with the
@@ -125,8 +131,8 @@ export function CostsPage() {
             ? `${windowLabel} · ${savedPct}% lower than without caching`
             : 'not available for this time range until the API is redeployed with per-window cache savings'} />
         <KpiTile label="Models used" helpId="cost.models-used" accent="var(--accent-blue)"
-          value={String(merged.length)}
-          definition={`${windowLabel} · ${windowIds !== merged.length ? `${plural(windowIds, 'distinct id')} — regional variants and inference-profile ARNs of one model merged` : 'one id per model'}`} />
+          value={String(usedModels)}
+          definition={`${windowLabel} · ${windowIds !== usedModels ? `${plural(windowIds, 'distinct id')} — regional variants and inference-profile ARNs of one model merged` : 'one id per model'}${usedModels !== merged.length ? ` · ${plural(merged.length - usedModels, 'row')} with calls but no tokens not counted` : ''}`} />
         <KpiTile label="Cache-read tokens" helpId="cost.cache-read-tokens" accent="var(--accent-amber)"
           value={fmtTokens(totalCacheRead)} definition={`${windowLabel} · billed at each model's cache-read rate (0.025×–0.1× input)`} />
       </div>

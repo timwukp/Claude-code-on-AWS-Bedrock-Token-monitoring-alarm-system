@@ -174,3 +174,17 @@ browser run on the PR, as in #67).
   with a 1-hour bound exposed.
 - `cacheNetUsd` is emitted for the peer's `cache-cost-truth` chain, which owns the "Saved by prompt caching" copy;
   this chain does not reword it.
+
+## qa round 2 (head `e893d7a`, after two auto-fix rounds by the bug-fix bot) — 4 findings
+The bot's commit `e893d7a` is kept as pushed (project rule): in `costs.ts` it matches profile ids by ARN suffix as well
+as by full ARN and drops all-zero rows before pricing (redundant with `summarizeCosts`, harmless); in `CostsPage.tsx` it
+counts the all-time ids as a union with the widest window so the footer never reads smaller than a window's tile
+(F-PR69-005, which it marked FIXED).
+
+| Finding | Verdict | Action |
+|---|---|---|
+| F-PR69-004 `/costs` three "Unknown" profile rows | Already fixed server-side in `8242873`; the qa run (09:06Z) predates the owner's Api deploy of that build (10-09). Live after the deploy: the opaque row is gone and `amazon.nova-micro-v1:0` carries its 582 / 82 tokens at $0.000032; 28 model rows (was 29) | Will re-verify on the next qa run. `/latency` rows are CloudWatch `ModelId` dimensions, outside this chain |
+| F-PR69-006 LOW `/costs` "Models used" counts rows with zero tokens | Real: a PROJDAY row can exist for calls that moved no tokens (throttled, empty), and the tile counted it | The tile and its id count now use only rows with tokens in the window, and say how many token-less rows were left out |
+| F-PR69-003 `/dora` axis tick · F-PR69-007 `/usage` category x-axis | Pre-existing, outside this plan | Left for their pages' chains |
+
+Served bundle after this round: `assets/index-DDdmlPO1.js`.
