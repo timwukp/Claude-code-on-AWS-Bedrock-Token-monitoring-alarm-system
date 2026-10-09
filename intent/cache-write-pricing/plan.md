@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** ca0ba29260aa005b26b1afdbaa72229e193b69c6
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #68 (cost-id-consistency, feature-35) merged; this chain waited for it so
 nothing was in flight alongside. The peer's next chain (`cache-cost-truth`) queues behind this one and reads the fields

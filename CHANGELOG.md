@@ -6,6 +6,25 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Fixed — the dashboard says what caching costs, and can no longer stop saying it (feature-37)
+- **Copy and docs no longer call prompt caching a discount.** Cache reads are billed at 0.1× input, cache writes at
+  1.25× (2× for a 1-hour cache); every sentence that said "billing discounts them", "the cheapest tokens you can buy"
+  or "~89 % lower than full input pricing" now names both halves. The Cost tile **"Saved by prompt caching"** becomes
+  **"Net effect of prompt caching"** — read savings minus the write premium, negative when caching cost more than it
+  saved — with the two dollar lines it subtracts shown beside it; the column follows. The Overview Spend token figure
+  now counts all four priced kinds, matching Usage; both freshness lines say "latest logged call … · rollups last ran …"
+  (qa F-PR68-001 read the old "Data as of … refresh every 15 min" as a stalled aggregator on a quiet night).
+- **Root cause on record:** `docs/incidents/2026-10-cache-write-omission.md` — a savings-framed feature priced the read
+  and not the write; three rollup writers copied a four-counter list; nine consumers shared one card, so every
+  cross-page reconciliation passed while every page was ~70 % low; the one external anchor read $0 in this account.
+- **Guards:** `pricing-completeness.test.ts` (every token kind the parser extracts must be priced or allow-listed with a
+  reason; red on the pre-fix tree for exactly the omission, green after), `rollup-fields.test.ts` (every writer and
+  maintenance script carries every counter; all rollup shapes carry the same set), `scripts/check-rate-card.ts` (card vs
+  AWS Price List; its first run after the fix caught a live change — Sonnet 5.5 cache read moved to $0.10/M on
+  2026-10-07/08), and `docs/RECONCILIATION.md` (monthly comparison with the bill from the payer account, the only place
+  it exists). The estimate is labelled a lower bound (~9 %) until the standard-route correction lands. (PR TBD)
+
+
 ### Fixed — prompt-cache writes are priced (feature-36)
 - **The bill's largest token line was shown as $0.** Cost Explorer for this account (2026-06-01 → 10-05): input $4,285 ·
   output $5,163 · cache read $11,666 · **cache write $12,398 (37.0%)** — and the rate card priced no cache writes. The

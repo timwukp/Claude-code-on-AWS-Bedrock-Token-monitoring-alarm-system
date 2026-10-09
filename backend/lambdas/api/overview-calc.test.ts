@@ -93,6 +93,26 @@ describe('buildOverview', () => {
     expect(r.spend.currentUsd).toBeCloseTo(8.25, 6);
   });
 
+  it('byModel rows carry the NET effect of caching, and the token figure counts cache writes (feature-37)', () => {
+    const b = windowBounds(new Date('2026-09-18T15:00:00Z'), '7');
+    const r = buildOverview([
+      { ...item('2026-09-13', 'alpha', 1_000_000), cacheReadTokens: 10_000_000, cacheWriteTokens: 4_000_000, cacheWrite5mTokens: 4_000_000 },
+    ], b, new Map(), CARD);
+    // reads saved 10M × ($1 − $0.1)/M = $9; writes cost a premium of 4M × ($1.25 − $1)/M = $1 → net +$8
+    expect(r.byModel[0].cacheNetUsd).toBeCloseTo(8, 6);
+    // the Spend tile's token figure is every priced kind: 1M input + 10M cache read + 4M cache write
+    expect(r.spend.tokens).toBe(15_000_000);
+  });
+
+  it('net effect goes negative when a workload writes more than it re-reads', () => {
+    const b = windowBounds(new Date('2026-09-18T15:00:00Z'), '7');
+    const r = buildOverview([
+      { ...item('2026-09-13', 'alpha', 0), cacheReadTokens: 1_000_000, cacheWriteTokens: 8_000_000, cacheWrite5mTokens: 8_000_000 },
+    ], b, new Map(), CARD);
+    // saved 1M × $0.9/M = $0.90; premium 8M × $0.25/M = $2.00 → net −$1.10
+    expect(r.byModel[0].cacheNetUsd).toBeCloseTo(-1.1, 6);
+  });
+
   it('ranks movers by absolute change and caps the list', () => {
     const items: ProjdayItem[] = [];
     for (let i = 0; i < 12; i++) items.push(item('2026-09-13', `p${i}`, (i + 1) * 1_000_000));

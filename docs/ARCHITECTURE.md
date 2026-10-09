@@ -72,7 +72,7 @@ What this architecture buys you:
   JWT and calls the API with it.
 - **Dashboard views**:
   - *Usage* — input/output tokens & invocations over time, plus a Bedrock token-quota / throttle panel.
-  - *Cost* — estimated spend (per-model rate card) with a prompt-cache savings KPI.
+  - *Cost* — estimated spend (per-model rate card over input, output, cache-read and cache-write tokens) with a net-effect-of-caching KPI.
   - *By Project* — per-project/user attribution with a Fast (DynamoDB) / Full (Athena + names) toggle.
   - *Governance* — Bedrock budget (limit / actual / forecast) and enforcement posture (Budget
     Action hard-stop, auto-containment mode).

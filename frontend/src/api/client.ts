@@ -185,6 +185,8 @@ export interface OverviewResponse {
     estimatedUsd: number; cacheSavingsUsd?: number;
     /** The bill's two cache lines in dollars, both inside estimatedUsd (feature-36). */
     cacheReadUsd?: number; cacheWriteUsd?: number;
+    /** Read savings − cache-write premium; negative when caching cost more than it saved (feature-37). */
+    cacheNetUsd?: number;
   }[];
   movers: { projectId: string; name: string | null; currentUsd: number; priorUsd: number; deltaUsd: number; deltaPct: number | null }[];
   coverage: { firstDayWithData: string | null; partial: boolean };

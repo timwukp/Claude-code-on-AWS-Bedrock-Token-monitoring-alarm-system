@@ -66,7 +66,7 @@ export function OverviewPage() {
           value={ov ? fmtUsd(ov.spend.currentUsd) : ''}
           delta={ov && ov.spend.deltaPct != null ? { value: ov.spend.deltaPct, unit: 'pct', compareLabel: compare, goodDirection: 'down' } : undefined}
           sparkline={ov?.spend.daily.map((d) => d.usd)}
-          definition={ov ? `${range.label.toLowerCase()} · ${fmtTokens(ov.spend.tokens)} input + output + cache-read tokens · token-based estimate${ov.spend.deltaPct == null && ov.spend.priorUsd === 0 ? ' · no prior-period data to compare' : ''}` : undefined}
+          definition={ov ? `${range.label.toLowerCase()} · ${fmtTokens(ov.spend.tokens)} input + output + cache-read + cache-write tokens · token-based estimate · lower bound (~9%) until the standard-route correction${ov.spend.deltaPct == null && ov.spend.priorUsd === 0 ? ' · no prior-period data to compare' : ''}` : undefined}
           status={ov?.coverage.partial ? { tone: 'neutral', text: 'partial history' } : undefined} />
 
         <KpiTile label="Budget" helpId="overview.budget" link={{ to: '/governance', label: 'Governance' }}
@@ -121,7 +121,7 @@ export function OverviewPage() {
         )}
         {ov && (
           <p className="muted" style={{ fontSize: 12, marginTop: 12, marginBottom: 0 }}>
-            Data as of {ov.rollupsAsOf ? `${ov.rollupsAsOf.slice(11, 16)} UTC (${fmtAgo(ov.rollupsAsOf)})` : 'the last aggregator run'} · rollups refresh every 15 minutes · figures are token-based estimates, not the AWS bill.
+            Latest logged call {ov.rollupsAsOf ? `${ov.rollupsAsOf.slice(11, 16)} UTC (${fmtAgo(ov.rollupsAsOf)})` : 'unknown'}{ov.rollupsLastRunAt ? ` · rollups last ran ${ov.rollupsLastRunAt.slice(11, 16)} UTC (${fmtAgo(ov.rollupsLastRunAt)})` : ''} · new logs are rolled up every 15 minutes · figures are token-based estimates, not the AWS bill.
           </p>
         )}
       </Panel>

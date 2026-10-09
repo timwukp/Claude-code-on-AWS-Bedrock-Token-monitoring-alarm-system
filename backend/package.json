@@ -22,6 +22,7 @@
     "@aws-sdk/lib-dynamodb": "^3.600.0"
   },
   "devDependencies": {
+    "@aws-sdk/client-pricing": "^3.1146.0",
     "@types/aws-lambda": "^8.10.140",
     "@types/jest": "^29.5.12",
     "@types/node": "^20.14.0",

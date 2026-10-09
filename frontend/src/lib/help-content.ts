@@ -30,7 +30,8 @@ export const HELP = {
     caveats: [
       'A token-based estimate: credits, refunds, private pricing and rounding make the AWS bill differ. The Governance tile shows what AWS Budgets has billed.',
       'When per-project rollups start inside the prior period the tile says “partial history”: the comparison is against an incomplete baseline.',
-      'The token figure is input + output + cache-read tokens from the per-project rollups. The Usage page also counts prompt-cache *writes*, so its total for the same window is larger by exactly that amount.',
+      'The token figure is input + output + cache-read + cache-write tokens from the per-project rollups — every kind the rate card prices, the same set the Usage page counts.',
+      'Until the standard-route (us./geo cross-region, about ×1.1) correction lands, the estimate is a lower bound of roughly 9 % — the Cost page states this beside its total.',
     ],
   },
   'overview.budget': {
@@ -60,7 +61,7 @@ export const HELP = {
     what: 'Tokens sent to a model as prompt, summed over the selected window.',
     why: 'Input is the larger share of most bills; a jump here usually means longer prompts or more calls, not more output.',
     how: 'Hourly usage rollups from Bedrock invocation logs, billed input only — the same definition the Cost page prices.',
-    caveats: ['Prompt-cache reads and writes are counted separately (see Prompt-cache tokens); Bedrock quotas count them as input, billing discounts them.'],
+    caveats: ['Prompt-cache reads and writes are counted separately (see Prompt-cache tokens). Bedrock quotas count both as input; billing prices reads at 0.1× the input rate and writes at 1.25× (2× for a 1-hour cache) — writes are not a discount.'],
     labels: ['Input tokens'],
   },
   'usage.output-tokens': {
@@ -73,9 +74,9 @@ export const HELP = {
   'usage.cache-tokens': {
     title: 'Prompt-cache tokens',
     what: 'Tokens served from or written to the prompt cache (reads + writes).',
-    why: 'Cache reads are billed at about a tenth of the input rate; this number is the size of the discount you are getting.',
+    why: 'Reads are billed at 0.1× the input rate and writes at 1.25× (2× for a 1-hour cache), so the two halves of this number pull cost in opposite directions; the Cost page shows the net effect.',
     how: 'Cache read and write counts from the invocation log, summed. Shown separately because it would dwarf both billed series on the chart.',
-    caveats: ['Bedrock service quotas count cache traffic as input; billing discounts it — so the quota table and this KPI disagree by design.'],
+    caveats: ['Bedrock service quotas count all cache traffic as plain input; billing prices each kind at its own rate — so the quota table and this KPI disagree by design.', 'Cache writes were unpriced by this dashboard until 2026-10 (see docs/incidents/2026-10-cache-write-omission.md); every figure since then includes them.'],
     labels: ['Prompt-cache tokens'],
   },
   'usage.invocations': {
@@ -98,21 +99,29 @@ export const HELP = {
     title: 'Estimated spend',
     what: 'What the recorded token usage would cost at the per-model rate card.',
     why: 'It is the number that moves with your usage in near-real time, hours to days ahead of the AWS bill.',
-    how: 'Per-model token counts × the rate card in the repo (input, output, cache-read at 0.1×). Rolled up from the same logs as Usage.',
+    how: 'Per-model token counts × the rate card in the repo: input, output, cache-read at 0.1× of input, cache-write at 1.25× of input (2× for a 1-hour cache; writes without a logged TTL are priced at 1.25× with a 2× upper bound). Rolled up from the same logs as Usage.',
     caveats: [
       'Follows the time range in the header; the all-time total is the footer line under the table. Overview and By project use the same rollups and rate card, so the same range gives the same figure on all three pages.',
       'An estimate, not an invoice: credits, refunds, private pricing and rounding make the AWS bill differ. Reconfirm against official pricing before billing.',
       'The Governance page shows AWS Budgets’ billed figure; the two use different sources and will not match.',
+      'A lower bound until the standard-route (us./geo cross-region, about ×1.1) correction lands — expect the bill to be roughly 9 % higher. The monthly reconciliation against the payer-account bill is described in docs/RECONCILIATION.md.',
     ],
     labels: ['Estimated spend', 'Total est. cost'],
   },
-  'cost.cache-savings': {
-    title: 'Saved by prompt caching',
-    what: 'How much lower the estimate is than it would have been without prompt caching, for the selected time range.',
-    why: 'Caching is the single largest lever on Claude spend for agentic workloads; this quantifies it.',
-    how: 'Cache-read tokens in the range × (full input rate − cache-read rate), summed per model.',
-    caveats: ['Shows “—” when the API build serving this page predates per-range cache savings; the all-time figure is unaffected.'],
-    labels: ['Saved by prompt caching'],
+  'cost.cache-net': {
+    title: 'Net effect of prompt caching',
+    what: 'What prompt caching did to the estimate over the selected time range: the money cache reads saved minus the premium cache writes cost. Negative means caching cost more than it saved.',
+    why: 'Caching is the largest lever on Claude spend for agentic workloads — in both directions. A workload that writes long prefixes it rarely re-reads pays 1.25× for them and gets little back; this is the number that tells you which side you are on.',
+    how: 'Σ per model of cache-read tokens × (input rate − cache-read rate) − cache-write tokens × (cache-write rate − input rate). Both halves use the rate card; the write half uses the logged 5-minute / 1-hour split where present.',
+    caveats: ['Before 2026-10 this tile was “Saved by prompt caching” and showed the read half only — a gross figure that ignored what the writes cost (docs/incidents/2026-10-cache-write-omission.md).', 'Shows “—” when the API build serving this page predates the net figure.'],
+    labels: ['Net effect of prompt caching', 'Saved by prompt caching'],
+  },
+  'cost.cache-write-tokens': {
+    title: 'Cache-write tokens',
+    what: 'Tokens written into the prompt cache in the selected range — the first pass over a prefix that later calls read back.',
+    why: 'Billed at 1.25× the input rate (2× for a 1-hour cache): the most expensive tokens on the bill per token, and the half of caching that a “savings” figure hides.',
+    how: 'cacheWriteInputTokenCount from the invocation log, summed; the 5-minute / 1-hour split comes from the logged response body where it was recorded.',
+    labels: ['Cache-write tokens'],
   },
   'cost.models-used': {
     title: 'Models used',
@@ -124,7 +133,7 @@ export const HELP = {
   'cost.cache-read-tokens': {
     title: 'Cache-read tokens',
     what: 'Tokens served from the prompt cache.',
-    why: 'They are billed at about 0.1× the input rate — the cheapest tokens you can buy.',
+    why: 'They are billed at 0.1× the input rate (0.025× on Fable 5.1 / Mythos 5.1, 0.05× on Opus 5.5) — the cheapest tokens on the bill. Every one of them was first written at 1.25×; see Cache-write tokens.',
     how: 'cacheReadInputTokens from the invocation log, summed.',
     labels: ['Cache-read tokens'],
   },
