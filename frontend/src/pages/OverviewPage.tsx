@@ -49,6 +49,9 @@ export function OverviewPage() {
   const anomsInWindow = useMemo(() => (anoms ?? []).filter((a) => detectedAt(a) >= range.fromIso), [anoms, range.fromIso]);
   const critical = anomsInWindow.filter((a) => a.severity === 'CRITICAL').length;
 
+  // Summed here from the per-model rows (which carry every priced kind) rather than read from spend.tokens,
+  // so the figure matches its own definition even on an API build whose spend.tokens predates cache writes.
+  const spendTokens = ov ? ov.byModel.reduce((n, m) => n + m.inputTokens + m.outputTokens + m.cacheReadTokens + (m.cacheWriteTokens ?? 0), 0) : 0;
   const compare = ov ? `vs ${ov.window.priorFrom.slice(5)} – ${ov.window.priorTo.slice(5)}` : `vs prior ${range.label.toLowerCase().replace('last ', '')}`;
   const bState = budgetState(budget);
   // `df.value` is merges PER DAY (see dora-calc.ts); the DORA page multiplies by 7 to show a weekly
@@ -66,7 +69,7 @@ export function OverviewPage() {
           value={ov ? fmtUsd(ov.spend.currentUsd) : ''}
           delta={ov && ov.spend.deltaPct != null ? { value: ov.spend.deltaPct, unit: 'pct', compareLabel: compare, goodDirection: 'down' } : undefined}
           sparkline={ov?.spend.daily.map((d) => d.usd)}
-          definition={ov ? `${range.label.toLowerCase()} · ${fmtTokens(ov.spend.tokens)} input + output + cache-read + cache-write tokens · token-based estimate · lower bound (~9%) until the standard-route correction${ov.spend.deltaPct == null && ov.spend.priorUsd === 0 ? ' · no prior-period data to compare' : ''}` : undefined}
+          definition={ov ? `${range.label.toLowerCase()} · ${fmtTokens(spendTokens)} input + output + cache-read + cache-write tokens · token-based estimate · lower bound (~9%) until the standard-route correction${ov.spend.deltaPct == null && ov.spend.priorUsd === 0 ? ' · no prior-period data to compare' : ''}` : undefined}
           status={ov?.coverage.partial ? { tone: 'neutral', text: 'partial history' } : undefined} />
 
         <KpiTile label="Budget" helpId="overview.budget" link={{ to: '/governance', label: 'Governance' }}

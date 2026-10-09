@@ -62,5 +62,9 @@
 **Deploy needed after merge (owner authorisation):** `Tums-dev-Api` — `OverviewFn` only (`cacheNetUsd` per model; `spend.tokens`
 counts cache writes). Until then the net tile/column read "—" and say why.
 
-## Live (after push — qa)
-_To be filled._
+## Live — qa round 1 on `820fd18` (3 findings)
+| Finding | Verdict |
+|---|---|
+| **HIGH** — Overview Spend tile says its token figure includes cache-write tokens but the number omits them | **Mine, real.** The copy got ahead of the deploy: the live `OverviewFn` predates this chain's `tokensOf`, so `spend.tokens` still summed three kinds while the definition named four. Fixed in round 2 by summing the figure on the frontend from the per-model rows (which carry `cacheWriteTokens` since #69) — the tile now matches its definition on any API build; the backend `tokensOf` change stays so the API field agrees once deployed |
+| MEDIUM — "Net effect of prompt caching" tile and "Cache net (USD)" column blank in every range | Expected until the owner-authorised `OverviewFn` deploy; the UI states the reason; the net cannot be derived client-side (needs the per-model input rate). Clears with the deploy |
+| MEDIUM — `timwukp/Java-framework-upgrade-workshop` in "sync error", Sync now does not recover it | Pre-existing (qa F-PR69-008): the repository went private and the collector's token gets 404 — an owner ops item (restore access, or remove the repo in Settings); outside both chains |
