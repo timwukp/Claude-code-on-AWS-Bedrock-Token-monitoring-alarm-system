@@ -22,7 +22,7 @@ are grouped by development milestone rather than strict semver releases.
   maintenance script carries every counter; all rollup shapes carry the same set), `scripts/check-rate-card.ts` (card vs
   AWS Price List; its first run after the fix caught a live change — Sonnet 5.5 cache read moved to $0.10/M on
   2026-10-07/08), and `docs/RECONCILIATION.md` (monthly comparison with the bill from the payer account, the only place
-  it exists). The estimate is labelled a lower bound (~9 %) until the standard-route correction lands. (PR TBD)
+  it exists). The estimate is labelled a lower bound (~9 %) until the standard-route correction lands. (PR #70)
 
 
 ### Fixed — prompt-cache writes are priced (feature-36)

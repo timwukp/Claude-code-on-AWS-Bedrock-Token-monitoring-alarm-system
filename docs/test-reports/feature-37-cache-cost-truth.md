@@ -1,6 +1,6 @@
 # Feature 37 — Cache-cost truth: copy, record, guards
 
-- **Chain:** `intent/cache-cost-truth/` · **Branch:** `feat/cache-cost-truth` off `main@daf6df6` (post-#69, feature-36) · **PR:** TBD
+- **Chain:** `intent/cache-cost-truth/` · **Branch:** `feat/cache-cost-truth` off `main@daf6df6` (post-#69, feature-36) · **PR:** #70
 - **Origin:** the 2026-10 cache-write pricing omission (`docs/incidents/2026-10-cache-write-omission.md`). Feature-36 fixed the
   pricing; this chain fixes what the product *says*, records why it happened, and adds the checks that would have caught it.
 - **Date:** 2026-10-08

@@ -44,7 +44,7 @@ results. One report per feature (mapped to a GitHub issue / PR).
 | Every figure reconciles with the one beside it (/roi day-count, /latency ranked rows + remainder + account-vs-tenant, rate card 5.x rows, /dora label, /projects Full − Fast) | — | #67 | [feature-34](./feature-34-numbers-reconcile.md) | PASS (gates + live Lambda + served bundle; qa pending) |
 | Cost page id consistency (one definition of model/id for rows, tile and footer; qa F-PR66-001/006, F-PR67-001) | — | #68 | [feature-35](./feature-35-cost-id-consistency.md) | PASS (gates + local render) |
 | Prompt-cache writes priced (1.25×/2× input by logged TTL; all four rollups + guarded backfill; Nova Micro + untagged-profile pricing, qa F-PR68-002; `rollupsLastRunAt`) | — | #69 | [feature-36](./feature-36-cache-write-pricing.md) | PASS (gates + bill reconciliation + live) |
-| Cache-cost truth (copy + docs corrected; RCA; pricing-completeness + rollup-fields tests; Price List drift script; payer reconciliation runbook) | — | TBD | [feature-37](./feature-37-cache-cost-truth.md) | PASS (gates) |
+| Cache-cost truth (copy + docs corrected; RCA; pricing-completeness + rollup-fields tests; Price List drift script; payer reconciliation runbook) | — | #70 | [feature-37](./feature-37-cache-cost-truth.md) | PASS (gates) |
 Each report records: scope, unit-test results, build/synth gates, real-AWS validation evidence,
 any defect found+fixed during validation, and a verdict. Reports are written before opening the
 PR; a feature is only PR-ready when all gates are green.
