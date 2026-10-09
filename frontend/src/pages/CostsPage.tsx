@@ -49,7 +49,12 @@ export function CostsPage() {
   // those columns then read "—" rather than a false zero.
   const savingsKnown = Boolean(ov && ov.byModel.every((m) => typeof m.cacheSavingsUsd === 'number'));
   const cacheUsdKnown = Boolean(ov && ov.byModel.every((m) => typeof m.cacheReadUsd === 'number' && typeof m.cacheWriteUsd === 'number'));
-  const netKnown = Boolean(ov && ov.byModel.every((m) => typeof m.cacheNetUsd === 'number'));
+  // A row with no cache traffic has a net of exactly 0 even when the API leaves the field out, and a
+  // numeric string still counts as a number. One such row must not blank the tile for the whole range.
+  const hasNet = (m: ModelRow) => m.cacheNetUsd != null && Number.isFinite(Number(m.cacheNetUsd));
+  const noCache = (m: ModelRow) => Number(m.cacheReadTokens ?? 0) + Number(m.cacheWriteTokens ?? 0) === 0;
+  const netKnown = Boolean(ov && ov.byModel.length > 0 && ov.byModel.some(hasNet)
+    && ov.byModel.every((m) => hasNet(m) || noCache(m)));
 
   const merged: MergedRow[] = useMemo(() => {
     if (!ov) return [];
@@ -64,7 +69,7 @@ export function CostsPage() {
         cacheWriteUsd: cacheUsdKnown ? g.rows.reduce((s, r) => s + Number(r.cacheWriteUsd ?? 0), 0) : null,
         cacheNetUsd: netKnown ? g.rows.reduce((s, r) => s + Number(r.cacheNetUsd ?? 0), 0) : null,
       }));
-  }, [ov, savingsKnown, cacheUsdKnown]);
+  }, [ov, savingsKnown, cacheUsdKnown, netKnown]);
 
   if (error) return <EmptyState kind="error" title="Costs could not be loaded" detail={error} action={{ label: 'Retry', onClick: () => location.reload() }} />;
   if (!ov) return <EmptyState kind="loading" title={`Loading costs for the ${range.label.toLowerCase()}…`} />;
@@ -136,7 +141,7 @@ export function CostsPage() {
           status={net != null && net < 0 ? { tone: 'warn', text: 'caching cost more than it saved' } : undefined}
           definition={net != null && savings != null && totalCacheWriteUsd != null
             ? `${windowLabel} · reads saved ${fmtUsd(savings)} − write premium ${fmtUsd(savings - net)} · writes billed ${fmtUsd(totalCacheWriteUsd)} in total`
-            : 'not available for this time range until the API is redeployed with the net figure'} />
+            : `${windowLabel} · net cache figure not reported for this time range`} />
         <KpiTile label="Models used" helpId="cost.models-used" accent="var(--accent-blue)"
           value={String(usedModels)}
           definition={`${windowLabel} · ${windowIds !== usedModels ? `${plural(windowIds, 'distinct id')} — regional variants and inference-profile ARNs of one model merged` : 'one id per model'}${usedModels !== merged.length ? ` · ${plural(merged.length - usedModels, 'row')} with calls but no tokens not counted` : ''}`} />
