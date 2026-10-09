@@ -74,3 +74,11 @@ describe('buildFullSql', () => {
     expect(sql.length).toBeLessThan(262_144);
   });
 });
+
+describe('buildFullSql prices cache writes at the 5-minute rate (feature-36)', () => {
+  it('adds the cacheWriteInputTokenCount term at 1.25× the reference input rate', () => {
+    const sql = buildFullSql(TENANT, []);
+    expect(sql).toContain('SUM(COALESCE(l.input.cacheWriteInputTokenCount, 0)) * 0.00000625');
+    expect(sql.indexOf('cacheWriteInputTokenCount')).toBeLessThan(sql.indexOf('AS est_usd'));
+  });
+});

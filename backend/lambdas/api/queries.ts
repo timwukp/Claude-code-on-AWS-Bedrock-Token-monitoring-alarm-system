@@ -7,7 +7,7 @@ import {
 } from '@aws-sdk/client-athena';
 import { ok, badRequest, serverError } from '../shared/response';
 import { RATE_CARD } from './cost-calc';
-import { listProfiles } from '../shared/project-registry';
+import { listProfiles, profileResolvesModel } from '../shared/project-registry';
 import { getTenantId } from '../shared/tenant';
 
 const athena = new AthenaClient({});
@@ -48,7 +48,10 @@ const tenantFilter = (tenantId: string) => {
  * SQL CASE reproducing RATE_CARD's first-substring-match semantics (cost-calc.matchRate) so
  * Athena and the Fast path price identically; unknown models fall through to 0.
  */
-function rateCase(field: 'inPerToken' | 'outPerToken' | 'cacheReadPerToken', modelExpr = 'l.modelId'): string {
+function rateCase(
+  field: 'inPerToken' | 'outPerToken' | 'cacheReadPerToken' | 'cacheWrite5mPerToken',
+  modelExpr = 'l.modelId',
+): string {
   const whens = RATE_CARD.map((r) => `WHEN ${modelExpr} LIKE '%${r.key.replace(/'/g, "''")}%' THEN ${r[field]}`).join(' ');
   return `CASE ${whens} ELSE 0 END`;
 }
@@ -64,9 +67,10 @@ const SAFE_SQL_STR = /^[A-Za-z0-9:._\/-]+$/;
 async function buildModelExpr(): Promise<string> {
   if (!process.env.TENANTS_TABLE) return 'l.modelId';
   try {
-    const profiles = (await listProfiles()).filter((p) => p.projectId !== 'untagged');
-    const whens = profiles
-      .filter((p) => SAFE_SQL_STR.test(p.arn) && SAFE_SQL_STR.test(p.underlyingModelId))
+    // Every profile whose model is known, tagged or not: the model is for pricing, the tag is for
+    // attribution (projectExprFrom), and the two are independent (feature-36, qa F-PR68-002).
+    const whens = (await listProfiles())
+      .filter((p) => profileResolvesModel(p) && SAFE_SQL_STR.test(p.arn) && SAFE_SQL_STR.test(p.underlyingModelId))
       .map((p) => `WHEN l.modelId = '${p.arn}' THEN '${p.underlyingModelId}'`);
     return whens.length ? `CASE ${whens.join(' ')} ELSE l.modelId END` : 'l.modelId';
   } catch (err) {
@@ -127,7 +131,8 @@ export const TEMPLATES: Record<string, (tenantId: string, days: number, ctx: Tem
       COALESCE(SUM(COALESCE(l.input.inputTokenCount, 0) + COALESCE(l.output.outputTokenCount, 0)), 0) AS tokens,
       COALESCE(SUM(COALESCE(l.input.inputTokenCount, 0)), 0) * (${rateCase('inPerToken', ctx.modelExpr)})
         + COALESCE(SUM(COALESCE(l.output.outputTokenCount, 0)), 0) * (${rateCase('outPerToken', ctx.modelExpr)})
-        + COALESCE(SUM(COALESCE(l.input.cacheReadInputTokenCount, 0)), 0) * (${rateCase('cacheReadPerToken', ctx.modelExpr)}) AS est_usd
+        + COALESCE(SUM(COALESCE(l.input.cacheReadInputTokenCount, 0)), 0) * (${rateCase('cacheReadPerToken', ctx.modelExpr)})
+        + COALESCE(SUM(COALESCE(l.input.cacheWriteInputTokenCount, 0)), 0) * (${rateCase('cacheWrite5mPerToken', ctx.modelExpr)}) AS est_usd
     FROM bedrock_invocation_logs l
     LEFT JOIN project_mapping m
       ON l.requestMetadata['project_id'] = m.project_id

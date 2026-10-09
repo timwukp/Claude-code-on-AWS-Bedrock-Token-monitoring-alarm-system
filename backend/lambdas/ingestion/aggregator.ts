@@ -5,8 +5,8 @@ import { DynamoDBDocumentClient, UpdateCommand, GetCommand, PutCommand } from '@
 import { gunzipSync } from 'zlib';
 import {
   parseLogFile, aggregate, aggregateByProject, aggregateByProjectDay, detectRunaways,
-  AttributionMaps, InvocationRecord, RunawayHit, UsageAggregate, ProjectAggregate, ProjectDayAggregate,
-  mergeLatency,
+  AttributionMaps, CacheWriteCounters, InvocationRecord, RunawayHit, UsageAggregate, ProjectAggregate,
+  ProjectDayAggregate, mergeCacheWrite, mergeLatency,
 } from './parse';
 import { latencyAddClause } from './latency-ddb';
 import { computeModelCost, normalizeModelId } from '../api/cost-calc';
@@ -80,7 +80,9 @@ export const handler = async (): Promise<{ filesProcessed: number; aggregatesWri
     written++;
   }
 
-  if (objects.length > 0) await setWatermark(maxKeyTime);
+  // `lastRunAt` moves on EVERY run, including one that found nothing new, so readers can tell "the
+  // aggregator is healthy and the logs are quiet" from "the aggregator has stopped" (feature-36).
+  await setWatermark(maxKeyTime);
   console.log(`Processed ${objects.length} objects, wrote ${written} aggregates.`);
   return { filesProcessed: objects.length, aggregatesWritten: written };
 };
@@ -106,7 +108,9 @@ async function loadAttributionMapsSafe(): Promise<AttributionMaps | null> {
  * negative-cached for 24h so a later tag fix heals without hammering the control plane.
  */
 async function resolveUnseenProfiles(batches: InvocationRecord[][], maps: AttributionMaps): Promise<void> {
-  const known = new Set(maps.profiles.keys());
+  // "Known" means tagged. An untagged profile may already be in the map for its model, but its tag
+  // is still worth re-checking (the negative cache below rate-limits that to once a day).
+  const known = new Set([...maps.profiles].filter(([, v]) => v.projectId !== 'untagged').map(([k]) => k));
   let negatives: Map<string, ProfileCacheItem> | null = null;
   const unseen = new Set<string>();
   for (const records of batches) {
@@ -141,11 +145,12 @@ async function resolveUnseenProfiles(batches: InvocationRecord[][], maps: Attrib
         ...(projectId === 'untagged' ? { retryAfterMs: Date.now() + RETRY_NEGATIVE_MS } : {}),
       };
       await putProfile(item);
+      // The model is usable for pricing whether or not the profile is tagged (feature-36).
+      if (wrapped) maps.profiles.set(arn, { projectId, underlyingModelId: item.underlyingModelId });
       if (projectId !== 'untagged') {
-        maps.profiles.set(arn, { projectId, underlyingModelId: item.underlyingModelId });
         console.log(`aggregator: resolved ${arn} → project=${projectId} model=${item.underlyingModelId}`);
       } else {
-        console.warn(`aggregator: profile ${arn} has no project tag — negative-cached 24h`);
+        console.warn(`aggregator: profile ${arn} has no project tag (model ${item.underlyingModelId}) — tag re-checked in 24h`);
       }
     } catch (err) {
       console.warn('aggregator: could not resolve profile', arn, (err as Error).message);
@@ -194,10 +199,20 @@ function mergeInto(target: Map<string, UsageAggregate>, src: Map<string, UsageAg
       e.requestIds.add(id);
     }
     e.inputTokens += v.inputTokens; e.outputTokens += v.outputTokens;
-    e.cacheReadTokens += v.cacheReadTokens; e.cacheWriteTokens += v.cacheWriteTokens;
-    e.invocations += v.invocations;
+    e.cacheReadTokens += v.cacheReadTokens; e.invocations += v.invocations;
+    mergeCacheWrite(e, v);
     mergeLatency(e.latency, v.latency);
   }
+}
+
+/**
+ * The cache-write counters every rollup ADDs (feature-36). Before this, only the USAGE item stored
+ * `cacheWriteTokens` and nothing stored the TTL split, so the MODEL/PROJECT/PROJDAY readers could not
+ * price the bill's largest line; `scripts/backfill-cache-write.ts` adds history onto those items.
+ */
+const CW_CLAUSE = ', cacheWriteTokens :cw, cacheWrite5mTokens :cw5, cacheWrite1hTokens :cw1h';
+function cacheWriteValues(c: CacheWriteCounters): Record<string, number> {
+  return { ':cw': c.cacheWriteTokens, ':cw5': c.cacheWrite5mTokens, ':cw1h': c.cacheWrite1hTokens };
 }
 
 /** Time-series item: pk=TENANT#<tenant>#USAGE, sk=<hour> (read by GET /v1/usage). */
@@ -207,11 +222,10 @@ async function upsertUsage(a: UsageAggregate) {
     TableName: TABLE,
     Key: { pk: `TENANT#${a.tenant}#USAGE`, sk: a.hourBucket },
     UpdateExpression:
-      'ADD inputTokens :i, outputTokens :o, cacheReadTokens :cr, cacheWriteTokens :cw, invocations :n'
-      + lat.clause,
+      'ADD inputTokens :i, outputTokens :o, cacheReadTokens :cr, invocations :n' + CW_CLAUSE + lat.clause,
     ExpressionAttributeValues: {
-      ':i': a.inputTokens, ':o': a.outputTokens, ':cr': a.cacheReadTokens,
-      ':cw': a.cacheWriteTokens, ':n': a.invocations, ...lat.values,
+      ':i': a.inputTokens, ':o': a.outputTokens, ':cr': a.cacheReadTokens, ':n': a.invocations,
+      ...cacheWriteValues(a), ...lat.values,
     },
   }));
 }
@@ -222,10 +236,11 @@ async function upsertModelRollup(a: UsageAggregate) {
   await ddb.send(new UpdateCommand({
     TableName: TABLE,
     Key: { pk: `TENANT#${a.tenant}#MODEL`, sk: a.modelId },
-    UpdateExpression: 'SET modelId = :m ADD inputTokens :i, outputTokens :o, cacheReadTokens :cr, invocations :n' + lat.clause,
+    UpdateExpression:
+      'SET modelId = :m ADD inputTokens :i, outputTokens :o, cacheReadTokens :cr, invocations :n' + CW_CLAUSE + lat.clause,
     ExpressionAttributeValues: {
       ':m': a.modelId, ':i': a.inputTokens, ':o': a.outputTokens, ':cr': a.cacheReadTokens, ':n': a.invocations,
-      ...lat.values,
+      ...cacheWriteValues(a), ...lat.values,
     },
   }));
 }
@@ -242,6 +257,7 @@ function mergeProjects(target: Map<string, ProjectAggregate>, src: Map<string, P
     for (const u of v.users) e.users.add(u);
     e.inputTokens += v.inputTokens; e.outputTokens += v.outputTokens;
     e.cacheReadTokens += v.cacheReadTokens; e.invocations += v.invocations;
+    mergeCacheWrite(e, v);
     mergeLatency(e.latency, v.latency);
   }
 }
@@ -258,11 +274,11 @@ async function upsertProjectRollup(p: ProjectAggregate) {
     Key: { pk: `TENANT#${p.tenant}#PROJECT`, sk: `${p.projectId}#${p.modelId}` },
     UpdateExpression:
       'SET projectId = :p, modelId = :m ADD inputTokens :i, outputTokens :o, cacheReadTokens :cr, invocations :n'
-      + lat.clause + (users.length ? ', userSet :u' : ''),
+      + CW_CLAUSE + lat.clause + (users.length ? ', userSet :u' : ''),
     ExpressionAttributeValues: {
       ':p': p.projectId, ':m': p.modelId,
       ':i': p.inputTokens, ':o': p.outputTokens, ':cr': p.cacheReadTokens, ':n': p.invocations,
-      ...lat.values, ...(users.length ? { ':u': new Set(users) } : {}),
+      ...cacheWriteValues(p), ...lat.values, ...(users.length ? { ':u': new Set(users) } : {}),
     },
   }));
 }
@@ -278,6 +294,7 @@ function mergeProjectDays(target: Map<string, ProjectDayAggregate>, src: Map<str
     }
     e.inputTokens += v.inputTokens; e.outputTokens += v.outputTokens;
     e.cacheReadTokens += v.cacheReadTokens; e.invocations += v.invocations;
+    mergeCacheWrite(e, v);
     mergeLatency(e.latency, v.latency);
   }
 }
@@ -293,12 +310,12 @@ async function upsertProjectDayRollup(d: ProjectDayAggregate) {
     Key: { pk: `TENANT#${d.tenant}#PROJDAY`, sk: `${d.day}#${d.projectId}#${d.modelId}` },
     UpdateExpression:
       'SET #day = :d, projectId = :p, modelId = :m ADD inputTokens :i, outputTokens :o, cacheReadTokens :cr, invocations :n'
-      + lat.clause,
+      + CW_CLAUSE + lat.clause,
     ExpressionAttributeNames: { '#day': 'day' },
     ExpressionAttributeValues: {
       ':d': d.day, ':p': d.projectId, ':m': d.modelId,
       ':i': d.inputTokens, ':o': d.outputTokens, ':cr': d.cacheReadTokens, ':n': d.invocations,
-      ...lat.values,
+      ...cacheWriteValues(d), ...lat.values,
     },
   }));
 }
@@ -306,9 +323,12 @@ async function upsertProjectDayRollup(d: ProjectDayAggregate) {
 const RUNAWAY_THRESHOLD_USD = Number(process.env.RUNAWAY_REQUEST_USD ?? '50') || 0;
 const ANOMALIES_TABLE = process.env.ANOMALIES_TABLE;
 
-function priceRecordUsd(modelId: string, input: number, output: number, cacheRead: number): number {
+function priceRecordUsd(
+  modelId: string, input: number, output: number, cacheRead: number, cacheWrite: CacheWriteCounters,
+): number {
   return computeModelCost({
     modelId: normalizeModelId(modelId), inputTokens: input, outputTokens: output, cacheReadTokens: cacheRead,
+    ...cacheWrite,
   }).estimatedUsd;
 }
 
@@ -349,5 +369,8 @@ async function getWatermark(): Promise<number> {
 }
 
 async function setWatermark(ts: number): Promise<void> {
-  await ddb.send(new PutCommand({ TableName: TABLE, Item: { pk: 'SYSTEM#WATERMARK', sk: 'aggregator', lastModified: ts } }));
+  await ddb.send(new PutCommand({
+    TableName: TABLE,
+    Item: { pk: 'SYSTEM#WATERMARK', sk: 'aggregator', lastModified: ts, lastRunAt: new Date().toISOString() },
+  }));
 }

@@ -52,6 +52,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         inputTokens: i.inputTokens ?? 0,
         cacheReadTokens: i.cacheReadTokens ?? 0,
         cacheWriteTokens: i.cacheWriteTokens ?? 0,
+        cacheWrite5mTokens: i.cacheWrite5mTokens ?? 0,
+        cacheWrite1hTokens: i.cacheWrite1hTokens ?? 0,
         outputTokens: i.outputTokens ?? 0,
         invocations: i.invocations ?? 0,
         throttleErrors: i.throttleErrors ?? 0,

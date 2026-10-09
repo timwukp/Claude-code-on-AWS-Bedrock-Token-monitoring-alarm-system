@@ -16,6 +16,10 @@ export interface ProjdayItem {
   inputTokens: number;
   outputTokens: number;
   cacheReadTokens: number;
+  /** Cache writes and their TTL split (feature-36); rows written before the backfill read as 0. */
+  cacheWriteTokens: number;
+  cacheWrite5mTokens: number;
+  cacheWrite1hTokens: number;
   invocations: number;
 }
 
@@ -93,6 +97,7 @@ export function buildProjectRows(
       inputTokens: it.inputTokens,
       outputTokens: it.outputTokens,
       cacheReadTokens: it.cacheReadTokens,
+      cacheWriteTokens: it.cacheWriteTokens, cacheWrite5mTokens: it.cacheWrite5mTokens, cacheWrite1hTokens: it.cacheWrite1hTokens,
     }, card).estimatedUsd;
     costByProject.set(it.projectId, e);
   }

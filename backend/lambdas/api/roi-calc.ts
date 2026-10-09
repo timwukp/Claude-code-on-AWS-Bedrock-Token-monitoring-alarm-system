@@ -138,6 +138,7 @@ export function weeklyFromProjday(
       inputTokens: it.inputTokens,
       outputTokens: it.outputTokens,
       cacheReadTokens: it.cacheReadTokens,
+      cacheWriteTokens: it.cacheWriteTokens, cacheWrite5mTokens: it.cacheWrite5mTokens, cacheWrite1hTokens: it.cacheWrite1hTokens,
     }, card).estimatedUsd;
     spend.set(wk, (spend.get(wk) ?? 0) + usd);
     tokens.set(wk, (tokens.get(wk) ?? 0) + (it.inputTokens ?? 0) + (it.outputTokens ?? 0));

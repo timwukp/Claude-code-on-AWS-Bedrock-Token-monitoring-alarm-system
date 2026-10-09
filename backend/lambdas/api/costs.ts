@@ -3,7 +3,8 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { ok, serverError } from '../shared/response';
 import { getTenantId } from '../shared/tenant';
-import { summarizeCosts, normalizeModelId, TokenCounts } from './cost-calc';
+import { cacheWriteOf, summarizeCosts, normalizeModelId, TokenCounts } from './cost-calc';
+import { profileModelMap } from '../shared/project-registry';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = process.env.AGGREGATES_TABLE!;
@@ -30,16 +31,29 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     // Normalization, duplicate-merging (bare id vs inference-profile ARN), and zero-usage
     // filtering all live in summarizeCosts — keep raw rows here.
-    const items: TokenCounts[] = (res.Items ?? []).map((i) => ({
-      modelId: String(i.modelId ?? i.sk ?? ''),
+    // Rows keyed by an inference-profile ARN resolve to their model here (qa F-PR69-004), the way the
+    // aggregator resolves them at ingest since feature-36; an unreadable cache leaves ids as stored.
+    const profiles = await profileModelMap();
+    // Rows may store the bare profile id while the map is keyed by full ARN (or vice versa): also match on the id suffix.
+    const byProfileId = new Map<string, string>();
+    profiles.forEach((v, k) => byProfileId.set(String(k).split('/').pop()!.toLowerCase(), v));
+    const resolveModel = (raw: string) => profiles.get(raw) ?? byProfileId.get(raw.split('/').pop()!.toLowerCase()) ?? raw;
+    // qa F-PR69-006: rows whose token counters are all zero must not be listed or counted in
+    // 'Models used'. Check every numeric counter (input/output/cache-read and every
+    // cache-write field from cacheWriteOf), so a row with only cache-write usage is still kept.
+    const hasUsage = (t: TokenCounts) =>
+      Object.entries(t).some(([k, v]) => k !== 'modelId' && Number(v) > 0);
+    const items: TokenCounts[] = (res.Items ?? []).map((i): TokenCounts => ({
+      modelId: resolveModel(String(i.modelId ?? i.sk ?? '')),
       inputTokens: Number(i.inputTokens ?? 0),
       outputTokens: Number(i.outputTokens ?? 0),
       cacheReadTokens: Number(i.cacheReadTokens ?? 0),
-    }));
+      ...cacheWriteOf(i),
+    })).filter(hasUsage);
 
     if (modelId) {
       const match = items.find((i) => normalizeModelId(i.modelId) === normalizeModelId(modelId));
-      if (!match) return ok({ tenantId, modelId, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, totalCost: 0, cacheSavings: 0 });
+      if (!match) return ok({ tenantId, modelId, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, totalCost: 0, cacheSavings: 0 });
       const summary = summarizeCosts([match]);
       return ok({ tenantId, modelId, ...summary });
     }

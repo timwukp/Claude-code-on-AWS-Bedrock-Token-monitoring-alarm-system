@@ -21,7 +21,7 @@ const project = (o: Partial<RegistryProject>): RegistryProject => ({
   projectId: 'p', name: 'P', repos: [], identityArns: [], addedBy: 't', addedAt: iso(0), ...o,
 });
 const day = (dayStr: string, projectId: string, modelId: string, inTok: number, outTok: number, cache = 0): ProjdayItem =>
-  ({ day: dayStr, projectId, modelId, inputTokens: inTok, outputTokens: outTok, cacheReadTokens: cache, invocations: 1 });
+  ({ day: dayStr, projectId, modelId, inputTokens: inTok, outputTokens: outTok, cacheReadTokens: cache, cacheWriteTokens: 0, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0, invocations: 1 });
 
 const OPTS = { windowDays: 30, now: NOW, doraTrackedRepos: new Set(['o/a', 'o/b']) };
 

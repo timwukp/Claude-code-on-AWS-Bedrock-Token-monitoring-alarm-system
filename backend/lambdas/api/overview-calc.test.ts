@@ -2,13 +2,14 @@ import { buildOverview, windowBounds } from './overview-calc';
 import { ModelRate } from './cost-calc';
 import { ProjdayItem } from './project-calc';
 
-// A flat card so expected dollars are easy to read: $1 per 1M input, $2 per 1M output, $0.1 per 1M cache.
+// A flat card so expected dollars are easy to read: $1 per 1M input, $2 per 1M output, $0.1 per 1M cache
+// read, $1.25 / $2 per 1M cache write (5 m / 1 h).
 const CARD: ModelRate[] = [
-  { key: 'claude', inPerToken: 1e-6, outPerToken: 2e-6, cacheReadPerToken: 1e-7 },
+  { key: 'claude', inPerToken: 1e-6, outPerToken: 2e-6, cacheReadPerToken: 1e-7, cacheWrite5mPerToken: 1.25e-6, cacheWrite1hPerToken: 2e-6 },
 ];
 
 const item = (day: string, projectId: string, inputTokens: number, outputTokens = 0, modelId = 'us.anthropic.claude-opus-5'): ProjdayItem =>
-  ({ day, projectId, modelId, inputTokens, outputTokens, cacheReadTokens: 0, invocations: 1 });
+  ({ day, projectId, modelId, inputTokens, outputTokens, cacheReadTokens: 0, cacheWriteTokens: 0, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0, invocations: 1 });
 
 describe('windowBounds', () => {
   it('splits a 7-day window into two equal, adjacent periods ending today', () => {
@@ -78,7 +79,18 @@ describe('buildOverview', () => {
       cached('2026-09-07', 50_000_000),   // prior — must not count
     ], b, new Map(), CARD);
     expect(r.byModel).toHaveLength(1);
-    expect(r.byModel[0]).toMatchObject({ cacheReadTokens: 20_000_000, estimatedUsd: 2, cacheSavingsUsd: 18 });
+    expect(r.byModel[0]).toMatchObject({ cacheReadTokens: 20_000_000, estimatedUsd: 2, cacheSavingsUsd: 18, cacheReadUsd: 2, cacheWriteUsd: 0 });
+  });
+
+  it('byModel rows carry the two cache lines of the bill in dollars (feature-36)', () => {
+    const b = windowBounds(new Date('2026-09-18T15:00:00Z'), '7');
+    const r = buildOverview([
+      { ...item('2026-09-13', 'alpha', 1_000_000), cacheReadTokens: 10_000_000, cacheWriteTokens: 4_000_000, cacheWrite5mTokens: 4_000_000 },
+      { ...item('2026-09-14', 'alpha', 0), cacheWriteTokens: 1_000_000 }, // TTL unknown → 5 m rate
+    ], b, new Map(), CARD);
+    // $1 input + $1 cache read (10M × $0.1/M) + $6.25 cache write (5M × $1.25/M, the unknown-TTL 1M at the 5 m rate) = $8.25
+    expect(r.byModel[0]).toMatchObject({ cacheWriteTokens: 5_000_000, cacheReadUsd: 1, cacheWriteUsd: 6.25, estimatedUsd: 8.25 });
+    expect(r.spend.currentUsd).toBeCloseTo(8.25, 6);
   });
 
   it('ranks movers by absolute change and caps the list', () => {

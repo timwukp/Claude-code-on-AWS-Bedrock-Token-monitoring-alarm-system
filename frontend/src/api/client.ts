@@ -29,6 +29,9 @@ export interface UsagePoint {
   /** Prompt-cache reads/writes — quota accounting counts these as input; billing does not. */
   cacheReadTokens?: number;
   cacheWriteTokens?: number;
+  /** TTL split of cacheWriteTokens (feature-36); hours rolled up before the backfill carry neither. */
+  cacheWrite5mTokens?: number;
+  cacheWrite1hTokens?: number;
   invocations: number;
   cost?: number; // estimated USD for this bucket (optional; older API responses omit it)
   label?: string; // short HH:MM label for chart axis (set client-side)
@@ -176,11 +179,18 @@ export interface OverviewResponse {
   tenantId: string;
   window: { kind: '7' | '30' | '90' | 'mtd'; days: number; from: string; to: string; priorFrom: string; priorTo: string };
   spend: { currentUsd: number; priorUsd: number; deltaUsd: number; deltaPct: number | null; tokens: number; priorTokens: number; daily: { day: string; usd: number; tokens: number }[] };
-  // cacheSavingsUsd is absent from API builds deployed before feature-27.
-  byModel: { modelId: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; invocations: number; estimatedUsd: number; cacheSavingsUsd?: number }[];
+  // cacheSavingsUsd is absent from API builds deployed before feature-27; cacheWriteTokens before feature-36.
+  byModel: {
+    modelId: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens?: number; invocations: number;
+    estimatedUsd: number; cacheSavingsUsd?: number;
+    /** The bill's two cache lines in dollars, both inside estimatedUsd (feature-36). */
+    cacheReadUsd?: number; cacheWriteUsd?: number;
+  }[];
   movers: { projectId: string; name: string | null; currentUsd: number; priorUsd: number; deltaUsd: number; deltaPct: number | null }[];
   coverage: { firstDayWithData: string | null; partial: boolean };
   rollupsAsOf: string | null;
+  /** When the aggregator last ran (feature-36), as distinct from the newest log it has folded in. */
+  rollupsLastRunAt?: string | null;
 }
 export interface GovernanceBudget {
   name?: string; limitUsd: number; actualUsd: number; forecastedUsd: number; timeUnit?: string;

@@ -100,3 +100,28 @@ describe('detectRunaways (#14)', () => {
     return detectRunaways(rs, maps(), threshold, price);
   }
 });
+
+describe('model resolution is independent of the project tag (feature-36, qa F-PR68-002)', () => {
+  const UNTAGGED_AIP = 'arn:aws:bedrock:us-east-1::application-inference-profile/untaggedopaque';
+  const mapsWithUntagged = (): AttributionMaps => {
+    const m = maps();
+    m.profiles.set(UNTAGGED_AIP, { projectId: 'untagged', underlyingModelId: 'amazon.nova-micro-v1:0' });
+    return m;
+  };
+  it('an untagged profile still rewrites the model id, and the project falls through to requestMetadata', () => {
+    const r = rec({ modelId: UNTAGGED_AIP, requestMetadata: { project_id: 'proj-meta' } });
+    expect(deriveProject(r, mapsWithUntagged())).toEqual({ projectId: 'proj-meta', effectiveModelId: 'amazon.nova-micro-v1:0' });
+  });
+  it('… then to the identity hint …', () => {
+    const r = rec({ modelId: UNTAGGED_AIP });
+    expect(deriveProject(r, mapsWithUntagged())).toEqual({ projectId: 'proj-alice', effectiveModelId: 'amazon.nova-micro-v1:0' });
+  });
+  it('… then to "untagged", with the model still resolved so the rate card can price it', () => {
+    const r = rec({ modelId: UNTAGGED_AIP, identity: { arn: 'arn:aws:iam:::user/Nobody' } });
+    expect(deriveProject(r, mapsWithUntagged())).toEqual({ projectId: 'untagged', effectiveModelId: 'amazon.nova-micro-v1:0' });
+  });
+  it('a tagged profile keeps winning outright', () => {
+    const r = rec({ modelId: AIP, requestMetadata: { project_id: 'proj-meta' } });
+    expect(deriveProject(r, mapsWithUntagged())).toEqual({ projectId: 'token-monitoring', effectiveModelId: 'us.anthropic.claude-sonnet-4-6' });
+  });
+});

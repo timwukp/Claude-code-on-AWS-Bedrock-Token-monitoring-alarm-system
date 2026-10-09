@@ -1,4 +1,9 @@
 /**
+ * SUPERSEDED for the cache-write counters: this script predates feature-36 and ADDs only inputTokens,
+ * outputTokens, cacheReadTokens and invocations. It has run once and is guarded against running again
+ * (SYSTEM#RETRO). Do not re-run it to repair anything — `backfill-cache-write.ts` adds the cache-write
+ * counters, and `reconcile-cache-write.ts` proves every rollup equal to USAGE.
+ *
  * One-off backfill of the PROJDAY daily project rollups (#13) from historical S3 invocation
  * logs. Safe by construction:
  *   - reads (never writes) the aggregator watermark W0, and only processes objects with
