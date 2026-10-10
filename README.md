@@ -81,8 +81,9 @@ for reasons specific to how Bedrock works:
   quotas are rate limits, not cost caps.
 - Bedrock invocation logs record the **IAM caller, but not an application-level user or project**,
   so attributing cost to a team requires additional tagging.
-- Workloads that reuse context generate large volumes of **prompt-cache reads**, billed at a
-  fraction of the standard input rate — so raw token totals overstate the real bill.
+- Workloads that reuse context generate large volumes of **prompt-cache traffic**: cache *reads* bill at
+  0.1× the input rate, but cache *writes* bill at 1.25× (2× for a 1-hour cache) — so a raw token total
+  misstates the bill in both directions, and every token kind has to be priced at its own rate.
 
 This platform addresses three recurring questions when operationalizing Bedrock cost:
 
@@ -90,14 +91,16 @@ This platform addresses three recurring questions when operationalizing Bedrock 
 |---|---|
 | **Observability** — proactively track & alert on token cost | Layered: CloudWatch metrics, AWS Cost Anomaly Detection (ML, learns a baseline instead of fixed thresholds), forecasted AWS Budgets, and forensic Athena analytics — in one dashboard. |
 | **Controls** — prevent cost spikes | AWS Budgets Action can apply a restrictive IAM policy at a spend threshold (a hard cost cap); Service Quotas bound per-model throughput; an opt-in, off-by-default automated-response path can contain an offending principal. |
-| **Operating practices** — keep cost predictable | Enable invocation logging on day one; tag requests for project/user attribution; tier models by task; and report prompt-cache reads separately so reported cost reflects the actual bill. |
+| **Operating practices** — keep cost predictable | Enable invocation logging on day one; tag requests for project/user attribution; tier models by task; and price prompt-cache reads AND writes at their own rates so reported cost reflects the actual bill. |
 
 **Scope of what the platform adds.** It does not change Bedrock's pricing or behavior. Its
 contribution is to **measure, attribute, and present** usage and cost accurately, and to wire
 native AWS governance (anomaly detection, budgets, quotas) into a single, deployable, multi-tenant
-system. Separating prompt-cache reads (priced at the documented 0.1x input rate) from standard
-input tokens yields a materially lower — and more accurate — cost figure than a raw token count
-implies; the magnitude depends on a given workload's cache-hit ratio.
+system. Pricing each token kind at its published rate — input, output, cache reads at 0.1×, cache
+writes at 1.25× or 2× — is what makes the figure accurate; a raw token count misstates it, and so did
+this platform until 2026-10, when it priced reads but not writes and understated spend by ~70 %
+(`docs/incidents/2026-10-cache-write-omission.md`). The estimate is reconciled with the bill monthly
+(`docs/RECONCILIATION.md`).
 
 ---
 

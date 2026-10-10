@@ -31,12 +31,14 @@ for Bedrock is a *layered* one. Use all of these together:
   attribution; richer per-user/per-project attribution comes from request metadata tags
   (see [`ATTRIBUTION.md`](./ATTRIBUTION.md)).
 
-> **Prompt caching changes the cost story.** Coding-agent workloads on Claude reuse large
-> contexts, generating very high **cache-read** token counts — and cache reads bill at **0.1×**
-> the base input rate. Reporting raw total tokens overstates cost; always break out cache-read
-> separately. This platform's Cost view does this, so actual spend is far lower than the
-> headline token volume suggests. This is often the most important data point when reassuring
-> stakeholders that the tool is not "expensive."
+> **Prompt caching changes the cost story — in both directions.** Coding-agent workloads on Claude
+> reuse large contexts, generating very high **cache-read** token counts, billed at **0.1×** the base
+> input rate — but every cached prefix is first **written**, and cache writes bill at **1.25×** (2× for
+> a 1-hour cache). Reporting raw total tokens misstates cost; pricing reads at a discount while
+> ignoring writes understates it (this platform did exactly that until 2026-10 — see
+> `docs/incidents/2026-10-cache-write-omission.md`). The Cost view now prices every kind and shows the
+> **net effect of caching** (read savings − write premium), which can be negative for a workload that
+> writes more than it re-reads. Use that net figure, not the gross saving, with stakeholders.
 
 ---
 
@@ -91,7 +93,8 @@ protection) and automated event-driven response.
 
 5. **Tier models by task.** Default to Haiku/Sonnet; reserve Opus for genuinely hard work.
 6. **Exploit prompt caching and report it correctly.** Claude coding agents cache automatically;
-   present cache-read tokens separately (0.1× rate) so reported cost reflects reality.
+   price cache reads (0.1×) and cache writes (1.25× / 2×) at their own rates and report the net effect,
+   so reported cost reflects the bill — then reconcile with the bill monthly (`docs/RECONCILIATION.md`).
 7. **Quarterly forensic review** via Athena — identify top consumers and discuss outliers early.
 8. **Start with showback, not chargeback.** Give each team visibility into its own usage (the
    By-Project view) to build cost awareness before introducing cross-charging.

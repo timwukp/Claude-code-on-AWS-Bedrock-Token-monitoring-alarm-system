@@ -70,7 +70,7 @@ export function UsagePage() {
              foot={`${range.label.toLowerCase()} — billed input, same definition as the Cost page`} />
         <Kpi label="Output tokens" value={fmtTokens(totalOut)} accent={role('output')} foot={`${range.label.toLowerCase()} (${daily ? 'daily' : 'hourly'} buckets)`} />
         <Kpi label="Prompt-cache tokens" value={fmtTokens(totalCache)} accent={role('cache')}
-             foot="reads + writes — quota counts these as input; billing discounts them" />
+             foot="reads + writes — quotas count both as input; billing prices reads at 0.1× input, writes at 1.25× (2× for 1-hour)" />
         <Kpi label="Invocations" value={fmtInt(totalCalls)} accent="var(--accent-amber)" foot="API calls" />
       </div>
 

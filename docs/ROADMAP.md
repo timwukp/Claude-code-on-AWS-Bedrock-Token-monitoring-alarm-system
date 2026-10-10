@@ -31,7 +31,7 @@ Ordered by impact on a cost-governance rollout.
 |---|---|---|---|
 | 1 | **Enable Cost Anomaly Detection** | ✅ | Done — the monitor (`AWS::CE::AnomalyMonitor`, DIMENSIONAL/SERVICE) and an IMMEDIATE→SNS subscription (`AWS::CE::AnomalySubscription`, `ThresholdExpression`) are now created by `AutomationStack` and validated against the real account. The manual `scripts/setup-cost-anomaly.sh` remains for reference. |
 | 2 | **Bedrock token-quota / throttle monitoring** | ✅ | Done — `GET /v1/quotas` reports throttle status (`InvocationThrottles`/client errors, with no-datapoints treated as 0) and per-model TPM/per-day quota headroom from Service Quotas; the Usage page shows a quota panel. Validated against real CloudWatch + Service Quotas data. See [`test-reports/feature-02`](./test-reports/feature-02-token-quota-monitoring.md). |
-| 3 | **Prompt-cache savings KPI** | ✅ | Done — `/v1/costs` returns `cacheSavingsUsd`; the Cost page shows a "Saved by prompt caching" KPI + per-model column. Validated on real data (~89% lower than full input pricing). See [`test-reports/feature-03`](./test-reports/feature-03-cache-savings-kpi.md). |
+| 3 | **Prompt-cache savings KPI** | ✅ | Done — `/v1/costs` returns `cacheSavingsUsd`; the Cost page shows a "Saved by prompt caching" KPI + per-model column. Gross read saving only until 2026-10 — cache writes were unpriced (incident `docs/incidents/2026-10-cache-write-omission.md`); feature-36/37 price writes and report the net effect. Earlier claim: (~89% lower than full input pricing). See [`test-reports/feature-03`](./test-reports/feature-03-cache-savings-kpi.md). |
 
 ### Tier 2 — core controls (cost-cap credibility)
 

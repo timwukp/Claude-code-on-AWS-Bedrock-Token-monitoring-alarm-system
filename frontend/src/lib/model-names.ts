@@ -53,7 +53,15 @@ export function normalizeModelId(id: string): string {
   return id.replace(/^arn:[^/]+\/(?=.)/, '');
 }
 
+/** The id of an application inference profile once its ARN prefix is stripped: 12 lower-case alphanumerics. */
+const PROFILE_ID = /^[a-z0-9]{12}$/;
+
 export function parseModelId(raw: string): ParsedModel {
+  // An opaque profile id names a route, not a model. Say so rather than invent a vendor ("Unknown Pj21…"); the model
+  // behind it is only knowable from the API's resolution (qa F-PR69-004 — three untagged profiles that route to Nova).
+  if (PROFILE_ID.test(raw)) {
+    return { raw, region: null, vendor: 'inference-profile', family: 'other', friendly: `Inference profile ${raw}`, canonical: raw };
+  }
   const regionMatch = raw.match(REGION_PREFIX);
   const region = (regionMatch?.[1] as ParsedModel['region']) ?? null;
   const rest = raw.replace(REGION_PREFIX, '');

@@ -8,7 +8,7 @@ import { countModelIds, mergeModelRows } from '../lib/model-names';
 import { useTimeRange } from '../lib/time-range';
 
 type ModelRow = OverviewResponse['byModel'][number];
-interface MergedRow { canonical: string; friendly: string; regions: string[]; ids: string[]; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; cacheSavingsUsd: number | null; cacheReadUsd: number | null; cacheWriteUsd: number | null; estimatedUsd: number }
+interface MergedRow { canonical: string; friendly: string; regions: string[]; ids: string[]; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; cacheSavingsUsd: number | null; cacheNetUsd: number | null; cacheReadUsd: number | null; cacheWriteUsd: number | null; estimatedUsd: number }
 interface AllTime { byModel: { modelId: string; estimatedUsd?: number }[]; totalEstimatedUsd: number }
 // One definition of "model" and "id" for the tile and the footer: rows merged by canonical model after ARN→id
 // normalisation (qa F-PR66-001: the window said 34 ids, the all-time footer 28; F-PR66-006/F-PR67-001: a row
@@ -49,6 +49,12 @@ export function CostsPage() {
   // those columns then read "—" rather than a false zero.
   const savingsKnown = Boolean(ov && ov.byModel.every((m) => typeof m.cacheSavingsUsd === 'number'));
   const cacheUsdKnown = Boolean(ov && ov.byModel.every((m) => typeof m.cacheReadUsd === 'number' && typeof m.cacheWriteUsd === 'number'));
+  // A row with no cache traffic has a net of exactly 0 even when the API leaves the field out, and a
+  // numeric string still counts as a number. One such row must not blank the tile for the whole range.
+  const hasNet = (m: ModelRow) => m.cacheNetUsd != null && Number.isFinite(Number(m.cacheNetUsd));
+  const noCache = (m: ModelRow) => Number(m.cacheReadTokens ?? 0) + Number(m.cacheWriteTokens ?? 0) === 0;
+  const netKnown = Boolean(ov && ov.byModel.length > 0 && ov.byModel.some(hasNet)
+    && ov.byModel.every((m) => hasNet(m) || noCache(m)));
 
   const merged: MergedRow[] = useMemo(() => {
     if (!ov) return [];
@@ -61,8 +67,9 @@ export function CostsPage() {
         cacheSavingsUsd: savingsKnown ? g.rows.reduce((s, r) => s + Number(r.cacheSavingsUsd ?? 0), 0) : null,
         cacheReadUsd: cacheUsdKnown ? g.rows.reduce((s, r) => s + Number(r.cacheReadUsd ?? 0), 0) : null,
         cacheWriteUsd: cacheUsdKnown ? g.rows.reduce((s, r) => s + Number(r.cacheWriteUsd ?? 0), 0) : null,
+        cacheNetUsd: netKnown ? g.rows.reduce((s, r) => s + Number(r.cacheNetUsd ?? 0), 0) : null,
       }));
-  }, [ov, savingsKnown, cacheUsdKnown]);
+  }, [ov, savingsKnown, cacheUsdKnown, netKnown]);
 
   if (error) return <EmptyState kind="error" title="Costs could not be loaded" detail={error} action={{ label: 'Retry', onClick: () => location.reload() }} />;
   if (!ov) return <EmptyState kind="loading" title={`Loading costs for the ${range.label.toLowerCase()}…`} />;
@@ -72,17 +79,21 @@ export function CostsPage() {
   const totalEstimatedUsd = ov.spend.currentUsd;
   const totalCacheRead = merged.reduce((s, r) => s + r.cacheReadTokens, 0);
   const savings = savingsKnown ? merged.reduce((s, r) => s + (r.cacheSavingsUsd ?? 0), 0) : null;
-  const savedPct = savings != null && totalEstimatedUsd + savings > 0 ? Math.round((savings / (totalEstimatedUsd + savings)) * 100) : null;
+  // Net = read savings − write premium. Before feature-37 the tile showed the gross read saving and called it "saved".
+  const net = netKnown ? merged.reduce((s, r) => s + (r.cacheNetUsd ?? 0), 0) : null;
+  const totalCacheWriteUsd = cacheUsdKnown ? merged.reduce((s, r) => s + (r.cacheWriteUsd ?? 0), 0) : null;
   const partial = ov.coverage.partial ? { tone: 'neutral' as const, text: 'partial history' } : undefined;
 
   const significant = merged.filter((r) => r.estimatedUsd >= ZERO_COST_THRESHOLD);
   const zeroRows = merged.filter((r) => r.estimatedUsd < ZERO_COST_THRESHOLD);
-  const visible = [...(showZero ? merged : significant)].sort((a, b) => sort.dir * ((a[sort.key] ?? 0) - (b[sort.key] ?? 0)));
+  const sortVal = (r: MergedRow) => (sort.key === 'cacheSavingsUsd' && netKnown ? r.cacheNetUsd ?? 0 : r[sort.key] ?? 0);
+  const visible = [...(showZero ? merged : significant)].sort((a, b) => sort.dir * (sortVal(a) - sortVal(b)));
   const toggleSort = (key: SortKey) => setSort((s) => (s.key === key ? { key, dir: (s.dir * -1) as 1 | -1 } : { key, dir: -1 }));
   const caret = (key: SortKey) => (sort.key === key ? (sort.dir === -1 ? ' ▾' : ' ▴') : '');
   const ariaSort = (key: SortKey): 'ascending' | 'descending' | 'none' => (sort.key === key ? (sort.dir === -1 ? 'descending' : 'ascending') : 'none');
   const sum = (k: Exclude<SortKey, 'cacheSavingsUsd' | 'cacheReadUsd' | 'cacheWriteUsd'>) => visible.reduce((s, r) => s + r[k], 0);
-  const sumSavings = savingsKnown ? visible.reduce((s, r) => s + (r.cacheSavingsUsd ?? 0), 0) : null;
+  // Never show the gross read saving under a "net" heading: without the net field the column reads "—".
+  const sumNet = netKnown ? visible.reduce((s, r) => s + (r.cacheNetUsd ?? 0), 0) : null;
   const sumNullable = (k: 'cacheReadUsd' | 'cacheWriteUsd') => (cacheUsdKnown ? visible.reduce((s, r) => s + (r[k] ?? 0), 0) : null);
   const usdOrDash = (v: number | null) => (v == null ? <span className="muted" aria-label="not available">—</span> : fmtUsd(v));
 
@@ -114,7 +125,7 @@ export function CostsPage() {
     + 'two cache columns show those two lines in dollars, already inside Est. cost. Cache-write is priced at '
     + '1.25× input for the 5-minute TTL, 2× for 1-hour, read per call from the logged response; writes whose TTL is not '
     + 'logged are priced at the 5-minute rate. Not yet applied: the ~10% standard-route premium on us./geo and '
-    + 'inference-profile calls — treat these figures as a lower bound.';
+    + 'inference-profile calls — treat these figures as a lower bound, roughly 9% under the bill. "Cache net" is read savings minus the write premium; see docs/RECONCILIATION.md for the monthly comparison with the bill.';
 
   return (
     <>
@@ -125,11 +136,12 @@ export function CostsPage() {
           sparkline={ov.spend.daily.map((d) => d.usd)}
           definition={`${windowLabel} · token-based estimate${ov.spend.deltaPct == null && ov.spend.priorUsd === 0 ? ' · no prior-period data to compare' : ''}`}
           status={partial} />
-        <KpiTile label="Saved by prompt caching" helpId="cost.cache-savings" accent="var(--accent-green)"
-          value={savings != null ? fmtUsd(savings) : '—'}
-          definition={savings != null
-            ? `${windowLabel} · ${savedPct}% lower than without caching`
-            : 'not available for this time range until the API is redeployed with per-window cache savings'} />
+        <KpiTile label="Net effect of prompt caching" helpId="cost.cache-net" accent={net != null && net < 0 ? 'var(--danger)' : 'var(--accent-green)'}
+          value={net != null ? (net < 0 ? `−${fmtUsd(-net)}` : fmtUsd(net)) : '—'}
+          status={net != null && net < 0 ? { tone: 'warn', text: 'caching cost more than it saved' } : undefined}
+          definition={net != null && savings != null && totalCacheWriteUsd != null
+            ? `${windowLabel} · reads saved ${fmtUsd(savings)} − write premium ${fmtUsd(savings - net)} · writes billed ${fmtUsd(totalCacheWriteUsd)} in total`
+            : `${windowLabel} · net cache figure not reported for this time range`} />
         <KpiTile label="Models used" helpId="cost.models-used" accent="var(--accent-blue)"
           value={String(usedModels)}
           definition={`${windowLabel} · ${windowIds !== usedModels ? `${plural(windowIds, 'distinct id')} — regional variants and inference-profile ARNs of one model merged` : 'one id per model'}${usedModels !== merged.length ? ` · ${plural(merged.length - usedModels, 'row')} with calls but no tokens not counted` : ''}`} />
@@ -154,7 +166,7 @@ export function CostsPage() {
                 <th className="num" aria-sort={ariaSort('cacheWriteTokens')}><button className="th-sort" onClick={() => toggleSort('cacheWriteTokens')}>Cache-write{caret('cacheWriteTokens')}</button></th>
                 <th className="num" aria-sort={ariaSort('cacheReadUsd')}><button className="th-sort" onClick={() => toggleSort('cacheReadUsd')} disabled={!cacheUsdKnown}>Cache-read (USD){caret('cacheReadUsd')}</button></th>
                 <th className="num" aria-sort={ariaSort('cacheWriteUsd')}><button className="th-sort" onClick={() => toggleSort('cacheWriteUsd')} disabled={!cacheUsdKnown}>Cache-write (USD){caret('cacheWriteUsd')}</button></th>
-                <th className="num" aria-sort={ariaSort('cacheSavingsUsd')}><button className="th-sort" onClick={() => toggleSort('cacheSavingsUsd')} disabled={!savingsKnown}>Cache savings (USD){caret('cacheSavingsUsd')}</button></th>
+                <th className="num" aria-sort={ariaSort('cacheSavingsUsd')}><button className="th-sort" onClick={() => toggleSort('cacheSavingsUsd')} disabled={!netKnown}>Cache net (USD){caret('cacheSavingsUsd')}</button></th>
                 <th className="num" aria-sort={ariaSort('estimatedUsd')}><button className="th-sort" onClick={() => toggleSort('estimatedUsd')}>Est. cost (USD){caret('estimatedUsd')}</button></th>
               </tr>
             </thead>
@@ -174,7 +186,7 @@ export function CostsPage() {
                   <td className="num muted">{fmtTokens(m.cacheWriteTokens)}</td>
                   <td className="num">{usdOrDash(m.cacheReadUsd)}</td>
                   <td className="num">{usdOrDash(m.cacheWriteUsd)}</td>
-                  <td className="num">{usdOrDash(m.cacheSavingsUsd)}</td>
+                  <td className="num">{usdOrDash(netKnown ? m.cacheNetUsd : null)}</td>
                   <td className="num"><strong>{fmtUsd(m.estimatedUsd)}</strong></td>
                 </tr>
               ))}
@@ -188,7 +200,7 @@ export function CostsPage() {
                 <td className="num muted">{fmtTokens(sum('cacheWriteTokens'))}</td>
                 <td className="num">{usdOrDash(sumNullable('cacheReadUsd'))}</td>
                 <td className="num">{usdOrDash(sumNullable('cacheWriteUsd'))}</td>
-                <td className="num">{usdOrDash(sumSavings)}</td>
+                <td className="num">{usdOrDash(sumNet)}</td>
                 <td className="num"><strong>{fmtUsd(sum('estimatedUsd'))}</strong></td>
               </tr>
             </tfoot>
