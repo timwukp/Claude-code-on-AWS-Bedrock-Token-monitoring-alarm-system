@@ -1,9 +1,11 @@
-import { matchRate, computeModelCost, summarizeCosts, RATE_CARD } from './cost-calc';
+import { matchRate, computeModelCost, summarizeCosts, routeMultiplier, routeCaseSql, RATE_CARD } from './cost-calc';
 
-const OPUS = 'arn:aws:bedrock:us-east-1:123456789012:inference-profile/us.anthropic.claude-opus-4-8';
-const FABLE = 'us.anthropic.claude-fable-5';
+// Rate-arithmetic fixtures sit on the GLOBAL route (factor 1) so the expected dollars read straight off the card;
+// the route factor has its own describe block below.
+const OPUS = 'arn:aws:bedrock:us-east-1:123456789012:inference-profile/global.anthropic.claude-opus-4-8';
+const FABLE = 'global.anthropic.claude-fable-5';
 const FABLE_GLOBAL = 'global.anthropic.claude-fable-5';
-const OPUS_BARE    = 'us.anthropic.claude-opus-4-8';
+const OPUS_BARE    = 'global.anthropic.claude-opus-4-8';
 
 describe('matchRate', () => {
   it('matches opus-4-8 to the Opus rate', () => {
@@ -52,7 +54,7 @@ describe('summarizeCosts', () => {
   it('totals estimated cost and cache savings across models', () => {
     const s = summarizeCosts([
       { modelId: OPUS, inputTokens: 0, outputTokens: 0, cacheReadTokens: 1_000_000 },
-      { modelId: 'anthropic.claude-haiku-4-5', inputTokens: 1000, outputTokens: 0, cacheReadTokens: 0 },
+      { modelId: 'global.anthropic.claude-haiku-4-5', inputTokens: 1000, outputTokens: 0, cacheReadTokens: 0 },
     ]);
     expect(s.byModel).toHaveLength(2);
     expect(s.totalCacheSavingsUsd).toBeCloseTo(4.5, 6);
@@ -240,5 +242,60 @@ describe('Nova Micro row (qa F-PR68-002: untagged-profile calls priced $0)', () 
     expect(r.cacheReadPerToken * 1e6).toBeCloseTo(0.00875, 9);
     expect(r.cacheWrite5mPerToken).toBe(0);
     expect(r.cacheWrite1hPerToken).toBe(0);
+  });
+});
+
+describe('route factor (feature-38): the card is the global tier, every other route is standard ×1.1', () => {
+  const r = matchRate('anthropic.claude-opus-4-8');
+  it.each([
+    ['global.anthropic.claude-opus-4-8', 1],
+    ['arn:aws:bedrock:us-east-1:123456789012:inference-profile/global.anthropic.claude-opus-4-8', 1],
+    ['us.anthropic.claude-opus-4-8', 1.1],
+    ['eu.anthropic.claude-opus-4-8', 1.1],
+    ['apac.anthropic.claude-opus-4-8', 1.1],
+    ['anthropic.claude-opus-4-8', 1.1],            // bare: direct single-region, or a profile resolved to its model
+    ['arn:aws:bedrock:us-east-1:123456789012:inference-profile/us.anthropic.claude-opus-4-8', 1.1],
+  ])('%s → ×%d', (id, mult) => {
+    expect(routeMultiplier(id, r)).toBe(mult);
+  });
+  it('OpenAI models on Bedrock have the two tiers too; Amazon Nova has one', () => {
+    expect(routeMultiplier('us.openai.gpt-5.6-sol', matchRate('openai.gpt-5.6-sol'))).toBe(1.1);
+    expect(routeMultiplier('global.openai.gpt-5.6-sol', matchRate('openai.gpt-5.6-sol'))).toBe(1);
+    expect(matchRate('amazon.nova-micro-v1:0').routeTiers).toBe(false);
+    expect(routeMultiplier('us.amazon.nova-micro-v1:0', matchRate('amazon.nova-micro-v1:0'))).toBe(1);
+  });
+  it('scales every dollar figure, never a token count', () => {
+    const t = { inputTokens: 1_000_000, outputTokens: 1_000_000, cacheReadTokens: 1_000_000, cacheWriteTokens: 1_000_000, cacheWrite5mTokens: 400_000 };
+    const g = computeModelCost({ modelId: 'global.anthropic.claude-opus-4-8', ...t });
+    const s = computeModelCost({ modelId: 'us.anthropic.claude-opus-4-8', ...t });
+    expect(g.routeMultiplier).toBe(1); expect(s.routeMultiplier).toBe(1.1);
+    for (const k of ['estimatedUsd', 'estimatedUsdUpperBound', 'cacheReadUsd', 'cacheWriteUsd', 'cacheSavingsUsd', 'cacheNetUsd'] as const) {
+      expect(s[k]).toBeCloseTo(g[k] * 1.1, 6);
+    }
+    for (const k of ['inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'cacheWriteUnknownTtlTokens'] as const) {
+      expect(s[k]).toBe(g[k]);
+    }
+    // the standard tier of Opus 4.8 input is $5.50/MTok on the Price List: 1M input tokens alone → $5.50
+    expect(computeModelCost({ modelId: 'us.anthropic.claude-opus-4-8', inputTokens: 1_000_000 }).estimatedUsd).toBeCloseTo(5.5, 6);
+  });
+  it('summarizeCosts keeps us. and global. as separate rows, each at its own tier', () => {
+    const s = summarizeCosts([
+      { modelId: 'global.anthropic.claude-opus-4-8', inputTokens: 1_000_000 },
+      { modelId: 'us.anthropic.claude-opus-4-8', inputTokens: 1_000_000 },
+      { modelId: 'arn:aws:bedrock:us-east-1:123456789012:inference-profile/us.anthropic.claude-opus-4-8', inputTokens: 1_000_000 }, // same row as the bare us.
+    ]);
+    expect(s.byModel).toHaveLength(2);
+    expect(s.totalEstimatedUsd).toBeCloseTo(5 + 2 * 5.5, 6);
+  });
+});
+
+describe('routeCaseSql mirrors routeMultiplier (feature-38)', () => {
+  it('names the single-tier rows from the card and tests both id shapes for global', () => {
+    const sql = routeCaseSql('m');
+    expect(sql).toBe("CASE WHEN m LIKE '%nova-micro%' THEN 1 WHEN m LIKE 'global.%' OR m LIKE '%/global.%' THEN 1 ELSE 1.1 END");
+  });
+  it('with no single-tier rows the CASE has only the global test', () => {
+    const card = RATE_CARD.filter((r) => r.routeTiers);
+    expect(routeCaseSql('m', card)).toBe("CASE WHEN m LIKE 'global.%' OR m LIKE '%/global.%' THEN 1 ELSE 1.1 END");
   });
 });

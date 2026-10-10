@@ -13,10 +13,13 @@
  * per-model `cache-write-tokens` lines there and against Cost Explorer (within 0.3% on each of the
  * three largest models, Jun–Oct 2026). Reconfirm and keep current.
  *
- * KNOWN LOWER BOUND, still open: one rate per model family at the `global.` route price. Calls on
- * `us.`/geo routes and through application inference profiles are billed at the *standard* price,
- * ×1.1 — about 9% of this account's spend. That correction is a separate chain; until it lands every
- * figure this module produces is a disclosed lower bound, and the pages say so.
+ * ROUTE (feature-38): the card holds the `global.` ("Global standard") tier. The Price List bills every
+ * other route — `us.`/`eu.`/`apac.` cross-region profiles, direct single-region calls, and application
+ * inference profiles (stored as their bare underlying model) — at the "standard" tier, ×1.1, for Claude
+ * AND for OpenAI models on Bedrock; Amazon Nova has a single tier. `routeMultiplier()` applies that
+ * factor to every dollar figure at read time, so the estimate is bill-equivalent, not a lower bound.
+ * Proven on the largest line before this landed: cache write, estimate × route vs Cost Explorer,
+ * 2026-06-04 → 10-05, $12,216.11 vs $12,216.63. Not priced: GPT "long context" tiers (2×).
  */
 export interface ModelRate {
   key: string;
@@ -27,6 +30,22 @@ export interface ModelRate {
   cacheWrite5mPerToken: number;
   /** Prompt-cache write, 1-hour TTL: 2× input. */
   cacheWrite1hPerToken: number;
+  /** Whether the Price List bills this model at two route tiers (global vs standard ×1.1). Nova: one tier. */
+  routeTiers: boolean;
+}
+
+/** "standard" (regional / cross-region-geo / profile) over "global standard", AWS Price List, every tiered model. */
+export const STANDARD_ROUTE_MULT = 1.1;
+
+/**
+ * The route factor for a (normalized) model id. `global.` is the card's own tier; everything else — a geo
+ * prefix, or a bare id (a direct single-region call, or an inference profile resolved to its underlying
+ * model, which is how the aggregator stores it) — is the standard tier. Models with one tier take 1.
+ */
+export function routeMultiplier(modelId: string, rate: ModelRate): number {
+  if (!rate.routeTiers) return 1;
+  // Callers may pass a full inference-profile ARN; the route prefix sits after the ARN prefix.
+  return normalizeModelId(modelId).startsWith('global.') ? 1 : STANDARD_ROUTE_MULT;
 }
 
 /** Published cache-write premiums over the input rate (Anthropic pricing, mirrored by the Price List). */
@@ -40,17 +59,18 @@ const round12 = (n: number) => Math.round(n * 1e12) / 1e12;
 function rate(
   key: string, inPerToken: number, outPerToken: number, cacheReadPerToken: number,
   cacheWrite: { m5: number; h1: number } = { m5: inPerToken * CACHE_WRITE_5M_MULT, h1: inPerToken * CACHE_WRITE_1H_MULT },
+  opts: { routeTiers?: boolean } = {},
 ): ModelRate {
   return {
     key, inPerToken, outPerToken, cacheReadPerToken,
     cacheWrite5mPerToken: round12(cacheWrite.m5), cacheWrite1hPerToken: round12(cacheWrite.h1),
+    routeTiers: opts.routeTiers ?? true,
   };
 }
 
 export const RATE_CARD: ModelRate[] = [
-  // Bedrock on-demand global-CRI pricing (aws.amazon.com/bedrock/pricing, us-east-1).
-  // One rate per model family: us./geo cross-region runs ~10% higher, but the guard tests
-  // pin family rates and a single card keeps estimates simple; treat as lower-bound estimate.
+  // Bedrock on-demand GLOBAL-tier pricing (aws.amazon.com/bedrock/pricing, us-east-1); the standard
+  // tier is this ×1.1 and is applied by routeMultiplier() from the model id's route, not stored here.
   // matchRate takes the FIRST substring hit, so a point release must sit above its family row:
   // 'fable-5' also matches 'fable-5-1', 'opus' matches 'opus-5-5', 'sonnet' matches 'sonnet-5-5'.
   // Point-release rows below: AWS Price List (AmazonBedrockFoundationModels, us-east-1, Global
@@ -72,7 +92,7 @@ export const RATE_CARD: ModelRate[] = [
   // Amazon Nova Micro — AWS Price List (AmazonBedrock, us-east-1, `USE1-NovaMicro-*`), read 2026-10-06:
   // $0.035 / $0.14 per MTok, cache read $0.00875 (0.25×), cache write $0.00 (no write charge).
   // Reached through untagged inference profiles that priced at $0 before feature-36 (qa F-PR68-002).
-  rate('nova-micro', 0.000000035, 0.00000014, 0.00000000875, { m5: 0, h1: 0 }),
+  rate('nova-micro', 0.000000035, 0.00000014, 0.00000000875, { m5: 0, h1: 0 }, { routeTiers: false }),
   // OpenAI models served on Bedrock (QA finding: gpt-5.6-sol usage priced to $0.00). Rates
   // follow the published GPT-5-family on-demand pricing ($1.25/M in, $10/M out, 0.1× cache
   // reads); confirm against aws.amazon.com/bedrock/pricing when adding successors. Cache writes:
@@ -91,6 +111,17 @@ const ZERO_RATE: ModelRate = rate('', 0, 0, 0);
 export function matchRate(modelId: string, card: ModelRate[] = RATE_CARD): ModelRate {
   for (const r of card) if (modelId.includes(r.key)) return r;
   return ZERO_RATE;
+}
+
+/**
+ * The same route rule as SQL, for the Athena (Full) view: `<modelExpr>` may be a bare id, a geo-prefixed
+ * id or a full inference-profile ARN, so the global test looks at both the start and after the last '/'.
+ * Single-tier models are listed from the card so the two code paths cannot drift apart.
+ */
+export function routeCaseSql(modelExpr: string, card: ModelRate[] = RATE_CARD): string {
+  const single = card.filter((r) => !r.routeTiers).map((r) => `${modelExpr} LIKE '%${r.key.replace(/'/g, "''")}%'`);
+  const singleClause = single.length ? `WHEN ${single.join(' OR ')} THEN 1 ` : '';
+  return `CASE ${singleClause}WHEN ${modelExpr} LIKE 'global.%' OR ${modelExpr} LIKE '%/global.%' THEN 1 ELSE ${STANDARD_ROUTE_MULT} END`;
 }
 
 export interface TokenCounts {
@@ -127,7 +158,9 @@ export interface ModelCost {
   cacheWriteTokens: number;
   /** Cache-write tokens whose TTL is not known; priced at 5 m in `estimatedUsd`, at 1 h in the bound. */
   cacheWriteUnknownTtlTokens: number;
-  /** Includes cache writes. Standard-route ×1.1 is NOT applied (see the module header). */
+  /** The route factor applied to every dollar figure below: 1 for `global.` (and single-tier models), 1.1 otherwise. */
+  routeMultiplier: number;
+  /** All four token kinds at the model's rates × the route factor. */
   estimatedUsd: number;
   /** `estimatedUsd` with the unknown-TTL writes priced at the 1-hour rate. */
   estimatedUsdUpperBound: number;
@@ -152,6 +185,7 @@ const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
  */
 export function computeModelCost(t: TokenCounts, card: ModelRate[] = RATE_CARD): ModelCost {
   const rate = matchRate(t.modelId, card);
+  const route = routeMultiplier(t.modelId, rate);
   const inTok = t.inputTokens ?? 0;
   const outTok = t.outputTokens ?? 0;
   const cacheTok = t.cacheReadTokens ?? 0;
@@ -180,12 +214,13 @@ export function computeModelCost(t: TokenCounts, card: ModelRate[] = RATE_CARD):
     cacheReadTokens: cacheTok,
     cacheWriteTokens: cwTok,
     cacheWriteUnknownTtlTokens: cwUnknown,
-    estimatedUsd: round6(base + cacheWriteUsd),
-    estimatedUsdUpperBound: round6(base + cacheWriteUsdUpper),
-    cacheReadUsd: round6(cacheReadUsd),
-    cacheWriteUsd: round6(cacheWriteUsd),
-    cacheSavingsUsd: round6(cacheSavingsUsd),
-    cacheNetUsd: round6(cacheSavingsUsd - cacheWritePremiumUsd),
+    routeMultiplier: route,
+    estimatedUsd: round6((base + cacheWriteUsd) * route),
+    estimatedUsdUpperBound: round6((base + cacheWriteUsdUpper) * route),
+    cacheReadUsd: round6(cacheReadUsd * route),
+    cacheWriteUsd: round6(cacheWriteUsd * route),
+    cacheSavingsUsd: round6(cacheSavingsUsd * route),
+    cacheNetUsd: round6((cacheSavingsUsd - cacheWritePremiumUsd) * route),
   };
 }
 

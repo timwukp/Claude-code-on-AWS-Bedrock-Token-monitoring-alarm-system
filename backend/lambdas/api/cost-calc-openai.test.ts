@@ -9,7 +9,9 @@ describe('OpenAI-on-Bedrock rates', () => {
     expect(rate.inPerToken).toBeGreaterThan(0);
     // 46,625 in + 4,314,612 out (the flagged numbers) must price well above zero:
     const c = computeModelCost({ modelId: id, inputTokens: 46_625, outputTokens: 4_314_612, cacheReadTokens: 0 });
-    expect(c.estimatedUsd).toBeCloseTo(46_625 * 0.00000125 + 4_314_612 * 0.00001, 6);
+    // us.openai.* is the standard route: ×1.1 over the card's global tier (feature-38; the Price List carries both tiers for OpenAI models too)
+    expect(c.routeMultiplier).toBe(1.1);
+    expect(c.estimatedUsd).toBeCloseTo((46_625 * 0.00000125 + 4_314_612 * 0.00001) * 1.1, 6);
     expect(c.estimatedUsd).toBeGreaterThan(43);
   });
   it('generic gpt-5 fallback exists and anthropic keys are unaffected', () => {
