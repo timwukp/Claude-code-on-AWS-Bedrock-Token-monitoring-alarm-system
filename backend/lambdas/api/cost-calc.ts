@@ -105,7 +105,8 @@ export const RATE_CARD: ModelRate[] = [
   rate('gpt-5', 0.00000125, 0.00001, 0.000000125, { m5: 0, h1: 0 }),
 ];
 
-const ZERO_RATE: ModelRate = rate('', 0, 0, 0);
+// An unknown model prices at 0 on every kind, so it has no tiers to speak of either (live check: 'nova-pro' read ×1.1 on $0).
+const ZERO_RATE: ModelRate = rate('', 0, 0, 0, undefined, { routeTiers: false });
 
 /** First matching rate by modelId substring; zero rate if unknown (so cost shows 0, not wrong). */
 export function matchRate(modelId: string, card: ModelRate[] = RATE_CARD): ModelRate {

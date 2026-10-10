@@ -93,11 +93,22 @@ $19.42 on $33,034 (0.06%) and are stated, not folded.
 Repricing of stored tokens for 2026-06-01 → 10-05, all tenants: $30,555.09 → $33,124.66 (+8.41%); largest tenant
 $25,540.84 → $28,094.61 (+10.00%, all `us.` routes); a tenant on `global.` routes only: unchanged.
 
-## Live — dev (TBD after the owner's `Tums-dev-Api` deploy)
-TBD
+## Live — dev, `Tums-dev-Api` deployed by the owner 2026-10-10 (7 Lambdas, code only)
+Deployed Lambdas invoked directly with an API-Gateway event carrying the tenant's `custom:tenantId` and `admin` claims.
 
-## Served bundle (TBD)
-TBD
+| Check | Result |
+|---|---|
+| `/v1/costs` all-time, largest tenant | **$28,524.16** (was $25,790.83 on 10-09 under feature-36's card; +10.6% with three more days of traffic); cache read $11,687.68, cache write $12,584.24; 28 rows |
+| `routeMultiplier` per row | present on every row; values {1, 1.1}. `us.anthropic.claude-fable-5` ×1.1 $15,256.66 · `us.…opus-5` ×1.1 $8,000.49 · `us.…sonnet-4-6` ×1.1 $2,074.13 · `anthropic.claude-fable-5-1` (profile-resolved, bare) ×1.1 $1,956.68 |
+| `global.` rows | ×1 and unchanged (`global.anthropic.claude-fable-5`, `global.…haiku-4-5`, `global.…opus-4-6`) |
+| single-tier | `amazon.nova-micro-v1:0` ×1 |
+| `/v1/overview?window=7` | 200; spend $542.17; `rollupsLastRunAt` 2026-10-10T06:51:44Z |
+| one cosmetic finding from the live read | an unknown model (`amazon.nova-pro`, $0 on the card) reported ×1.1 on a $0 row; `ZERO_RATE` now carries `routeTiers: false` so unknown models report ×1 (commit after the deploy; needs the final code-only redeploy to show live) |
+
+## Served bundle (CloudFront, invalidation completed; `assets/index-6x_eSv8y.js`)
+Present: "standard tier, ×1.1" (Cost note), "routes priced (global tier, standard ×1.1)" (Overview tile). Absent: "Not
+yet applied", "treat these figures". The one remaining "lower bound" string in the bundle is the Latency page's
+open-ended-bucket chip, which is about histogram buckets and stays. Browser render left to qa's run on the PR.
 
 ## Known limits, stated rather than fixed
 - GPT "long context" tiers (2× on the Price List) are not priced; this account has no such usage on the bill.

@@ -262,6 +262,7 @@ describe('route factor (feature-38): the card is the global tier, every other ro
     expect(routeMultiplier('us.openai.gpt-5.6-sol', matchRate('openai.gpt-5.6-sol'))).toBe(1.1);
     expect(routeMultiplier('global.openai.gpt-5.6-sol', matchRate('openai.gpt-5.6-sol'))).toBe(1);
     expect(matchRate('amazon.nova-micro-v1:0').routeTiers).toBe(false);
+    expect(routeMultiplier('us.amazon.nova-pro-v1:0', matchRate('amazon.nova-pro-v1:0'))).toBe(1); // unknown model: $0, no tier
     expect(routeMultiplier('us.amazon.nova-micro-v1:0', matchRate('amazon.nova-micro-v1:0'))).toBe(1);
   });
   it('scales every dollar figure, never a token count', () => {
