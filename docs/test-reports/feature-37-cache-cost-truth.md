@@ -68,3 +68,11 @@ counts cache writes). Until then the net tile/column read "—" and say why.
 | **HIGH** — Overview Spend tile says its token figure includes cache-write tokens but the number omits them | **Mine, real.** The copy got ahead of the deploy: the live `OverviewFn` predates this chain's `tokensOf`, so `spend.tokens` still summed three kinds while the definition named four. Fixed in round 2 by summing the figure on the frontend from the per-model rows (which carry `cacheWriteTokens` since #69) — the tile now matches its definition on any API build; the backend `tokensOf` change stays so the API field agrees once deployed |
 | MEDIUM — "Net effect of prompt caching" tile and "Cache net (USD)" column blank in every range | Expected until the owner-authorised `OverviewFn` deploy; the UI states the reason; the net cannot be derived client-side (needs the per-model input rate). Clears with the deploy |
 | MEDIUM — `timwukp/Java-framework-upgrade-workshop` in "sync error", Sync now does not recover it | Pre-existing (qa F-PR69-008): the repository went private and the collector's token gets 404 — an owner ops item (restore access, or remove the repo in Settings); outside both chains |
+
+## Deploy (owner-authorised, 2026-10-10 05:39Z, from the PR branch)
+`cdk diff Tums-dev-Api`: `[~] OverviewFn`, `[~] CostsFn` — both code only, no IAM or resource change (CostsFn's hash differed
+from the peer's branch deploy; now equals merged main). `UPDATE_COMPLETE`. Direct invoke of `OverviewFn` (30 d): 15 rows, **every
+row carries `cacheNetUsd`**; Σ net **$15,423.70** = read savings $15,887.48 − write premium $463.78; **`spend.tokens` =
+2,582,712,507 = Σ of the four kinds over `byModel`**; `rollupsLastRunAt` 05:36:36Z beside `rollupsAsOf` 05:36:31Z. The net tile
+and column now show figures on dev; qa round 2 should reconcile F-003 as FIXED. The repo sync MEDIUM was cleared by the owner
+widening the collector token's repository access to the (now private) `Java-framework-upgrade-workshop`.
