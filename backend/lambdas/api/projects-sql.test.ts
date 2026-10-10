@@ -78,7 +78,15 @@ describe('buildFullSql', () => {
 describe('buildFullSql prices cache writes at the 5-minute rate (feature-36)', () => {
   it('adds the cacheWriteInputTokenCount term at 1.25× the reference input rate', () => {
     const sql = buildFullSql(TENANT, []);
-    expect(sql).toContain('SUM(COALESCE(l.input.cacheWriteInputTokenCount, 0)) * 0.00000625');
+    expect(sql).toContain('COALESCE(l.input.cacheWriteInputTokenCount, 0) * 0.00000625'); // per row, inside the route-weighted SUM (feature-38)
     expect(sql.indexOf('cacheWriteInputTokenCount')).toBeLessThan(sql.indexOf('AS est_usd'));
+  });
+});
+
+describe('buildFullSql applies the route factor per row (feature-38)', () => {
+  it('multiplies each row by the route CASE inside the SUM (the query is not grouped by model)', () => {
+    const sql = buildFullSql(TENANT, []);
+    expect(sql).toContain("* (CASE WHEN l.modelId LIKE '%nova-micro%' THEN 1 WHEN l.modelId LIKE 'global.%' OR l.modelId LIKE '%/global.%' THEN 1 ELSE 1.1 END)) AS est_usd");
+    expect(sql).toMatch(/SUM\(\(l\.input\.inputTokenCount \* /);
   });
 });

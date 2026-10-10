@@ -6,7 +6,7 @@ import {
   GetQueryResultsCommand,
 } from '@aws-sdk/client-athena';
 import { ok, badRequest, serverError } from '../shared/response';
-import { RATE_CARD } from './cost-calc';
+import { RATE_CARD, routeCaseSql } from './cost-calc';
 import { listProfiles, profileResolvesModel } from '../shared/project-registry';
 import { getTenantId } from '../shared/tenant';
 
@@ -129,10 +129,11 @@ export const TEMPLATES: Record<string, (tenantId: string, days: number, ctx: Tem
       COALESCE(m.cost_center, '—') AS cost_center,
       COUNT(DISTINCT l.requestMetadata['user_id']) AS users,
       COALESCE(SUM(COALESCE(l.input.inputTokenCount, 0) + COALESCE(l.output.outputTokenCount, 0)), 0) AS tokens,
-      COALESCE(SUM(COALESCE(l.input.inputTokenCount, 0)), 0) * (${rateCase('inPerToken', ctx.modelExpr)})
+      (COALESCE(SUM(COALESCE(l.input.inputTokenCount, 0)), 0) * (${rateCase('inPerToken', ctx.modelExpr)})
         + COALESCE(SUM(COALESCE(l.output.outputTokenCount, 0)), 0) * (${rateCase('outPerToken', ctx.modelExpr)})
         + COALESCE(SUM(COALESCE(l.input.cacheReadInputTokenCount, 0)), 0) * (${rateCase('cacheReadPerToken', ctx.modelExpr)})
-        + COALESCE(SUM(COALESCE(l.input.cacheWriteInputTokenCount, 0)), 0) * (${rateCase('cacheWrite5mPerToken', ctx.modelExpr)}) AS est_usd
+        + COALESCE(SUM(COALESCE(l.input.cacheWriteInputTokenCount, 0)), 0) * (${rateCase('cacheWrite5mPerToken', ctx.modelExpr)}))
+        * (${routeCaseSql(ctx.modelExpr)}) AS est_usd
     FROM bedrock_invocation_logs l
     LEFT JOIN project_mapping m
       ON l.requestMetadata['project_id'] = m.project_id

@@ -75,10 +75,20 @@ describe('byProject prices cache writes (feature-36)', () => {
   });
   it('still prices the other three kinds, each from its own rate column', () => {
     const est = sql.slice(sql.indexOf('COALESCE(SUM(COALESCE(l.input.inputTokenCount'), sql.indexOf('AS est_usd'));
-    expect(est.match(/CASE WHEN/g)).toHaveLength(4);
+    expect(est.match(/CASE WHEN/g)).toHaveLength(5); // four rate CASEs + the route CASE (feature-38)
     expect(est).toContain("cacheReadInputTokenCount, 0)), 0) * (CASE WHEN l.modelId LIKE '%fable-5-1%' THEN 2.5e-7");
     // derived rates render as exact decimals, not float artefacts (4e-6 × 1.25 must not become 4.999…e-6)
     expect(est).toContain("LIKE '%opus-5-5%' THEN 0.000005 ");
     expect(est).not.toMatch(/9999999/);
+  });
+});
+
+describe('byProject applies the route factor (feature-38)', () => {
+  const sql = TEMPLATES.byProject('arn:aws:iam::111111111111:user/demo', 90, { modelExpr: 'l.modelId', projectExpr: null });
+  it('multiplies the four priced terms by the route CASE: global 1, single-tier models 1, else 1.1', () => {
+    const est = sql.slice(sql.indexOf('(COALESCE(SUM(COALESCE(l.input.inputTokenCount'), sql.indexOf('AS est_usd'));
+    expect(est).toContain("* (CASE WHEN l.modelId LIKE '%nova-micro%' THEN 1 WHEN l.modelId LIKE 'global.%' OR l.modelId LIKE '%/global.%' THEN 1 ELSE 1.1 END)");
+    // the route CASE wraps all four terms (one factor, applied once), after the last rate CASE
+    expect(est.lastIndexOf('ELSE 1.1 END')).toBeGreaterThan(est.lastIndexOf('cacheWriteInputTokenCount'));
   });
 });
