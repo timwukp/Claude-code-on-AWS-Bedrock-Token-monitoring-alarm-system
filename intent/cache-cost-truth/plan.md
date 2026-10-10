@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** daf6df698ab7c9ceb44b2444a8af84d699e85a2c
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is bound at branch time to the tip of `main` after feature-36 (`cache-write-pricing`) merges; this chain
 waits for it because its tests assert feature-36's fields and its copy describes them. Guards, docs and help copy were

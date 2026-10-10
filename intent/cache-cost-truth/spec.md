@@ -3,7 +3,7 @@
 - **Intent:** ./intent.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Status:** signed-off
+- **Status:** shipped
 
 Depends on feature-36 (`cache-write-pricing`) being on main: the fields `cacheNetUsd`, `cacheWriteTokens`,
 `cacheWriteUsd`, `estimatedUsdUpperBound`, `rollupsLastRunAt` and the counters `cacheWriteTokens` /
