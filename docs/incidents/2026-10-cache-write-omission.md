@@ -97,8 +97,10 @@ obvious the moment the two lists sat side by side.
   that case.
 - "Saved by prompt caching" becomes **"Net effect of prompt caching"** = read savings − write premium, and can be
   negative for a workload that writes more than it re-reads.
-- The estimate remains a **disclosed lower bound** until the standard-route (us./geo cross-region, ~×1.1) correction
-  lands in its own chain: expect the figure to be ~9 % under the bill, and the page says so.
+- ~~The estimate remains a **disclosed lower bound** until the standard-route (us./geo cross-region, ~×1.1) correction
+  lands in its own chain: expect the figure to be ~9 % under the bill, and the page says so.~~ **Resolved by
+  feature-38 (standard-route pricing, PR #TBD):** the standard tier is applied at read time and the lower-bound wording
+  came out of the pages, help text and `RECONCILIATION.md`.
 
 ## Guards added (feature-37)
 

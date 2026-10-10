@@ -43,7 +43,6 @@ change to `backend/lambdas/api/cost-calc.ts`.
    | Difference (bill − estimate) / bill | Reading |
    |---|---|
    | within **±3 %** | healthy — the known residuals explain it (see below) |
-   | **+5 % to +12 %**, estimate low | expected while the standard-route (us./geo cross-region ≈ ×1.1) correction is not yet applied; the Cost page states this as a lower bound |
    | **> +12 %**, estimate low | a token kind or a model is unpriced or under-priced → run `npx tsx backend/scripts/check-rate-card.ts`; then compare `/v1/usage` token totals per kind with the bill's usage-type lines |
    | estimate **high** by > 3 % | a rate on the card is above the published one, or usage is double-counted → `check-rate-card.ts`, then the PROJDAY-vs-hourly day comparison in `feature-19b`'s report |
 
@@ -52,8 +51,9 @@ change to `backend/lambdas/api/cost-calc.ts`.
 
 ## Known residuals (expected, disclosed on the pages)
 
-- **Standard-route premium (~×1.1).** The card prices the global route; calls on `us.`/geo cross-region profiles bill
-  ~10 % higher. Until the standard-route chain lands, the estimate is a lower bound by roughly that share of traffic.
+- **Route tiers are priced (feature-38).** The card holds the global tier; `routeMultiplier()` applies the standard tier
+  (×1.1) to `us.`/geo cross-region, inference-profile and direct calls, and 1 to `global.` calls and single-tier models
+  (Amazon Nova). A residual here would mean a route the rule does not recognise — check the model ids on the Cost page.
 - **Unknown-TTL cache writes.** Where the logged response body carries no 5 m / 1 h split, writes are priced at the
   5-minute rate with a 1-hour upper bound (`estimatedUsdUpperBound`).
 - **Unresolved inference-profile ids** are reported `unpriced: true` and excluded; the Cost page lists them.

@@ -69,7 +69,7 @@ export function OverviewPage() {
           value={ov ? fmtUsd(ov.spend.currentUsd) : ''}
           delta={ov && ov.spend.deltaPct != null ? { value: ov.spend.deltaPct, unit: 'pct', compareLabel: compare, goodDirection: 'down' } : undefined}
           sparkline={ov?.spend.daily.map((d) => d.usd)}
-          definition={ov ? `${range.label.toLowerCase()} · ${fmtTokens(spendTokens)} input + output + cache-read + cache-write tokens · token-based estimate · lower bound (~9%) until the standard-route correction${ov.spend.deltaPct == null && ov.spend.priorUsd === 0 ? ' · no prior-period data to compare' : ''}` : undefined}
+          definition={ov ? `${range.label.toLowerCase()} · ${fmtTokens(spendTokens)} input + output + cache-read + cache-write tokens · token-based estimate, routes priced (global tier, standard ×1.1)${ov.spend.deltaPct == null && ov.spend.priorUsd === 0 ? ' · no prior-period data to compare' : ''}` : undefined}
           status={ov?.coverage.partial ? { tone: 'neutral', text: 'partial history' } : undefined} />
 
         <KpiTile label="Budget" helpId="overview.budget" link={{ to: '/governance', label: 'Governance' }}
