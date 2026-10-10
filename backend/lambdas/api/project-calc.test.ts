@@ -80,7 +80,7 @@ describe('buildProjectRows', () => {
     const rows = buildProjectRows(
       [project({ projectId: 'p2', name: 'CostOnly', costCenter: 'CC-1' })],
       new Map(), new Map(),
-      [day('2026-09-10', 'p2', 'us.anthropic.claude-sonnet-4-6', 1_000_000, 100_000)],
+      [day('2026-09-10', 'p2', 'global.anthropic.claude-sonnet-4-6', 1_000_000, 100_000)],
       OPTS,
     );
     expect(rows[0].dora).toBeNull();
@@ -96,8 +96,8 @@ describe('buildProjectRows', () => {
       [project({ projectId: 'p3', name: 'Mixed' })],
       new Map(), new Map(),
       [
-        day('2026-09-10', 'p3', 'arn:aws:bedrock:us-east-1:1:inference-profile/us.anthropic.claude-sonnet-4-6', 1_000_000, 0),
-        day('2026-09-11', 'p3', 'us.anthropic.claude-haiku-4-5', 1_000_000, 0),
+        day('2026-09-10', 'p3', 'arn:aws:bedrock:us-east-1:1:inference-profile/global.anthropic.claude-sonnet-4-6', 1_000_000, 0),
+        day('2026-09-11', 'p3', 'global.anthropic.claude-haiku-4-5', 1_000_000, 0),
       ],
       OPTS,
     );
@@ -110,7 +110,7 @@ describe('buildProjectRows', () => {
       [project({ projectId: 'p4', name: 'Full', repos: ['o/a'] })],
       new Map([['o/a', [pr(5), pr(6)]]]),
       new Map(),
-      [day('2026-09-15', 'p4', 'us.anthropic.claude-sonnet-4-6', 2_000_000, 0)],
+      [day('2026-09-15', 'p4', 'global.anthropic.claude-sonnet-4-6', 2_000_000, 0)],
       OPTS,
     );
     expect(rows[0].estimatedUsd).toBeCloseTo(6.0, 6);

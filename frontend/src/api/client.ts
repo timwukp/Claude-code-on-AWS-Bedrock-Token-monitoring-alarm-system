@@ -185,6 +185,8 @@ export interface OverviewResponse {
     estimatedUsd: number; cacheSavingsUsd?: number;
     /** The bill's two cache lines in dollars, both inside estimatedUsd (feature-36). */
     cacheReadUsd?: number; cacheWriteUsd?: number;
+    /** 1 for global. (and single-tier models), 1.1 for the standard route — applied to every dollar figure (feature-38). */
+    routeMultiplier?: number;
     /** Read savings − cache-write premium; negative when caching cost more than it saved (feature-37). */
     cacheNetUsd?: number;
   }[];

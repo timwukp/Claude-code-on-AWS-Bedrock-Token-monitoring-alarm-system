@@ -5,7 +5,7 @@ import {
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { ok, serverError } from '../shared/response';
-import { cacheWriteOf, computeModelCost, normalizeModelId, summarizeCosts, TokenCounts } from './cost-calc';
+import { cacheWriteOf, computeModelCost, normalizeModelId, routeCaseSql, summarizeCosts, TokenCounts } from './cost-calc';
 import { listProfiles, listProjects, profileModelMap } from '../shared/project-registry';
 import { getTenantId } from '../shared/tenant';
 
@@ -194,10 +194,11 @@ export function buildFullSql(tenantId: string, profiles: { arn: string; projectI
         ${costCenter} AS cost_center,
         COUNT(DISTINCT l.requestMetadata['user_id']) AS users,
         SUM(l.input.inputTokenCount + l.output.outputTokenCount) AS tokens,
-        SUM(l.input.inputTokenCount) * ${IN}
-          + SUM(l.output.outputTokenCount) * ${OUT}
-          + SUM(COALESCE(l.input.cacheReadInputTokenCount, 0)) * ${CACHE}
-          + SUM(COALESCE(l.input.cacheWriteInputTokenCount, 0)) * ${CACHE_WRITE} AS est_usd
+        SUM((l.input.inputTokenCount * ${IN}
+          + l.output.outputTokenCount * ${OUT}
+          + COALESCE(l.input.cacheReadInputTokenCount, 0) * ${CACHE}
+          + COALESCE(l.input.cacheWriteInputTokenCount, 0) * ${CACHE_WRITE})
+          * (${routeCaseSql('l.modelId')})) AS est_usd
       FROM bedrock_invocation_logs l
       ${aipJoin}LEFT JOIN project_mapping m
         ON l.requestMetadata['project_id'] = m.project_id

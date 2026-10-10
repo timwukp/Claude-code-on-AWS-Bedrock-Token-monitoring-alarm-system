@@ -116,16 +116,18 @@ export function CostsPage() {
     ? `All time: ${fmtUsd(allTime!.totalEstimatedUsd)} across ${plural(allTimeCounts.models, 'model')} (${plural(allTimeCounts.ids, 'id')}, counted the same way as the tile above) · the same rate card prices the By project and Overview pages, so their totals reconcile with this one.`
     : 'All-time total unavailable — the costs endpoint did not respond.')
     + (centGap > 0 ? ` The shown rows sum to ${fmtUsd(sum('estimatedUsd'))}, ${plural(centGap, 'cent')} from the tile — per-model rounding${!showZero && zeroRows.length ? ` and ${plural(zeroRows.length, 'folded model')} below $${ZERO_COST_THRESHOLD.toFixed(2)}` : ''}.` : '');
-  // What the estimate does and does not price, in one place. Cache writes are the bill's largest token
-  // line and were priced at $0 until feature-36; the standard-route premium is the one line still open.
+  // What the estimate prices, in one place. Cache writes (the bill's largest token line) were priced at $0 until
+  // feature-36; the standard-route tier (×1.1) was missing until feature-38. Nothing on the bill's token lines is
+  // left unpriced now; what remains different is credits, refunds and private pricing.
   // Cache-read rates are per model: 0.1× input on most Claude rows, 0.05× on Opus 5.5 / Sonnet 5.5, 0.025× on
   // Fable 5.1 / Mythos 5.1 (AWS Price List). The page must not state one multiple as if it held for all (qa F-PR69-001).
   const pricingNote = 'Est. cost is the sum of the four billed token kinds — input, output, cache-read (at each model\'s cache-read rate, '
     + '0.025×–0.1× of its input rate) and cache-write; the '
     + 'two cache columns show those two lines in dollars, already inside Est. cost. Cache-write is priced at '
     + '1.25× input for the 5-minute TTL, 2× for 1-hour, read per call from the logged response; writes whose TTL is not '
-    + 'logged are priced at the 5-minute rate. Not yet applied: the ~10% standard-route premium on us./geo and '
-    + 'inference-profile calls — treat these figures as a lower bound, roughly 9% under the bill. "Cache net" is read savings minus the write premium; see docs/RECONCILIATION.md for the monthly comparison with the bill.';
+    + 'logged are priced at the 5-minute rate. Route: global. calls at the global tier; us./geo cross-region, '
+    + 'inference-profile and direct calls at the standard tier, ×1.1 (Amazon Nova has one tier). "Cache net" is read '
+    + 'savings minus the write premium; see docs/RECONCILIATION.md for the monthly comparison with the bill.';
 
   return (
     <>

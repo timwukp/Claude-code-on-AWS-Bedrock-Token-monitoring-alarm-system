@@ -31,7 +31,7 @@ export const HELP = {
       'A token-based estimate: credits, refunds, private pricing and rounding make the AWS bill differ. The Governance tile shows what AWS Budgets has billed.',
       'When per-project rollups start inside the prior period the tile says “partial history”: the comparison is against an incomplete baseline.',
       'The token figure is input + output + cache-read + cache-write tokens from the per-project rollups — every kind the rate card prices, the same set the Usage page counts.',
-      'Until the standard-route (us./geo cross-region, about ×1.1) correction lands, the estimate is a lower bound of roughly 9 % — the Cost page states this beside its total.',
+      'Routes are priced: global. calls at the global tier, us./geo cross-region, inference-profile and direct calls at the standard tier (×1.1) — the same split the AWS Price List bills.',
     ],
   },
   'overview.budget': {
@@ -104,7 +104,7 @@ export const HELP = {
       'Follows the time range in the header; the all-time total is the footer line under the table. Overview and By project use the same rollups and rate card, so the same range gives the same figure on all three pages.',
       'An estimate, not an invoice: credits, refunds, private pricing and rounding make the AWS bill differ. Reconfirm against official pricing before billing.',
       'The Governance page shows AWS Budgets’ billed figure; the two use different sources and will not match.',
-      'A lower bound until the standard-route (us./geo cross-region, about ×1.1) correction lands — expect the bill to be roughly 9 % higher. The monthly reconciliation against the payer-account bill is described in docs/RECONCILIATION.md.',
+      'All four token kinds and both route tiers are priced (global, and standard ×1.1 for us./geo, inference-profile and direct calls), so the estimate is bill-equivalent before credits, refunds and private pricing. The monthly reconciliation against the payer-account bill is described in docs/RECONCILIATION.md.',
     ],
     labels: ['Estimated spend', 'Total est. cost'],
   },

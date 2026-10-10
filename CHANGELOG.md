@@ -6,6 +6,20 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Fixed — the standard route is priced; the estimate is no longer a lower bound (feature-38)
+- **Every non-`global.` call is billed at the standard tier, ×1.1, and the card priced the global tier.** `us.`/`eu.`/
+  `apac.` cross-region profiles, direct single-region calls and application inference profiles (stored as their bare
+  model) now take `routeMultiplier` = 1.1 on every dollar figure; `global.` calls and single-tier models (Amazon Nova)
+  take 1. The AWS Price List carries both tiers for Claude and for OpenAI models on Bedrock. **Cost is computed at read
+  time, so history reprices:** the largest tenant moves from $25,540.84 to $28,094.61 for 2026-06-01 → 10-05 (+10.00%;
+  all of its calls are on `us.` routes).
+- **Reconciled against Cost Explorer** per model × route × token kind, 2026-06-04 → 10-05: **$33,040.54 estimated vs
+  $33,033.63 billed (+0.02%)**; input −0.14%, output +0.59%, cache read −0.14%, cache write −0.00%.
+- The Athena (Full) view applies the same rule in SQL (`routeCaseSql`), so Fast and Full agree.
+- The "lower bound, ~9% under the bill" sentences are gone from the Cost and Overview pages, the help text and
+  `docs/RECONCILIATION.md`; the incident record's bullet is marked resolved. `ModelCost.routeMultiplier` is exposed per
+  row. Not priced: GPT "long context" tiers. (feature-38, PR #71)
+
 ### Fixed — the dashboard says what caching costs, and can no longer stop saying it (feature-37)
 - **Copy and docs no longer call prompt caching a discount.** Cache reads are billed at 0.1× input, cache writes at
   1.25× (2× for a 1-hour cache); every sentence that said "billing discounts them", "the cheapest tokens you can buy"

@@ -5,10 +5,10 @@ import { ProjdayItem } from './project-calc';
 // A flat card so expected dollars are easy to read: $1 per 1M input, $2 per 1M output, $0.1 per 1M cache
 // read, $1.25 / $2 per 1M cache write (5 m / 1 h).
 const CARD: ModelRate[] = [
-  { key: 'claude', inPerToken: 1e-6, outPerToken: 2e-6, cacheReadPerToken: 1e-7, cacheWrite5mPerToken: 1.25e-6, cacheWrite1hPerToken: 2e-6 },
+  { key: 'claude', inPerToken: 1e-6, outPerToken: 2e-6, cacheReadPerToken: 1e-7, cacheWrite5mPerToken: 1.25e-6, cacheWrite1hPerToken: 2e-6, routeTiers: true },
 ];
 
-const item = (day: string, projectId: string, inputTokens: number, outputTokens = 0, modelId = 'us.anthropic.claude-opus-5'): ProjdayItem =>
+const item = (day: string, projectId: string, inputTokens: number, outputTokens = 0, modelId = 'global.anthropic.claude-opus-5'): ProjdayItem =>
   ({ day, projectId, modelId, inputTokens, outputTokens, cacheReadTokens: 0, cacheWriteTokens: 0, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0, invocations: 1 });
 
 describe('windowBounds', () => {
@@ -67,7 +67,10 @@ describe('buildOverview', () => {
       item('2026-09-13', 'alpha', 1_000_000, 0, 'global.anthropic.claude-opus-5'),
     ], b, new Map(), CARD);
     expect(r.byModel).toHaveLength(2);
-    expect(r.spend.currentUsd).toBe(2);
+    // $1 on the global route + $1 × 1.1 on the us. (standard) route — the route factor rides every row (feature-38)
+    expect(r.spend.currentUsd).toBeCloseTo(2.1, 9);
+    expect(r.byModel.find((m) => m.modelId.startsWith('us.'))!.estimatedUsd).toBeCloseTo(1.1, 9);
+    expect(r.byModel.find((m) => m.modelId.startsWith('global.'))!.estimatedUsd).toBe(1);
   });
 
   it('reports per-model cache savings for the current window only: full input rate minus cache-read rate', () => {

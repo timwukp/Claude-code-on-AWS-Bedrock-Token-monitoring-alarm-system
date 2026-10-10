@@ -215,9 +215,9 @@ describe('referenceBands / killFastFlag / estimateForward', () => {
   it('(14) weeklyFromProjday groups by ISO week across a month boundary with per-model pricing', () => {
     const items: ProjdayItem[] = [
       // 2026-08-31 (Mon) and 2026-09-01 (Tue) share the ISO week starting 2026-08-31
-      { day: '2026-08-31', projectId: 'p', modelId: 'us.anthropic.claude-sonnet-4-6', inputTokens: 1_000_000, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0, invocations: 1 },
-      { day: '2026-09-01', projectId: 'p', modelId: 'us.anthropic.claude-haiku-4-5-20251001-v1:0', inputTokens: 1_000_000, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0, invocations: 1 },
-      { day: '2026-09-07', projectId: 'p', modelId: 'us.anthropic.claude-sonnet-4-6', inputTokens: 2_000_000, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0, invocations: 1 },
+      { day: '2026-08-31', projectId: 'p', modelId: 'global.anthropic.claude-sonnet-4-6', inputTokens: 1_000_000, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0, invocations: 1 },
+      { day: '2026-09-01', projectId: 'p', modelId: 'global.anthropic.claude-haiku-4-5-20251001-v1:0', inputTokens: 1_000_000, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0, invocations: 1 },
+      { day: '2026-09-07', projectId: 'p', modelId: 'global.anthropic.claude-sonnet-4-6', inputTokens: 2_000_000, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0, invocations: 1 },
     ];
     const { spend, tokens } = weeklyFromProjday(items);
     expect(spend.map((w) => w.weekStart)).toEqual(['2026-08-31', '2026-09-07']);
