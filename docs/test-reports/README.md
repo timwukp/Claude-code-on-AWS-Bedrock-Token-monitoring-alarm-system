@@ -45,6 +45,7 @@ results. One report per feature (mapped to a GitHub issue / PR).
 | Cost page id consistency (one definition of model/id for rows, tile and footer; qa F-PR66-001/006, F-PR67-001) | — | #68 | [feature-35](./feature-35-cost-id-consistency.md) | PASS (gates + local render) |
 | Prompt-cache writes priced (1.25×/2× input by logged TTL; all four rollups + guarded backfill; Nova Micro + untagged-profile pricing, qa F-PR68-002; `rollupsLastRunAt`) | — | #69 | [feature-36](./feature-36-cache-write-pricing.md) | PASS (gates + bill reconciliation + live) |
 | Cache-cost truth (copy + docs corrected; RCA; pricing-completeness + rollup-fields tests; Price List drift script; payer reconciliation runbook) | — | #70 | [feature-37](./feature-37-cache-cost-truth.md) | PASS (gates) |
+| Standard route priced (×1.1 on us./geo, inference-profile and direct calls; Athena parity; lower-bound caveats removed) | — | #71 | [feature-38](./feature-38-standard-route.md) | PASS (gates + bill reconciliation +0.02%) |
 Each report records: scope, unit-test results, build/synth gates, real-AWS validation evidence,
 any defect found+fixed during validation, and a verdict. Reports are written before opening the
 PR; a feature is only PR-ready when all gates are green.
