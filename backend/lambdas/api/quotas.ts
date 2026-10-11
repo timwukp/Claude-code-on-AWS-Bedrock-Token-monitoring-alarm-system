@@ -36,11 +36,13 @@ export const handler = async (_event: APIGatewayProxyEvent): Promise<APIGatewayP
     // Region variants of one model (us./global.) share the same quota; merge their usage so each
     // (quota, window) appears once with the combined usage.
     const byKey = new Map<string, { modelId: string; q: typeof quotas[number]; used: number }>();
-    for (const modelId of activeModels) {
-      const [perMin, perDay] = await Promise.all([
-        sumTokensForModel(modelId, 60),
-        sumTokensForModel(modelId, 24 * 60 * 60),
-      ]);
+    // One round trip for all models, not one per model: the per-model loop ran serially and took
+    // ~0.5 s a model, so a dozen active models made the endpoint answer in 6–7 s (qa F-PR68-004).
+    const usage = await Promise.all(activeModels.map(async (modelId) => {
+      const [perMin, perDay] = await Promise.all([sumTokensForModel(modelId, 60), sumTokensForModel(modelId, 24 * 60 * 60)]);
+      return { modelId, perMin, perDay };
+    }));
+    for (const { modelId, perMin, perDay } of usage) {
       for (const window of ['minute', 'day'] as const) {
         const q = matchQuotaForModel(quotas, modelId, window);
         if (!q) continue;
@@ -101,8 +103,20 @@ async function sumTokensForModel(modelId: string, seconds: number): Promise<numb
   return inTok + outTok;
 }
 
-/** List Bedrock per-model token quotas (TPM + per-day) from Service Quotas. */
+/**
+ * List Bedrock per-model token quotas (TPM + per-day) from Service Quotas. The bedrock service has
+ * hundreds of quotas (several 100-row pages, read serially), and they change rarely, so a warm Lambda
+ * keeps the list for QUOTA_CACHE_MS instead of paging again on every request.
+ */
+const QUOTA_CACHE_MS = 10 * 60_000;
+let quotaCache: { at: number; quotas: QuotaInfo[] } | null = null;
 async function listTokenQuotas(): Promise<QuotaInfo[]> {
+  if (quotaCache && Date.now() - quotaCache.at < QUOTA_CACHE_MS) return quotaCache.quotas;
+  const quotas = await listTokenQuotasUncached();
+  quotaCache = { at: Date.now(), quotas };
+  return quotas;
+}
+async function listTokenQuotasUncached(): Promise<QuotaInfo[]> {
   const out: QuotaInfo[] = [];
   let token: string | undefined;
   do {
