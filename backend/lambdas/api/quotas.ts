@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import {
-  CloudWatchClient, GetMetricStatisticsCommand, ListMetricsCommand,
+  CloudWatchClient, GetMetricDataCommand, GetMetricStatisticsCommand, ListMetricsCommand,
 } from '@aws-sdk/client-cloudwatch';
 import { ServiceQuotasClient, ListServiceQuotasCommand } from '@aws-sdk/client-service-quotas';
 import { ok, serverError } from '../shared/response';
@@ -36,12 +36,14 @@ export const handler = async (_event: APIGatewayProxyEvent): Promise<APIGatewayP
     // Region variants of one model (us./global.) share the same quota; merge their usage so each
     // (quota, window) appears once with the combined usage.
     const byKey = new Map<string, { modelId: string; q: typeof quotas[number]; used: number }>();
-    // One round trip for all models, not one per model: the per-model loop ran serially and took
-    // ~0.5 s a model, so a dozen active models made the endpoint answer in 6–7 s (qa F-PR68-004).
-    const usage = await Promise.all(activeModels.map(async (modelId) => {
-      const [perMin, perDay] = await Promise.all([sumTokensForModel(modelId, 60), sumTokensForModel(modelId, 24 * 60 * 60)]);
-      return { modelId, perMin, perDay };
-    }));
+    // Two CloudWatch calls for every model at once (GetMetricData, one per window) instead of four
+    // GetMetricStatistics calls per model run serially — a dozen active models made the endpoint
+    // answer in 6–11 s (qa F-PR68-004).
+    const [perMinByModel, perDayByModel] = await Promise.all([
+      sumTokensBatch(activeModels, 60),
+      sumTokensBatch(activeModels, 24 * 60 * 60),
+    ]);
+    const usage = activeModels.map((modelId) => ({ modelId, perMin: perMinByModel.get(modelId) ?? 0, perDay: perDayByModel.get(modelId) ?? 0 }));
     for (const { modelId, perMin, perDay } of usage) {
       for (const window of ['minute', 'day'] as const) {
         const q = matchQuotaForModel(quotas, modelId, window);
@@ -88,19 +90,37 @@ async function sumMetric(metricName: string): Promise<number | undefined> {
   return dp.length ? dp.reduce((s, d) => s + (d.Sum ?? 0), 0) : undefined;
 }
 
-/** Sum input+output tokens for ONE model over the trailing `seconds` window. */
-async function sumTokensForModel(modelId: string, seconds: number): Promise<number> {
-  const one = async (metricName: string) => {
-    const res = await cw.send(new GetMetricStatisticsCommand({
-      Namespace: 'AWS/Bedrock', MetricName: metricName,
-      Dimensions: [{ Name: 'ModelId', Value: modelId }],
-      StartTime: new Date(Date.now() - seconds * 1000), EndTime: new Date(),
-      Period: Math.max(60, seconds), Statistics: ['Sum'],
-    }));
-    return (res.Datapoints ?? []).reduce((s, d) => s + (d.Sum ?? 0), 0);
-  };
-  const [inTok, outTok] = await Promise.all([one('InputTokenCount'), one('OutputTokenCount')]);
-  return inTok + outTok;
+/**
+ * Sum input+output tokens per model over the trailing `seconds` window, for every model in ONE
+ * GetMetricData call (two queries per model; the API takes up to 500 per call, so 250 models fit).
+ * Query ids must match /^[a-z][a-zA-Z0-9_]*$/, hence the index-based ids mapped back by position.
+ */
+async function sumTokensBatch(modelIds: string[], seconds: number): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (modelIds.length === 0) return out;
+  const period = Math.max(60, seconds);
+  const queries = modelIds.flatMap((modelId, i) => (['InputTokenCount', 'OutputTokenCount'] as const).map((metricName, j) => ({
+    Id: `m${i}_${j}`,
+    MetricStat: { Metric: { Namespace: 'AWS/Bedrock', MetricName: metricName, Dimensions: [{ Name: 'ModelId', Value: modelId }] }, Period: period, Stat: 'Sum' },
+    ReturnData: true,
+  })));
+  for (let start = 0; start < queries.length; start += 500) {
+    let token: string | undefined;
+    do {
+      const res = await cw.send(new GetMetricDataCommand({
+        MetricDataQueries: queries.slice(start, start + 500),
+        StartTime: new Date(Date.now() - seconds * 1000), EndTime: new Date(),
+        NextToken: token,
+      }));
+      for (const r of res.MetricDataResults ?? []) {
+        const i = Number(r.Id?.match(/^m(\d+)_/)?.[1]);
+        if (!Number.isInteger(i) || !modelIds[i]) continue;
+        out.set(modelIds[i], (out.get(modelIds[i]) ?? 0) + (r.Values ?? []).reduce((s, v) => s + v, 0));
+      }
+      token = res.NextToken;
+    } while (token);
+  }
+  return out;
 }
 
 /**
