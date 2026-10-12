@@ -1,6 +1,6 @@
 # Feature 39 — the three qa findings no chain owned
 
-- **Chain:** `intent/qa-leftovers/` · **Branch:** `feat/qa-leftovers` off `main@bc366b3` (post-#71) · **PR:** #TBD
+- **Chain:** `intent/qa-leftovers/` · **Branch:** `feat/qa-leftovers` off `main@bc366b3` (post-#71) · **PR:** #72
 - **Origin:** qa F-PR69-003 (`/dora` axis), F-PR69-007 (`/usage` axis), F-PR68-004 (`/v1/quotas` 6–11 s) — red on every
   PR since #68 because each sat outside the active chain's plan.
 - **Date:** 2026-10-11/12

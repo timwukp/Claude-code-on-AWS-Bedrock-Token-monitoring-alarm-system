@@ -12,7 +12,7 @@ are grouped by development milestone rather than strict semver releases.
   container for ten minutes. Cold requests still pay the quota pages (~7 s). QuotasFn gains `cloudwatch:GetMetricData`.
 - **`/dora` lead-time axis in one unit** (qa F-PR69-003): ticks on whole-day multiples once the series reaches two days.
 - **`/usage` chart is a time axis again** (qa F-PR69-007): every hour/day in the window is drawn, zero where nothing was
-  recorded, so quiet days no longer vanish and tick spacing means time. (feature-39, PR #TBD)
+  recorded, so quiet days no longer vanish and tick spacing means time. (feature-39, PR #72)
 
 ### Fixed — the standard route is priced; the estimate is no longer a lower bound (feature-38)
 - **Every non-`global.` call is billed at the standard tier, ×1.1, and the card priced the global tier.** `us.`/`eu.`/
