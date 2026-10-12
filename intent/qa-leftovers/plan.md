@@ -12,7 +12,9 @@
 1. `frontend/src/lib/format.ts` — `hourAxis`.
 2. `frontend/src/pages/DoraPage.tsx` — lead-time axis uses it.
 3. `frontend/src/pages/UsagePage.tsx` — `fillBuckets` applied to the series.
-4. `backend/lambdas/api/quotas.ts` — parallel per-model sums; 10-minute quota-list cache.
+4. `backend/lambdas/api/quotas.ts` — per-model sums in two `GetMetricData` calls; 10-minute quota-list cache.
+5. `infra/lib/stacks/api-stack.ts` — `cloudwatch:GetMetricData` added to QuotasFn's read-only CloudWatch statement
+   (the deployed first cut 500'd on AccessDenied: a local run under my own credentials had masked the missing action).
 
 Non-source riders: `.sdlc/active` (handover from `standard-route`), `intent/standard-route/*` → shipped,
 `intent/qa-leftovers/*`, `CHANGELOG.md`, `docs/test-reports/feature-39-qa-leftovers.md` plus its index row.
