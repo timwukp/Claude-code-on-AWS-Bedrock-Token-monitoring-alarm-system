@@ -6,6 +6,14 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Fixed — the three qa findings no chain owned (feature-39)
+- **`/v1/quotas` 6–11 s → 0.3–0.6 s warm** (qa F-PR68-004): per-model token sums now come from two `GetMetricData`
+  calls instead of four serial `GetMetricStatistics` calls per model, and the bedrock quota list is cached in the
+  container for ten minutes. Cold requests still pay the quota pages (~7 s). QuotasFn gains `cloudwatch:GetMetricData`.
+- **`/dora` lead-time axis in one unit** (qa F-PR69-003): ticks on whole-day multiples once the series reaches two days.
+- **`/usage` chart is a time axis again** (qa F-PR69-007): every hour/day in the window is drawn, zero where nothing was
+  recorded, so quiet days no longer vanish and tick spacing means time. (feature-39, PR #TBD)
+
 ### Fixed — the standard route is priced; the estimate is no longer a lower bound (feature-38)
 - **Every non-`global.` call is billed at the standard tier, ×1.1, and the card priced the global tier.** `us.`/`eu.`/
   `apac.` cross-region profiles, direct single-region calls and application inference profiles (stored as their bare
