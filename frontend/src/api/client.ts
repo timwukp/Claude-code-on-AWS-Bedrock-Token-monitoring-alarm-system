@@ -96,6 +96,8 @@ export interface RoiResult {
   unitEconomics: { usdPerMergedPr: number | null; usdPerDeployment: number | null; tokensPerMergedPr: WeeklyPoint[] };
   uncertainty: { bracketLowPct: number; bracketHighPct: number; appliedTo: string; note: string };
   refusals: string[]; notes: string[];
+  /** false → the project's own staffing is not configured and every staff-based term is withheld (feature-39). */
+  staffed?: boolean;
 }
 export interface RoiProjectRow {
   projectId: string; name: string; category: string | null;

@@ -83,6 +83,12 @@ export interface RoiResult {
   window: number;
   /** 365/window — every rate-like term is annualized with this, disclosed to the UI. */
   annualizationFactor: number;
+  /**
+   * Whether this project's OWN teamSize and loaded cost were configured. When false, every term that
+   * multiplies by them (time saved, training, adoption dip) is withheld, and the UI shows the value
+   * column as withheld rather than as "+$0" (qa F-PR72-001/003).
+   */
+  staffed: boolean;
   value: { timeSaved: RoiComponent; throughput: RoiComponent; stabilityDelta: RoiComponent; totalUsd: number };
   investment: { aiSpend: RoiComponent; training: RoiComponent; jCurve: RoiComponent; totalUsd: number };
   roiPct: number | null;
@@ -263,13 +269,17 @@ export function computeRoi(agg: RoiWindowAggregates, a: RoiAssumptions, opts: Ro
     formulaInputs: staffed ? { trainingCostPerUser: a.trainingCostPerUser, teamSize: a.teamSize } : { trainingCostPerUser: a.trainingCostPerUser },
     note: staffed ? 'One-time — deliberately NOT annualized.' : 'Not computed: no staffing of this project\'s own (see time saved).',
   };
-  const jCurveUsd = a.jCurve.include
+  // The dip is teamSize × loadedCost × drop × months too — refused without the project's own staffing
+  // (qa F-PR72-003: a borrowed $5,625/yr dip sat in INVESTMENT/YR beside a refused ROI).
+  const jCurveUsd = a.jCurve.include && staffed
     ? a.teamSize * a.loadedCostPerYear * (a.jCurve.dropPct / 100) * (a.jCurve.months / 12)
     : 0;
   const jCurve: RoiComponent = {
     valueUsd: round0(jCurveUsd),
     formulaInputs: { include: String(a.jCurve.include), dropPct: a.jCurve.dropPct, months: a.jCurve.months },
-    note: 'One-time adoption dip (DORA default 15% for 3 months) — NOT annualized.',
+    note: !staffed && a.jCurve.include
+      ? 'Not computed: no staffing of this project\'s own (see time saved).'
+      : 'One-time adoption dip (DORA default 15% for 3 months) — NOT annualized.',
   };
 
   const valueTotal = timeSaved.valueUsd + throughput.valueUsd + stabilityDelta.valueUsd;
@@ -343,6 +353,7 @@ export function computeRoi(agg: RoiWindowAggregates, a: RoiAssumptions, opts: Ro
   return {
     window: agg.windowDays,
     annualizationFactor: round2(k),
+    staffed,
     value: { timeSaved, throughput, stabilityDelta, totalUsd: round2(valueTotal) },
     investment: { aiSpend, training, jCurve, totalUsd: round2(investmentTotal) },
     roiPct,

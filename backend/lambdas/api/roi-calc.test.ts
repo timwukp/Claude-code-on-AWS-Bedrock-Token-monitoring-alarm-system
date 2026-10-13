@@ -106,6 +106,13 @@ describe('computeRoi', () => {
     expect(r.value.timeSaved.note).toMatch(/Not computed/);
     expect(r.value.timeSaved.formulaInputs).not.toHaveProperty('teamSize');
     expect(r.investment.training.valueUsd).toBe(0);
+    expect(r.investment.jCurve.valueUsd).toBe(0); // qa F-PR72-003: the adoption dip borrows the same inputs
+    const dip = computeRoi(agg(), { ...assume(), jCurve: { include: true, dropPct: 15, months: 3 } });
+    expect(dip.investment.jCurve.valueUsd).toBe(0);
+    expect(dip.investment.jCurve.note).toMatch(/Not computed/);
+    expect(computeRoi(agg(), { ...assume(), jCurve: { include: true, dropPct: 15, months: 3 } }, { perProjectStaffing: true }).investment.jCurve.valueUsd).toBeGreaterThan(0);
+    expect(r.staffed).toBe(false);
+    expect(computeRoi(agg(), assume(), { perProjectStaffing: true }).staffed).toBe(true);
     expect(r.value.totalUsd).toBe(r.value.throughput.valueUsd + r.value.stabilityDelta.valueUsd);
     const staffedRun = computeRoi(agg(), assume(), { perProjectStaffing: true });
     expect(staffedRun.value.timeSaved.valueUsd).toBeGreaterThan(0);

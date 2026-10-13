@@ -16,6 +16,9 @@
 5. `backend/lambdas/api/roi-calc.ts`, `backend/lambdas/api/roi-calc.test.ts` — qa F-PR72-001 (round 1 on this PR): without
    the project's own staffing the time-saved and training components are refused (0, with a note), not just the
    percentage, so the table and waterfall stop crediting a borrowed +$18,750/yr.
+5b. `frontend/src/pages/RoiPage.tsx`, `frontend/src/api/client.ts` — qa F-PR72-003 (round 2): `RoiResult.staffed`; the table
+   shows VALUE/YR as "withheld" (not "+$0") and marks INVESTMENT/YR as measured spend only for unstaffed projects; the
+   adoption-dip term is refused like time saved and training.
 6. `frontend/src/pages/ProjectsPage.tsx` — qa F-PR72-002: the "Total tokens" tile says it counts input + output only.
 7. `infra/lib/stacks/api-stack.ts` — `cloudwatch:GetMetricData` added to QuotasFn's read-only CloudWatch statement
    (the deployed first cut 500'd on AccessDenied: a local run under my own credentials had masked the missing action).

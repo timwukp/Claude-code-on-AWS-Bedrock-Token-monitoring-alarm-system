@@ -225,8 +225,10 @@ export function RoiPage() {
                     <td className="num">{fmtUsd(p.monthlySpendUsd)}</td>
                     <td className="num">{be.hoursPerMonth != null ? `${be.hoursPerMonth.toFixed(1)}${be.pctOfCapacity != null ? ` · ${be.pctOfCapacity.toFixed(1)}%` : ''}` : '—'}</td>
                     <td><span className={`badge ${v.cls}`}>{v.text}</span></td>
-                    <td className="num">{fmtSignedUsd(r.value.totalUsd)}</td>
-                    <td className="num">{fmtUsd(r.investment.totalUsd)}</td>
+                    <td className="num">{r.staffed === false
+                      ? <span className="muted" title="Withheld: no staffing of this project's own (teamSize, loaded cost) — a value built on a shared default is not reported">withheld</span>
+                      : fmtSignedUsd(r.value.totalUsd)}</td>
+                    <td className="num">{fmtUsd(r.investment.totalUsd)}{r.staffed === false && <span className="muted" title="Measured AI spend only; training and adoption dip need this project's own staffing"> *</span>}</td>
                     <td className="num">{r.roiPct != null ? <strong>{r.roiPct > 0 ? '+' : ''}{r.roiPct}%</strong> : <span className="muted" title={r.refusals.join(' ')}>{shortRefusal(p)}</span>}</td>
                   </tr>
                 );
