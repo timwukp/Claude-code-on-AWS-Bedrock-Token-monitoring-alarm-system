@@ -22,5 +22,9 @@
 - `/v1/quotas` live duration before vs after (CloudWatch REPORT): before 6–11 s; target < 2 s warm.
 - Served bundle carries the new helpers; qa run on the PR re-verifies F-PR69-003 and F-PR69-007.
 
+5. (qa round 1 on the PR) `roi-calc.ts`: when `perProjectStaffing !== true`, `value.timeSaved` and `investment.training`
+   are 0 with "Not computed" notes and no `teamSize` in their formula inputs; `value.totalUsd` excludes them. The
+   Projects "Total tokens" tile states it counts input + output tokens only.
+
 ## Out of scope
 F-PR69-008 (owner ops); F-PR68-003 (already FIXED in #68 round 2).

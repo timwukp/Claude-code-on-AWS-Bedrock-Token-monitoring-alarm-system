@@ -100,6 +100,15 @@ describe('computeRoi', () => {
     expect(r.paybackMonths).toBeNull();
     expect(r.refusals.join(' ')).toMatch(/no staffing of its own configured/);
     expect(r.breakEven.hoursPerMonth).not.toBeNull();
+    // qa F-PR72-001: the refused composite must not still CARRY a borrowed time-saved dollar figure —
+    // the table and waterfall read value.timeSaved, and credited +$18,750/yr to every unstaffed project.
+    expect(r.value.timeSaved.valueUsd).toBe(0);
+    expect(r.value.timeSaved.note).toMatch(/Not computed/);
+    expect(r.value.timeSaved.formulaInputs).not.toHaveProperty('teamSize');
+    expect(r.investment.training.valueUsd).toBe(0);
+    expect(r.value.totalUsd).toBe(r.value.throughput.valueUsd + r.value.stabilityDelta.valueUsd);
+    const staffedRun = computeRoi(agg(), assume(), { perProjectStaffing: true });
+    expect(staffedRun.value.timeSaved.valueUsd).toBeGreaterThan(0);
     expect(computeRoi(agg(), assume(), { perProjectStaffing: true }).roiPct).not.toBeNull();
   });
 

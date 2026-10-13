@@ -183,14 +183,22 @@ export function computeRoi(agg: RoiWindowAggregates, a: RoiAssumptions, opts: Ro
   const k = DAYS_PER_YEAR / agg.windowDays;
 
   // ---- Value: time saved (floor −100%) -----------------------------------------------------
+  // The whole term is teamSize × loadedCost × pct. Without this project's OWN staffing the inputs
+  // are a shared default, and a dollar figure built on them is the very claim the composite refuses
+  // below — so the component is refused too, not just the percentage (qa F-PR72-001: the table and
+  // waterfall credited +$18,750/yr to every unstaffed project while the card said "refused").
+  const staffed = opts.perProjectStaffing === true;
   const netPct = Math.max(a.netTimeSavedPct, -100);
   if (netPct !== a.netTimeSavedPct) notes.push('netTimeSavedPct clamped to the −100% floor');
-  const timeSavedUsd = a.teamSize * a.loadedCostPerYear * (netPct / 100);
+  const timeSavedUsd = staffed ? a.teamSize * a.loadedCostPerYear * (netPct / 100) : 0;
   const timeSaved: RoiComponent = {
     valueUsd: round0(timeSavedUsd),
-    formulaInputs: { teamSize: a.teamSize, loadedCostPerYear: a.loadedCostPerYear, netTimeSavedPct: netPct },
-    note: 'staff × loaded cost × net time saved (net of the verification tax; may be negative). '
-      + 'An ASSUMPTION, not telemetry — see the RCT bracket.',
+    formulaInputs: staffed ? { teamSize: a.teamSize, loadedCostPerYear: a.loadedCostPerYear, netTimeSavedPct: netPct } : { netTimeSavedPct: netPct },
+    note: staffed
+      ? 'staff × loaded cost × net time saved (net of the verification tax; may be negative). '
+        + 'An ASSUMPTION, not telemetry — see the RCT bracket.'
+      : 'Not computed: this project has no staffing of its own (teamSize, loaded cost per year), and a '
+        + 'time-saved figure built on a shared default would claim one team\'s saving once per project.',
   };
 
   // ---- Value: throughput (refused without a revenue base AND a baseline) --------------------
@@ -249,10 +257,11 @@ export function computeRoi(agg: RoiWindowAggregates, a: RoiAssumptions, opts: Ro
     formulaInputs: { windowSpendUsd: round2(agg.spendUsd), windowDays: agg.windowDays, annualizationFactor: round2(k) },
     note: 'MEASURED per-project AI spend (daily rollups × rate card), annualized from the window.',
   };
+  // Training also multiplies by teamSize; a borrowed team size would invent an investment too.
   const training: RoiComponent = {
-    valueUsd: round0(a.trainingCostPerUser * a.teamSize),
-    formulaInputs: { trainingCostPerUser: a.trainingCostPerUser, teamSize: a.teamSize },
-    note: 'One-time — deliberately NOT annualized.',
+    valueUsd: staffed ? round0(a.trainingCostPerUser * a.teamSize) : 0,
+    formulaInputs: staffed ? { trainingCostPerUser: a.trainingCostPerUser, teamSize: a.teamSize } : { trainingCostPerUser: a.trainingCostPerUser },
+    note: staffed ? 'One-time — deliberately NOT annualized.' : 'Not computed: no staffing of this project\'s own (see time saved).',
   };
   const jCurveUsd = a.jCurve.include
     ? a.teamSize * a.loadedCostPerYear * (a.jCurve.dropPct / 100) * (a.jCurve.months / 12)
