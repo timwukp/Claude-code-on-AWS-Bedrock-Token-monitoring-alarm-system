@@ -61,6 +61,11 @@ Browser render left to qa's run on the PR.
 | F-PR72-001 MEDIUM `/roi`: unstaffed projects credited +$18,750/yr time saved while the card said ROI was refused | Real, and this author's from feature-14: the composite percentage was refused without the project's own staffing, but `value.timeSaved` (and `investment.training`) were still computed from the shared default | Both components are 0 with a "Not computed" note and no `teamSize` in their inputs; `value.totalUsd` excludes them. Test 6d extended. Live after the owner's RoiFn deploy (10-13 08:02Z): 21 projects, every unstaffed one `timeSaved` = 0 / `training` = 0; the one staffed project keeps $50,000 and 17.8% |
 | F-PR72-002 LOW `/projects`: "Total tokens" excludes prompt-cache tokens without saying so | Real: Overview's token figure counts all four kinds since feature-37; Projects counts input + output | The tile's foot now states the definition. Bundle `index-D9nx_nib.js` |
 
+## qa round 2 on the PR (head `abd954c`) — 1 finding, fixed in `ed5573f`
+| Finding | Verdict | Action |
+|---|---|---|
+| F-PR72-003 MEDIUM `/roi`: unstaffed projects still carried a borrowed adoption-dip cost ($5,625/yr) in INVESTMENT/YR, and VALUE/YR read "+$0" instead of a withheld marker | Real — the third exit of the same hole: the J-curve term multiplies by the same borrowed teamSize × loaded cost | The dip is withheld too; `RoiResult.staffed` exposed; the table reads "withheld" for VALUE/YR and marks INVESTMENT/YR as measured spend only. Live after the RoiFn deploy (10-13 08:59Z): 21 projects, 20 unstaffed → time saved / training / dip all $0 and investment = measured AI spend exactly; the staffed one keeps $50,000 / $15,000 dip / 17%. Mutation (guard removed) fails test 6d. Bundle `index-r9ngRiML.js` |
+
 ## Known limits, stated rather than fixed
 - Cold `/v1/quotas` requests still take ~7 s (Service Quotas pagination has no name filter).
 - Zero-filled rows now appear in the Usage table — a quiet day is information, not noise.
