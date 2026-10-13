@@ -66,6 +66,12 @@ Browser render left to qa's run on the PR.
 |---|---|---|
 | F-PR72-003 MEDIUM `/roi`: unstaffed projects still carried a borrowed adoption-dip cost ($5,625/yr) in INVESTMENT/YR, and VALUE/YR read "+$0" instead of a withheld marker | Real — the third exit of the same hole: the J-curve term multiplies by the same borrowed teamSize × loaded cost | The dip is withheld too; `RoiResult.staffed` exposed; the table reads "withheld" for VALUE/YR and marks INVESTMENT/YR as measured spend only. Live after the RoiFn deploy (10-13 08:59Z): 21 projects, 20 unstaffed → time saved / training / dip all $0 and investment = measured AI spend exactly; the staffed one keeps $50,000 / $15,000 dip / 17%. Mutation (guard removed) fails test 6d. Bundle `index-r9ngRiML.js` |
 
+## qa round 3 on the PR (head `d4ab9dc`) — 2 LOW findings, fixed in the next commit; F-PR72-003 confirmed fixed
+| Finding | Verdict | Action |
+|---|---|---|
+| `/costs` negative currency reads "$-0.19" | Real: `fmtUsd` interpolated the signed number after the `$` | Sign first: "−$0.19"; a value rounding to 0.00 prints "$0.00" |
+| `/usage` cache KPI says reads bill at a flat 0.1× while the Cost page says 0.025×–0.1× per model | Real: the caption pre-dated the per-model wording fixed on `/costs` in #69 | Caption now says "at each model's cache-read rate (0.025×–0.1× input)". Bundle `index-CVMOosYj.js` |
+
 ## Known limits, stated rather than fixed
 - Cold `/v1/quotas` requests still take ~7 s (Service Quotas pagination has no name filter).
 - Zero-filled rows now appear in the Usage table — a quiet day is information, not noise.

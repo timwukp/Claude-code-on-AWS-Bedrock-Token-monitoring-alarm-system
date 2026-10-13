@@ -5,8 +5,12 @@
  * The locale is pinned rather than left to the browser (qa F-1102 was the missing separator;
  * an unpinned locale is the same bug's mirror image — a de-DE reader would see "$13.858,35"
  * for a figure the rest of the page states in en-US form). */
-export const fmtUsd = (n: number): string =>
-  `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+// Sign before the currency symbol: a negative cache-net read "$-0.19" (qa F-PR72 round 3). A value that rounds
+// to -0.00 is shown as $0.00, not "−$0.00".
+export const fmtUsd = (n: number): string => {
+  const abs = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `${n < 0 && abs !== '0.00' ? '−' : ''}$${abs}`;
+};
 
 /** Token counts: "842" / "12.3k" / "9.38M" / "16.22B" / "1.04T".
  *
