@@ -8,7 +8,7 @@ import {
 } from '../api/client';
 import { Disclosure, Kpi, Panel } from '../components/Layout';
 import { ChartTable } from '../components/ChartTable';
-import { fmtAgo, fmtAxisHours, fmtDateTime, fmtHours, fmtPct, fmtTokens, fmtUsd } from '../lib/format';
+import { fmtAgo, fmtDateTime, fmtHours, fmtPct, fmtTokens, fmtUsd, hourAxis } from '../lib/format';
 import { gridProps, legendProps, MARK, role, series, surfaceGap, tooltipProps, xAxisProps, yAxisProps } from '../charts/theme';
 import { useTimeRange } from '../lib/time-range';
 
@@ -354,7 +354,7 @@ export function DoraPage() {
                         <LineChart data={tl} margin={{ left: 4, right: 12, top: 8 }}>
                           <CartesianGrid {...gridProps()} />
                           <XAxis dataKey="week" {...xAxisProps()} tickFormatter={(w: string) => w.slice(5)} />
-                          <YAxis {...yAxisProps(fmtAxisHours)} width={40} />
+                          <YAxis {...yAxisProps()} {...hourAxis(Math.max(0, ...tl.map((w) => w.medianLeadHours ?? 0)))} width={40} />
                           <Tooltip {...tooltipProps()} formatter={(v: number) => fmtHours(v)} />
                           <Line type="monotone" dataKey="medianLeadHours" name="Median lead time" stroke={series()[2]} {...MARK.line} dot={{ r: MARK.dot.r, fill: series()[2], strokeWidth: 0 }} connectNulls />
                         </LineChart>

@@ -26,6 +26,27 @@ function bucketDaily(points: UsagePoint[]): UsagePoint[] {
   return [...by.values()];
 }
 
+/**
+ * Every bucket in the window, in order, with zeros where nothing was recorded. The API returns only
+ * the hours that had traffic, and a category axis drawn from those alone compresses time: a quiet
+ * weekend vanishes and the tick spacing stops meaning anything (qa F-PR69-007). Filling the gaps
+ * keeps the x-axis linear in time while the points stay the same objects the table shows.
+ */
+export function fillBuckets(points: UsagePoint[], fromIso: string, toIso: string, daily: boolean): UsagePoint[] {
+  const stepMs = daily ? 86_400_000 : 3_600_000;
+  const key = (iso: string) => (daily ? `${iso.slice(0, 10)}T00:00:00Z` : `${iso.slice(0, 13)}:00:00Z`);
+  const have = new Map(points.map((p) => [key(p.timestamp), p]));
+  const out: UsagePoint[] = [];
+  const end = Date.parse(key(toIso));
+  for (let t = Date.parse(key(fromIso)); t <= end; t += stepMs) {
+    const k = new Date(t).toISOString().replace('.000Z', 'Z');
+    out.push(have.get(k) ?? { timestamp: k, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, invocations: 0 });
+  }
+  // Anything stamped outside the window (clock skew, a bucket the API included at the edge) is kept at the end rather than dropped.
+  for (const p of points) if (!out.some((o) => o.timestamp === key(p.timestamp))) out.push(p);
+  return out;
+}
+
 export function UsagePage() {
   const range = useTimeRange([7, 30, 90, 'mtd']);
   const [points, setPoints] = useState<UsagePoint[]>([]);
@@ -42,7 +63,7 @@ export function UsagePage() {
       // which read as duplicated/non-monotonic ticks (F-004). Longer windows are bucketed to days.
       .then((r) => {
         if (cancelled) return;
-        const pts = daily ? bucketDaily(r.points) : r.points;
+        const pts = fillBuckets(daily ? bucketDaily(r.points) : r.points, range.fromIso, range.toIso, daily);
         setPoints(pts.map((p) => ({ ...p, label: daily ? p.timestamp.slice(5, 10) : `${p.timestamp.slice(5, 10)} ${p.timestamp.slice(11, 16)}` })));
         setError(null);
       })
@@ -70,7 +91,7 @@ export function UsagePage() {
              foot={`${range.label.toLowerCase()} — billed input, same definition as the Cost page`} />
         <Kpi label="Output tokens" value={fmtTokens(totalOut)} accent={role('output')} foot={`${range.label.toLowerCase()} (${daily ? 'daily' : 'hourly'} buckets)`} />
         <Kpi label="Prompt-cache tokens" value={fmtTokens(totalCache)} accent={role('cache')}
-             foot="reads + writes — quotas count both as input; billing prices reads at 0.1× input, writes at 1.25× (2× for 1-hour)" />
+             foot="reads + writes — quotas count both as input; billing prices reads at each model's cache-read rate (0.025×–0.1× input) and writes at 1.25× input (2× for the 1-hour TTL)" />
         <Kpi label="Invocations" value={fmtInt(totalCalls)} accent="var(--accent-amber)" foot="API calls" />
       </div>
 

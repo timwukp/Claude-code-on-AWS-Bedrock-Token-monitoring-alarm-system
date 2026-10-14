@@ -5,8 +5,12 @@
  * The locale is pinned rather than left to the browser (qa F-1102 was the missing separator;
  * an unpinned locale is the same bug's mirror image — a de-DE reader would see "$13.858,35"
  * for a figure the rest of the page states in en-US form). */
-export const fmtUsd = (n: number): string =>
-  `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+// Sign before the currency symbol: a negative cache-net read "$-0.19" (qa F-PR72 round 3). A value that rounds
+// to -0.00 is shown as $0.00, not "−$0.00".
+export const fmtUsd = (n: number): string => {
+  const abs = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `${n < 0 && abs !== '0.00' ? '−' : ''}$${abs}`;
+};
 
 /** Token counts: "842" / "12.3k" / "9.38M" / "16.22B" / "1.04T".
  *
@@ -46,6 +50,27 @@ export const fmtPct = (n: number | null | undefined): string =>
 
 /** Axis-tick variant for hour values (hides the origin tick, see fmtAxisTokens). */
 export const fmtAxisHours = (h: number): string => (h === 0 ? '' : h >= 48 ? `${Math.round(h / 24)}d` : `${Math.round(h)}h`);
+
+/**
+ * Axis ticks for a duration-in-hours series, in ONE unit. Recharts picks "nice" ticks in the data's
+ * unit (25, 50, 75, 100 h), and a per-tick formatter then prints "25h, 2d, 3d, 4d" — mixed units and
+ * an odd first tick (qa F-PR69-003). So when the series reaches two days the ticks are placed at
+ * whole-day multiples and every label is in days; below that, whole hours.
+ */
+export function hourAxis(maxHours: number): { ticks: number[]; tickFormatter: (h: number) => string; domain: [number, number] } {
+  const max = Math.max(0, maxHours);
+  if (max >= 48) {
+    const days = max / 24;
+    const step = days <= 6 ? 1 : days <= 14 ? 2 : days <= 35 ? 7 : 14; // whole days per tick
+    const top = Math.ceil(days / step) * step;
+    const ticks: number[] = []; for (let d = 0; d <= top; d += step) ticks.push(d * 24);
+    return { ticks, domain: [0, top * 24], tickFormatter: (h) => (h === 0 ? '' : `${Math.round(h / 24)}d`) };
+  }
+  const step = max <= 6 ? 1 : max <= 12 ? 2 : max <= 24 ? 4 : 12;
+  const top = Math.max(step, Math.ceil(max / step) * step);
+  const ticks: number[] = []; for (let h = 0; h <= top; h += step) ticks.push(h);
+  return { ticks, domain: [0, top], tickFormatter: (h) => (h === 0 ? '' : `${h}h`) };
+}
 
 /** ISO timestamp → "2026-09-16 09:30" (UTC, as the API returns). */
 export const fmtDateTime = (iso: string | null | undefined): string => (iso ? iso.slice(0, 16).replace('T', ' ') : '—');

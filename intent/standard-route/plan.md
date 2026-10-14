@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** 10d3296545d05bd42c7c38e471917da7e07de566
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #70 (cache-cost-truth, feature-37) merged; the peer holds nothing and
 this is the only chain in flight.

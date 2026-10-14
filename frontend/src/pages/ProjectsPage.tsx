@@ -190,8 +190,8 @@ export function ProjectsPage() {
         <Kpi label="Total tokens" value={fmtTokens(totalTokens)} accent="var(--accent-blue)"
              chip={srcChip(apiTotalTokens != null ? 'rollups' : rowSource)}
              foot={apiTotalTokens != null
-               ? `per-model rollups across every project, not just the ${rows.length} row(s) below (those sum to ${fmtTokens(rowsTokens)})${rollupsAsOf ? ` · as of ${rollupsAsOf.slice(11, 16)} UTC` : ''}`
-               : 'sum of the rows in the table below'} />
+               ? `input + output tokens (prompt-cache tokens not counted here; Overview's token figure counts all four kinds) · per-model rollups across every project, not just the ${rows.length} row(s) below (those sum to ${fmtTokens(rowsTokens)})${rollupsAsOf ? ` · as of ${rollupsAsOf.slice(11, 16)} UTC` : ''}`
+               : 'input + output tokens (prompt-cache tokens not counted here) · sum of the rows in the table below'} />
         <Kpi label="Total est. cost" value={fmtUsd(totalCost)} accent="var(--accent-green)"
              chip={srcChip(apiTotalUsd != null ? 'rollups' : rowSource)}
              foot={apiTotalUsd != null && Math.abs(apiTotalUsd - rowsCost) > roundingBound + 1e-9
