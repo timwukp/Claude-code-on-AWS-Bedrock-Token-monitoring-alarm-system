@@ -6,6 +6,17 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Added — the spend the invocation logs never see (feature-40)
+- **Since 2026-10-06, Bedrock Mantle traffic bills under the ordinary usage types but never reaches the invocation
+  logs** — for Opus 5.5, 2026-10-06 → 10-13, that was $1,098 of $1,748 (63%), proven by Cost Explorer − logs matching
+  `AWS/BedrockMantle` token counts to within 6 tokens. A daily **bill collector** (`BillCollectorFn`, `ce:GetCostAndUsage`,
+  ≈ $0.5/month) now stores Cost Explorer's Bedrock lines (`BILL#DAILY`), and `/v1/costs` + `/v1/overview` carry a `bill`
+  block: per model, billed vs what the logs price on the same days, the difference named **not logged**, with Mantle
+  inferences and tokens as the explanation — never multiplied by a rate (Mantle's token metric has no cache split).
+  `/v1/latency` reports Mantle inferences ("latency not published by AWS"). The Cost page gains a "Billed vs what the
+  logs price" panel; the Overview spend tile states the unlogged amount beside the logged figure; headline numbers stay
+  "logged, reconcilable". Research: `docs/research-mantle-unlogged-spend.md`. (feature-40, PR #TBD)
+
 ### Fixed — the three qa findings no chain owned (feature-39)
 - **`/v1/quotas` 6–11 s → 0.3–0.6 s warm** (qa F-PR68-004): per-model token sums now come from two `GetMetricData`
   calls instead of four serial `GetMetricStatistics` calls per model, and the bedrock quota list is cached in the

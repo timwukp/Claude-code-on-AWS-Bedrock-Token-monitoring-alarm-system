@@ -49,6 +49,14 @@ change to `backend/lambdas/api/cost-calc.ts`.
 4. **Record** the two numbers, the difference and the reading in `docs/incidents/` (append to the current year's
    reconciliation log; create `docs/incidents/reconciliation-log.md` on first use).
 
+## Unlogged spend (Bedrock Mantle) — read the `bill` block first
+Since 2026-10-06 Bedrock Mantle traffic bills under the ordinary usage types but never reaches the invocation logs
+(`docs/research-mantle-unlogged-spend.md`). The daily collector (`BillCollectorFn`) stores Cost Explorer's lines as
+`BILL#DAILY`; `/v1/costs.bill` compares, per model and per billed day, the bill with what the logs price and names the
+difference **not logged**. So the monthly comparison above is now two numbers: the rollups should match the bill's
+`loggedEstimateUsd`, and `totalUnloggedUsd` is the Mantle share — explained by its CloudWatch inferences, never priced
+from its tokens (no cache split there). A rising unlogged share is not a pricing defect; a non-zero `overEstimated` flag is.
+
 ## Known residuals (expected, disclosed on the pages)
 
 - **Route tiers are priced (feature-38).** The card holds the global tier; `routeMultiplier()` applies the standard tier

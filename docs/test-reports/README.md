@@ -47,6 +47,7 @@ results. One report per feature (mapped to a GitHub issue / PR).
 | Cache-cost truth (copy + docs corrected; RCA; pricing-completeness + rollup-fields tests; Price List drift script; payer reconciliation runbook) | — | #70 | [feature-37](./feature-37-cache-cost-truth.md) | PASS (gates) |
 | Standard route priced (×1.1 on us./geo, inference-profile and direct calls; Athena parity; lower-bound caveats removed) | — | #71 | [feature-38](./feature-38-standard-route.md) | PASS (gates + bill reconciliation +0.02%) |
 | qa leftovers (/dora one-unit axis; /usage time axis zero-filled; /v1/quotas 6–11 s → 0.3–0.6 s) | — | #72 | [feature-39](./feature-39-qa-leftovers.md) | PASS (gates + live measurement) |
+| Mantle visibility (daily bill collector; billed vs logged per model; Mantle counts on /costs, /overview, /latency) | — | #TBD | [feature-40](./feature-40-mantle-visibility.md) | PASS (gates + live: unlogged $1,096.96 = Mantle) |
 Each report records: scope, unit-test results, build/synth gates, real-AWS validation evidence,
 any defect found+fixed during validation, and a verdict. Reports are written before opening the
 PR; a feature is only PR-ready when all gates are green.
