@@ -35,6 +35,8 @@ import { getTenantId } from '../shared/tenant';
 import * as projectRegistry from '../shared/project-registry';
 import { projdayRange } from './project-calc';
 import { buildProjectLatencyRows, latencyCoverage } from './latency-projects';
+import { mantleConsistent } from './bill-calc';
+import { readMantle } from './bill-read';
 
 const cw = new CloudWatchClient({});
 const bedrock = new BedrockClient({});
@@ -469,9 +471,22 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const streamingPct =
       fleetE2e.samples && fleetTtft.samples ? Math.round((fleetTtft.samples / fleetE2e.samples) * 100) : null;
 
+    // Bedrock Mantle (feature-40): calls AWS/BedrockMantle counts but publishes no latency metric, and they
+    // never reach the invocation logs. Reported as counts beside the fleet figures, never inside them.
+    const mantleCounts = await readMantle(start.toISOString().slice(0, 10), end.toISOString().slice(0, 10))
+      .catch((err) => { console.warn('latency: Mantle counts unavailable', (err as Error).message); return null; });
+    const mantle = mantleCounts ? {
+      inferences: [...mantleCounts.perModel.values()].reduce((s, c) => s + c.inferences, 0),
+      clientErrors: mantleCounts.clientErrors,
+      models: [...mantleCounts.perModel].map(([model, c]) => ({ model, inferences: c.inferences })).filter((m) => m.inferences > 0).sort((a, b) => b.inferences - a.inferences),
+      inconsistent: !mantleConsistent(mantleCounts.perModel, mantleCounts.fleetInferences),
+      note: 'Bedrock Mantle publishes invocation and token counts but no latency for this endpoint; these calls are not in the fleet figures above and not in the invocation logs.',
+    } : null;
+
     return ok({
       window: windowDays,
       generatedAt: end.toISOString(),
+      mantle,
       source: 'CloudWatch AWS/Bedrock (InvocationLatency, TimeToFirstToken)',
       scope: 'aws-account',
       scopeNote:
