@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api, OverviewResponse } from '../api/client';
+import { api, BillBlock, OverviewResponse } from '../api/client';
 import { EmptyState } from '../components/EmptyState';
 import { KpiTile } from '../components/KpiTile';
 import { Panel } from '../components/Layout';
-import { fmtUsd, fmtTokens } from '../lib/format';
+import { fmtInt, fmtTokens, fmtUsd } from '../lib/format';
 import { countModelIds, mergeModelRows } from '../lib/model-names';
 import { useTimeRange } from '../lib/time-range';
 
 type ModelRow = OverviewResponse['byModel'][number];
 interface MergedRow { canonical: string; friendly: string; regions: string[]; ids: string[]; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; cacheSavingsUsd: number | null; cacheNetUsd: number | null; cacheReadUsd: number | null; cacheWriteUsd: number | null; estimatedUsd: number }
-interface AllTime { byModel: { modelId: string; estimatedUsd?: number }[]; totalEstimatedUsd: number }
+interface AllTime { byModel: { modelId: string; estimatedUsd?: number }[]; totalEstimatedUsd: number; bill?: BillBlock | null }
 // One definition of "model" and "id" for the tile and the footer: rows merged by canonical model after ARN→id
 // normalisation (qa F-PR66-001: the window said 34 ids, the all-time footer 28; F-PR66-006/F-PR67-001: a row
 // listed the same id twice because the ARN and the bare id were counted as two).
@@ -75,6 +75,8 @@ export function CostsPage() {
   if (!ov) return <EmptyState kind="loading" title={`Loading costs for the ${range.label.toLowerCase()}…`} />;
 
   const windowLabel = range.label.toLowerCase();
+  // Billed vs logged for the selected window (feature-40); /v1/overview carries it for the window.
+  const bill: BillBlock | null = ov.bill ?? null;
   const compare = `vs ${ov.window.priorFrom.slice(5)} – ${ov.window.priorTo.slice(5)}`;
   const totalEstimatedUsd = ov.spend.currentUsd;
   const totalCacheRead = merged.reduce((s, r) => s + r.cacheReadTokens, 0);
@@ -216,6 +218,38 @@ export function CostsPage() {
         <p className="muted" style={{ fontSize: 12, marginTop: 12, marginBottom: 0 }}>{footer}</p>
         <p className="muted" style={{ fontSize: 12, marginTop: 8, marginBottom: 0 }}>{pricingNote}</p>
       </Panel>
+
+      {bill && bill.byModel.length > 0 && (
+        <Panel title="Billed vs what the logs price" helpId="cost.estimated-spend"
+               desc={`${windowLabel} · bill through ${bill.window.to} (${bill.window.daysBilled} billed day${bill.window.daysBilled === 1 ? '' : 's'} in the window) · dollars from Cost Explorer, Mantle counts from CloudWatch${bill.asOf ? ` · collected ${bill.asOf.slice(0, 16).replace('T', ' ')} UTC` : ''}`}>
+          <table className="data">
+            <thead>
+              <tr><th>Model</th><th className="num">Billed (USD)</th><th className="num">Logged estimate (USD)</th><th className="num">Not logged (USD)</th><th>Bedrock Mantle</th></tr>
+            </thead>
+            <tbody>
+              {bill.byModel.map((r) => (
+                <tr key={r.model}>
+                  <td className="mono" style={{ fontSize: 12 }}>{r.model}</td>
+                  <td className="num">{fmtUsd(r.billedUsd)}</td>
+                  <td className="num">{fmtUsd(r.loggedEstimateUsd)}{r.overEstimated && <span className="badge warning" style={{ marginLeft: 6 }} title="Our logged estimate is above the bill for this model">over</span>}</td>
+                  <td className="num"><strong>{fmtUsd(r.unloggedUsd)}</strong></td>
+                  <td className="muted" style={{ fontSize: 12 }}>{r.mantle ? `${fmtInt(r.mantle.inferences)} inferences · ${fmtTokens(r.mantle.inputTokens)} in · ${fmtTokens(r.mantle.outputTokens)} out` : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="total-row">
+                <td>Total{bill.loggedSharePct != null ? <span className="muted"> · logged share {bill.loggedSharePct}%</span> : ''}</td>
+                <td className="num">{fmtUsd(bill.totalBilledUsd)}</td>
+                <td className="num">{fmtUsd(bill.totalLoggedEstimateUsd)}</td>
+                <td className="num"><strong>{fmtUsd(bill.totalUnloggedUsd)}</strong></td>
+                <td />
+              </tr>
+            </tfoot>
+          </table>
+          <p className="muted" style={{ fontSize: 12, marginTop: 12, marginBottom: 0 }}>{bill.note}{bill.mantleInconsistent ? ' Mantle per-model and fleet series disagree by more than 1% — the counts are shown but not trusted.' : ''}</p>
+        </Panel>
+      )}
     </>
   );
 }

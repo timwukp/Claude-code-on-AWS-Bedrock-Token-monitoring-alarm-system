@@ -165,6 +165,8 @@ export interface LatencyResponse {
   window: number; generatedAt: string; source: string; scope: string; scopeNote: string;
   fleet: { e2e: LatencyStat; ttft: LatencyStat; generation: LatencyStat };
   models: LatencyRow[]; projects: LatencyProjects; hops: LatencyHop[];
+  /** Bedrock Mantle counts (feature-40): the endpoint publishes no latency, and its calls are not in the logs. */
+  mantle?: { inferences: number; clientErrors: number; models: { model: string; inferences: number }[]; inconsistent: boolean; note: string } | null;
   coverage: { e2eSamples: number | null; ttftSamples: number | null; streamingPct: number | null; note: string };
   /** Fleet minus the listed rows, so the By-model column sums to the fleet total. */
   modelRemainder: { seriesNotShown: number; e2eSamples: number | null; note: string };
@@ -197,6 +199,22 @@ export interface OverviewResponse {
   rollupsAsOf: string | null;
   /** When the aggregator last ran (feature-36), as distinct from the newest log it has folded in. */
   rollupsLastRunAt?: string | null;
+  /** Billed vs what the logs price, for the window (feature-40). Null until the daily bill collector has run. */
+  bill?: BillBlock | null;
+}
+
+/** "Billed vs logged" (feature-40). Dollars from Cost Explorer (daily collector), Mantle counts from CloudWatch. */
+export interface BillModelRow {
+  model: string; billedUsd: number;
+  byKind?: { input: number; output: number; cacheRead: number; cacheWrite: number; other: number };
+  loggedEstimateUsd: number; unloggedUsd: number; overEstimated?: boolean;
+  mantle: { inferences: number; inputTokens: number; outputTokens: number } | null;
+}
+export interface BillBlock {
+  window: { from: string; to: string; daysBilled: number }; asOf: string | null;
+  byModel: BillModelRow[];
+  totalBilledUsd: number; totalLoggedEstimateUsd: number; totalUnloggedUsd: number; loggedSharePct: number | null;
+  dollarsSource: 'cost-explorer'; tokensSource: 'cloudwatch'; note: string; mantleInconsistent?: boolean;
 }
 export interface GovernanceBudget {
   name?: string; limitUsd: number; actualUsd: number; forecastedUsd: number; timeUnit?: string;
@@ -242,7 +260,7 @@ export const api = {
     request<{ points: UsagePoint[] }>(
       `v1/usage${from || to ? `?from=${from ?? ''}&to=${to ?? ''}` : ''}`,
     ),
-  costs: () => request<{ byModel: any[]; totalEstimatedUsd: number }>('v1/costs'),
+  costs: () => request<{ byModel: any[]; totalEstimatedUsd: number; bill?: BillBlock | null }>('v1/costs'),
   anomalies: () => request<{ anomalies: any[] }>('v1/anomalies'),
   // source 'fast' reads pre-aggregated rollups from DynamoDB (quick, project_id codes);
   // 'full' runs the Athena join for human-readable project names + cost centers.
