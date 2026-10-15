@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** bc366b3e5732265322e3fd5bbd04aa48c349b7a0
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #71 (standard-route, feature-38) merged; the only chain in flight.
 
