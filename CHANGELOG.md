@@ -15,7 +15,7 @@ are grouped by development milestone rather than strict semver releases.
   inferences and tokens as the explanation — never multiplied by a rate (Mantle's token metric has no cache split).
   `/v1/latency` reports Mantle inferences ("latency not published by AWS"). The Cost page gains a "Billed vs what the
   logs price" panel; the Overview spend tile states the unlogged amount beside the logged figure; headline numbers stay
-  "logged, reconcilable". Research: `docs/research-mantle-unlogged-spend.md`. (feature-40, PR #TBD)
+  "logged, reconcilable". Research: `docs/research-mantle-unlogged-spend.md`. (feature-40, PR #73)
 
 ### Fixed — the three qa findings no chain owned (feature-39)
 - **`/v1/quotas` 6–11 s → 0.3–0.6 s warm** (qa F-PR68-004): per-model token sums now come from two `GetMetricData`

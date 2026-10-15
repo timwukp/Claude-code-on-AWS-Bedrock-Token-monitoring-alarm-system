@@ -1,6 +1,6 @@
 # Feature 40 — Mantle visibility: the spend the invocation logs never see
 
-- **Chain:** `intent/mantle-visibility/` · **Branch:** `feat/mantle-visibility` off `main@e849de8` (post-#72) · **PR:** #TBD
+- **Chain:** `intent/mantle-visibility/` · **Branch:** `feat/mantle-visibility` off `main@e849de8` (post-#72) · **PR:** #73
 - **Origin:** a peer session's gateway study pointed at `AWS/BedrockMantle`; the three-source check in
   `docs/research-mantle-unlogged-spend.md` then showed that Bedrock Mantle traffic is billed but never logged.
 - **Date:** 2026-10-14/15
