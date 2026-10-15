@@ -28,7 +28,8 @@ type SortKey = 'estimatedUsd' | 'inputTokens' | 'outputTokens' | 'cacheReadToken
 export function CostsPage() {
   const range = useTimeRange([7, 30, 90, 'mtd']);
   const [ov, setOv] = useState<OverviewResponse | null>(null);
-  const [allTime, setAllTime] = useState<AllTime | null>(null);
+  // undefined = /v1/costs still pending; null = it failed.
+  const [allTime, setAllTime] = useState<AllTime | null | undefined>(undefined);
   const [widest, setWidest] = useState<OverviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'estimatedUsd', dir: -1 });
@@ -116,7 +117,9 @@ export function CostsPage() {
   const allTimeCounts = allTime ? modelCounts([...allTime.byModel, ...(widest?.byModel ?? []), ...ov.byModel]) : null;
   const footer = (allTimeCounts
     ? `All time: ${fmtUsd(allTime!.totalEstimatedUsd)} across ${plural(allTimeCounts.models, 'model')} (${plural(allTimeCounts.ids, 'id')}, counted the same way as the tile above) · the same rate card prices the By project and Overview pages, so their totals reconcile with this one.`
-    : 'All-time total unavailable — the costs endpoint did not respond.')
+    : allTime === undefined
+      ? 'Loading all-time total…'
+      : 'All-time total unavailable — the costs endpoint did not respond.')
     + (centGap > 0 ? ` The shown rows sum to ${fmtUsd(sum('estimatedUsd'))}, ${plural(centGap, 'cent')} from the tile — per-model rounding${!showZero && zeroRows.length ? ` and ${plural(zeroRows.length, 'folded model')} below $${ZERO_COST_THRESHOLD.toFixed(2)}` : ''}.` : '');
   // What the estimate prices, in one place. Cache writes (the bill's largest token line) were priced at $0 until
   // feature-36; the standard-route tier (×1.1) was missing until feature-38. Nothing on the bill's token lines is
