@@ -82,12 +82,13 @@ export class EtlStack extends cdk.Stack {
       projectRoot: BACKEND_ROOT,
       depsLockFilePath: BACKEND_LOCK,
       handler: 'handler',
-      timeout: cdk.Duration.minutes(2),
-      memorySize: 256,
+      timeout: cdk.Duration.minutes(5), // the logged side walks every tenant's PROJDAY rows (thousands of identity ARNs)
+      memorySize: 512,
       tracing: lambda.Tracing.ACTIVE,
-      environment: { AGGREGATES_TABLE: tables.aggregates.tableName, BILL_LOOKBACK_DAYS: '4' },
+      environment: { AGGREGATES_TABLE: tables.aggregates.tableName, TENANTS_TABLE: tables.tenants.tableName, BILL_LOOKBACK_DAYS: '4' },
     });
     tables.aggregates.grantReadWriteData(billCollectorFn);
+    tables.tenants.grantReadData(billCollectorFn); // profile cache: price profile-ARN rows as their model
     billCollectorFn.addToRolePolicy(new iam.PolicyStatement({ actions: ['ce:GetCostAndUsage'], resources: ['*'] }));
     new events.Rule(this, 'BillCollectorSchedule', {
       schedule: events.Schedule.cron({ hour: '6', minute: '30' }), // 06:30 UTC daily — after Cost Explorer's overnight refresh

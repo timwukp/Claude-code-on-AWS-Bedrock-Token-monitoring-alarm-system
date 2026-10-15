@@ -1,8 +1,8 @@
 /**
  * The three inputs of the bill block (feature-40), fetched for the API readers:
  *   - stored Cost Explorer lines (BILL#DAILY, written by ingestion/bill-collector.ts) + SYSTEM#BILL.lastRunAt;
- *   - the logged estimate per model key per day, over EVERY tenant's PROJDAY rows (the bill is account-wide;
- *     tenants come from SYSTEM#TENANTS, which the aggregator maintains);
+ *   - the logged estimate per model key per day (LOGGED#DAILY), computed by the same collector over EVERY
+ *     tenant's PROJDAY rows — the bill is account-wide, and tenants are thousands of identity ARNs;
  *   - Bedrock Mantle counts from CloudWatch AWS/BedrockMantle, per `Model` series, plus the undimensioned
  *     fleet series as a consistency check.
  * Every fetch degrades to "absent" rather than failing the page: a missing collector, grant or namespace
@@ -12,8 +12,7 @@ import { CloudWatchClient, GetMetricDataCommand, ListMetricsCommand } from '@aws
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { BillBlock, BillLineItem, MantleCounts, billModelKey, buildBill, mantleConsistent } from './bill-calc';
-import { cacheWriteOf, computeModelCost } from './cost-calc';
-import { profileModelMap } from '../shared/project-registry';
+import { readLoggedByModelDay } from '../shared/logged-estimate';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const cw = new CloudWatchClient({});
@@ -37,41 +36,8 @@ export async function readBillLines(fromDay: string, toDay: string): Promise<{ l
   return { lines, asOf: typeof meta.Item?.lastRunAt === 'string' ? meta.Item.lastRunAt : null };
 }
 
-/** Every tenant the aggregator has written rollups for (SYSTEM#TENANTS, maintained per run). */
-export async function listTenants(): Promise<string[]> {
-  const res = await ddb.send(new GetCommand({ TableName: TABLE, Key: { pk: 'SYSTEM#TENANTS', sk: 'all' } }));
-  const t = res.Item?.tenants;
-  return Array.isArray(t) ? t.map(String) : t instanceof Set ? [...t].map(String) : [];
-}
-
-/** Logged estimate per model key per day across all tenants: the same pricing the pages use. */
-export async function loggedEstimateByModelDay(fromDay: string, toDay: string): Promise<Map<string, Map<string, number>>> {
-  const out = new Map<string, Map<string, number>>();
-  const [tenants, profiles] = await Promise.all([listTenants(), profileModelMap()]);
-  for (const tenant of tenants) {
-    let start: Record<string, unknown> | undefined;
-    do {
-      const res = await ddb.send(new QueryCommand({
-        TableName: TABLE, KeyConditionExpression: 'pk = :pk AND sk BETWEEN :a AND :b',
-        ExpressionAttributeValues: { ':pk': `TENANT#${tenant}#PROJDAY`, ':a': fromDay, ':b': `${toDay}#￿` }, ExclusiveStartKey: start,
-      }));
-      for (const it of (res.Items ?? []) as Record<string, unknown>[]) {
-        const raw = String(it.modelId ?? '');
-        const modelId = profiles.get(raw) ?? raw;
-        const usd = computeModelCost({
-          modelId, inputTokens: Number(it.inputTokens ?? 0), outputTokens: Number(it.outputTokens ?? 0),
-          cacheReadTokens: Number(it.cacheReadTokens ?? 0), ...cacheWriteOf(it),
-        }).estimatedUsd;
-        const key = billModelKey(modelId);
-        const perDay = out.get(key) ?? new Map<string, number>();
-        perDay.set(String(it.day), (perDay.get(String(it.day)) ?? 0) + usd);
-        out.set(key, perDay);
-      }
-      start = res.LastEvaluatedKey as Record<string, unknown> | undefined;
-    } while (start);
-  }
-  return out;
-}
+/** The logged side, stored by the daily collector (LOGGED#DAILY) — see shared/logged-estimate.ts. */
+export { readLoggedByModelDay as loggedEstimateByModelDay } from '../shared/logged-estimate';
 
 /** Mantle counts per Model over [from, to] (inclusive days), and the fleet inferences for the consistency check. */
 export async function readMantle(fromDay: string, toDay: string): Promise<{ perModel: Map<string, MantleCounts>; fleetInferences: number; clientErrors: number }> {
@@ -125,7 +91,7 @@ export async function billBlockFor(fromDay: string, toDay: string): Promise<(Bil
   const { lines, asOf } = await readBillLines(fromDay, toDay);
   if (!asOf) return null;
   const [logged, mantle] = await Promise.all([
-    loggedEstimateByModelDay(fromDay, toDay),
+    readLoggedByModelDay(fromDay, toDay),
     readMantle(fromDay, toDay).catch((err) => { console.warn('bill: Mantle counts unavailable', (err as Error).message); return null; }),
   ]);
   const block = buildBill(lines, logged, mantle?.perModel ?? new Map(), { from: fromDay, to: toDay }, asOf);

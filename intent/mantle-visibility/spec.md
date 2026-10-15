@@ -18,8 +18,10 @@
    window, asOf)`: filters lines to the window, `daysBilled` = distinct billed days, logged estimate restricted to those
    days, `unloggedUsd = max(0, billed − logged)` with `overEstimated` when negative, totals, `loggedSharePct`;
    `mantleConsistent` (Model series Σ vs fleet within 1%).
-5. `backend/lambdas/api/bill-read.ts` — DDB readers for lines/asOf/tenants, `loggedEstimateByModelDay` (all tenants,
-   profile-resolved, priced by `computeModelCost`), `readMantle` (ListMetrics Model series; GetMetricData daily sums of
+5. `backend/lambdas/shared/logged-estimate.ts` — `computeLoggedByModelDay` (every tenant from `SYSTEM#TENANTS`, PROJDAY
+   rows for the day range, profile-resolved, priced by `computeModelCost`, bounded concurrency) run by the COLLECTOR and
+   stored as `LOGGED#DAILY`/`<day>#<modelKey>` (SET, idempotent); `readLoggedByModelDay` for the API.
+   `backend/lambdas/api/bill-read.ts` — DDB readers for lines/asOf and the stored logged rows, `readMantle` (ListMetrics Model series; GetMetricData daily sums of
    Inferences / InferenceClientErrors / TotalInputTokens / TotalOutputTokens + fleet Inferences), `billBlockFor` (null
    until the collector has run; Mantle failures leave `mantle: null`).
 6. `/v1/overview` → `bill` for the page window; `/v1/costs` → `bill` over every stored day; `/v1/latency` → `mantle`.

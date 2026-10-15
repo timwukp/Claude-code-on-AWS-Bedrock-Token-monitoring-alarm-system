@@ -12,11 +12,17 @@
  *   pk = BILL#DAILY, sk = <day>#<usageType>   { usd, qty, model, kind, route, region, estimated, collectedAt }
  * with PutItem — idempotent. `SYSTEM#BILL` records lastRunAt and the last day read. Lines that do not
  * parse keep kind 'other': a billed line is never dropped.
+ *
+ * It also computes the other side of the comparison for the same days — what the invocation logs price,
+ * summed over every tenant's PROJDAY rows — and stores it as LOGGED#DAILY / <day>#<modelKey>. Tenants are
+ * identity ARNs (thousands, one per AgentCore session), so that sum is done here once a day, never by a
+ * page view.
  */
 import { CostExplorerClient, GetCostAndUsageCommand } from '@aws-sdk/client-cost-explorer';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { BillLine, billLinesFrom } from './bill-parse';
+import { computeLoggedByModelDay, storeLoggedByModelDay } from '../shared/logged-estimate';
 
 const ce = new CostExplorerClient({ region: 'us-east-1' }); // Cost Explorer is a us-east-1 endpoint
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -64,10 +70,14 @@ export const handler = async (event?: { start?: string; end?: string }): Promise
     }));
   }
   const days = new Set(lines.map((l) => l.day)).size;
+  // The logged side for the same days (end is exclusive; LOGGED rows are inclusive days).
+  const lastDay = day(new Date(Date.parse(end) - 86_400_000));
+  const logged = await computeLoggedByModelDay(start, lastDay);
+  await storeLoggedByModelDay(logged, collectedAt);
   await ddb.send(new PutCommand({
     TableName: TABLE,
-    Item: { pk: 'SYSTEM#BILL', sk: 'collector', lastRunAt: collectedAt, lastStart: start, lastEnd: end, lines: lines.length, days },
+    Item: { pk: 'SYSTEM#BILL', sk: 'collector', lastRunAt: collectedAt, lastStart: start, lastEnd: end, lines: lines.length, days, loggedRows: logged.length },
   }));
-  console.log(`bill-collector: ${lines.length} line(s) over ${days} day(s), ${start} → ${end}`);
+  console.log(`bill-collector: ${lines.length} bill line(s) over ${days} day(s), ${logged.length} logged day-model row(s), ${start} → ${end}`);
   return { lines: lines.length, days, start, end };
 };

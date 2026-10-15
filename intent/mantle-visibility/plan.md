@@ -13,7 +13,10 @@
 2. `backend/lambdas/ingestion/bill-collector.ts` (new)
 3. `backend/lambdas/ingestion/aggregator.ts` — `recordTenants` → `SYSTEM#TENANTS`
 4. `backend/lambdas/api/bill-calc.ts`, `backend/lambdas/api/bill-calc.test.ts` (new)
-5. `backend/lambdas/api/bill-read.ts` (new)
+5. `backend/lambdas/api/bill-read.ts` (new); `backend/lambdas/shared/logged-estimate.ts` (new) — the logged side is
+   computed by the collector over every tenant (thousands of identity ARNs) and stored as `LOGGED#DAILY`; readers never
+   walk tenants per page view (the first cut did, and timed out live); `backend/scripts/seed-tenant-index.ts` (new,
+   one-time seed of `SYSTEM#TENANTS` from the table's PROJDAY partitions)
 6. `backend/lambdas/api/costs.ts`, `backend/lambdas/api/overview.ts`, `backend/lambdas/api/latency.ts`
 7. `backend/package.json`, `backend/package-lock.json` — `@aws-sdk/client-cost-explorer`
 8. `infra/lib/stacks/etl-stack.ts`, `infra/lib/stacks/api-stack.ts`
