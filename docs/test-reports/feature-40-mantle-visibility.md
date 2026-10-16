@@ -85,6 +85,14 @@ AWS". Browser render left to qa's run on the PR.
 | R2/R3 `/v1/quotas` 6.1–6.7 s first load | cold start of a 6-batch GetMetricData path; warm 0.3–0.6 s held (#72) | not changed here; stated |
 | R2 /dora singular/plural, unknown URL renders Overview, "Athena 20 rows" while the table is empty | pre-existing, outside this chain | not changed; candidates for a later qa-leftovers chain |
 
+## Live after the qa-round deploys (2026-10-17, owner deployed Api then Automation)
+| Check | Result |
+|---|---|
+| `/v1/overview?window=7` `bill.window` | `from 10-10, to 10-16, daysBilled 5, billedFrom 10-10, billedTo 10-14` — Cost Explorer's lag is now stated, not hidden |
+| Mantle opus-5-5, 7 days, Cost / Overview vs Latency | **710 / 710** (was 710 vs 2,856); gpt-6-luna 227, gpt-5.6-luna 208, fleet 1,145 on all pages |
+| `describe-budget bedrock-monthly-dev` | `CostFilters.Service` = the three names; **actual MTD $4,453.85 of $1,000 (445%), forecast $15,424.73** — was $0.82 / $6.01 "on track" |
+| `/v1/governance.budget` | `actualPct 445.4, forecastedPct 1542.5, billingDataAvailable true` — the Governance page now shows the over-run; the 80% actual and 100% forecast e-mail notifications fire from this state. The hard-stop (`BedrockHardStopAction`) is opt-in and **off in dev** (`enableAutoContainment: false`), so nothing is denied. |
+
 ## Known limits, stated rather than fixed
 - Cost Explorer lags about a day; the panel says "bill through <day>" and compares only billed days.
 - Mantle calls have no project attribution and no cache split — by the nature of the source, not a defect here.
