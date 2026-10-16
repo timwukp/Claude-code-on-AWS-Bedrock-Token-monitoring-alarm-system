@@ -86,7 +86,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       rollupWatermark(),
       // Billed vs logged for the selected window (feature-40). Account-wide on both sides; null until the
       // daily bill collector has run. Never fails the page.
-      billBlockFor(bounds.from, bounds.to).catch((err) => { console.warn('overview: bill block unavailable', (err as Error).message); return null; }),
+      billBlockFor(bounds.from, bounds.to, tenantId).catch((err) => { console.warn('overview: bill block unavailable', (err as Error).message); return null; }),
     ]);
     const names = new Map(projects.map((p) => [p.projectId, p.name]));
     const result = buildOverview(items, bounds, names);

@@ -25,8 +25,8 @@ export async function listTenants(): Promise<string[]> {
 }
 
 /** Sum and price every tenant's PROJDAY rows for [fromDay, toDay] into per-day, per-model-key totals. */
-export async function computeLoggedByModelDay(fromDay: string, toDay: string, concurrency = 25): Promise<LoggedDay[]> {
-  const [tenants, profiles] = await Promise.all([listTenants(), profileModelMap()]);
+export async function computeLoggedByModelDay(fromDay: string, toDay: string, concurrency = 25, onlyTenants?: string[]): Promise<LoggedDay[]> {
+  const [tenants, profiles] = await Promise.all([onlyTenants ?? listTenants(), profileModelMap()]);
   const acc = new Map<string, LoggedDay>();
   let next = 0;
   const worker = async () => {

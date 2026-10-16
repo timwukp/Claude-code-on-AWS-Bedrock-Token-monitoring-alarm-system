@@ -68,6 +68,14 @@ describe('buildBill', () => {
     expect(b.byModel[0].model).toBe('opus-5-5'); // sorted by billed
     expect(b.byModel.find((r) => r.model === 'DeepSeek-R1')!.byKind.other).toBe(1.41); // unknown model: key = its id as billed
   });
+  it('carries the viewer tenant\'s share on the same billed days and names the scope (qa F-PR73-001)', () => {
+    const tenant = new Map([['2026-10-06', 100], ['2026-10-08', 50], ['2026-10-09', 999]]); // 10-09 is not billed yet → excluded
+    const t = buildBill(lines, logged, mantle, W, null, tenant);
+    expect(t.scope).toBe('account');
+    expect(t.tenantLoggedEstimateUsd).toBe(150);
+    expect(buildBill(lines, logged, mantle, W, null).tenantLoggedEstimateUsd).toBeNull();
+    expect(t.note).toMatch(/Account-wide/);
+  });
   it('an empty window yields a null share and no rows', () => {
     const e = buildBill(lines, logged, new Map(), { from: '2026-11-01', to: '2026-11-30' }, null); // the caller fetches Mantle for the window, so it is empty too
     expect(e.byModel).toEqual([]); expect(e.loggedSharePct).toBeNull(); expect(e.window.daysBilled).toBe(0);

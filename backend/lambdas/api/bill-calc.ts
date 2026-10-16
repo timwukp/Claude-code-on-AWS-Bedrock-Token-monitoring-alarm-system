@@ -35,12 +35,17 @@ export interface BillBlock {
   totalUnloggedUsd: number;
   /** loggedEstimate ÷ billed, in percent; null when nothing is billed in the window. */
   loggedSharePct: number | null;
+  /** Both dollar sides are ACCOUNT-wide (the bill has no tenant); the pages' other figures are the viewer's tenant. */
+  scope: 'account';
+  /** The viewer's tenant's share of the logged estimate on the same billed days — so the two scopes can be read together. */
+  tenantLoggedEstimateUsd: number | null;
   dollarsSource: 'cost-explorer';
   tokensSource: 'cloudwatch';
   note: string;
 }
 
-export const BILL_NOTE = 'Unlogged = billed − what the invocation logs price. Bedrock Mantle calls bill under the same '
+export const BILL_NOTE = 'Account-wide: the bill has no tenant, so both sides here sum every tenant; the other figures on this '
+  + 'page are this tenant alone. Unlogged = billed − what the invocation logs price. Bedrock Mantle calls bill under the same '
   + 'usage types but never reach the invocation log, so they have no cache split and no project attribution; their '
   + 'CloudWatch counts are shown as the explanation and are not priced. Cost Explorer lags about a day.';
 
@@ -63,6 +68,7 @@ export function buildBill(
   mantle: Map<string, MantleCounts>,
   window: { from: string; to: string },
   asOf: string | null,
+  tenantLogged?: Map<string, number> | null, // the viewer's tenant: day → USD (any model)
 ): BillBlock {
   const inWindow = lines.filter((l) => l.day >= window.from && l.day <= window.to);
   const days = new Set(inWindow.map((l) => l.day));
@@ -101,9 +107,13 @@ export function buildBill(
     billed += r.billedUsd; loggedTotal += r.loggedEstimateUsd; unlogged += Math.max(0, diff);
     return out;
   }).sort((a, b) => b.billedUsd - a.billedUsd);
+  let tenantUsd: number | null = null;
+  if (tenantLogged) { tenantUsd = 0; for (const [d, v] of tenantLogged) if (days.has(d)) tenantUsd += v; tenantUsd = round2(tenantUsd); }
   return {
     window: { from: window.from, to: window.to, daysBilled: days.size },
     asOf,
+    scope: 'account',
+    tenantLoggedEstimateUsd: tenantUsd,
     byModel,
     totalBilledUsd: round2(billed),
     totalLoggedEstimateUsd: round2(loggedTotal),

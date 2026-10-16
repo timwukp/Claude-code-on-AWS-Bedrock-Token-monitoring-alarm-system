@@ -28,8 +28,7 @@ type SortKey = 'estimatedUsd' | 'inputTokens' | 'outputTokens' | 'cacheReadToken
 export function CostsPage() {
   const range = useTimeRange([7, 30, 90, 'mtd']);
   const [ov, setOv] = useState<OverviewResponse | null>(null);
-  // undefined = /v1/costs still pending; null = it failed.
-  const [allTime, setAllTime] = useState<AllTime | null | undefined>(undefined);
+  const [allTime, setAllTime] = useState<AllTime | null>(null);
   const [widest, setWidest] = useState<OverviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'estimatedUsd', dir: -1 });
@@ -117,9 +116,7 @@ export function CostsPage() {
   const allTimeCounts = allTime ? modelCounts([...allTime.byModel, ...(widest?.byModel ?? []), ...ov.byModel]) : null;
   const footer = (allTimeCounts
     ? `All time: ${fmtUsd(allTime!.totalEstimatedUsd)} across ${plural(allTimeCounts.models, 'model')} (${plural(allTimeCounts.ids, 'id')}, counted the same way as the tile above) · the same rate card prices the By project and Overview pages, so their totals reconcile with this one.`
-    : allTime === undefined
-      ? 'Loading all-time total…'
-      : 'All-time total unavailable — the costs endpoint did not respond.')
+    : 'All-time total unavailable — the costs endpoint did not respond.')
     + (centGap > 0 ? ` The shown rows sum to ${fmtUsd(sum('estimatedUsd'))}, ${plural(centGap, 'cent')} from the tile — per-model rounding${!showZero && zeroRows.length ? ` and ${plural(zeroRows.length, 'folded model')} below $${ZERO_COST_THRESHOLD.toFixed(2)}` : ''}.` : '');
   // What the estimate prices, in one place. Cache writes (the bill's largest token line) were priced at $0 until
   // feature-36; the standard-route tier (×1.1) was missing until feature-38. Nothing on the bill's token lines is
@@ -223,8 +220,8 @@ export function CostsPage() {
       </Panel>
 
       {bill && bill.byModel.length > 0 && (
-        <Panel title="Billed vs what the logs price" helpId="cost.estimated-spend"
-               desc={`${windowLabel} · bill through ${bill.window.to} (${bill.window.daysBilled} billed day${bill.window.daysBilled === 1 ? '' : 's'} in the window) · dollars from Cost Explorer, Mantle counts from CloudWatch${bill.asOf ? ` · collected ${bill.asOf.slice(0, 16).replace('T', ' ')} UTC` : ''}`}>
+        <Panel title="Account bill vs all tenants' logged estimate" helpId="cost.estimated-spend"
+               desc={`ACCOUNT-WIDE — the rest of this page is this tenant alone${bill.tenantLoggedEstimateUsd != null ? ` (this tenant's logged estimate on the same billed days: ${fmtUsd(bill.tenantLoggedEstimateUsd)})` : ''} · ${windowLabel} · bill through ${bill.window.to} (${bill.window.daysBilled} billed day${bill.window.daysBilled === 1 ? '' : 's'} in the window) · dollars from Cost Explorer, Mantle counts from CloudWatch${bill.asOf ? ` · collected ${bill.asOf.slice(0, 16).replace('T', ' ')} UTC` : ''}`}>
           <table className="data">
             <thead>
               <tr><th>Model</th><th className="num">Billed (USD)</th><th className="num">Logged estimate (USD)</th><th className="num">Not logged (USD)</th><th>Bedrock Mantle</th></tr>

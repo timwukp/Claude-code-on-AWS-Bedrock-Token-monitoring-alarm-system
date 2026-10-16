@@ -62,7 +62,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const summary = summarizeCosts(items);
     // Billed vs logged over every day the collector has stored (the page is all-time), feature-40.
     // Null until the daily bill collector has run; never fails the page.
-    const bill = await billBlockFor('2000-01-01', new Date().toISOString().slice(0, 10))
+    const bill = await billBlockFor('2000-01-01', new Date().toISOString().slice(0, 10), tenantId)
       .catch((err) => { console.warn('costs: bill block unavailable', (err as Error).message); return null; });
     return ok({ tenantId, ...summary, bill });
   } catch (err) {

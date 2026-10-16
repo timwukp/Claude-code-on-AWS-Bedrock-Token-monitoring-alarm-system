@@ -214,6 +214,7 @@ export interface BillBlock {
   window: { from: string; to: string; daysBilled: number }; asOf: string | null;
   byModel: BillModelRow[];
   totalBilledUsd: number; totalLoggedEstimateUsd: number; totalUnloggedUsd: number; loggedSharePct: number | null;
+  scope?: 'account'; tenantLoggedEstimateUsd?: number | null;
   dollarsSource: 'cost-explorer'; tokensSource: 'cloudwatch'; note: string; mantleInconsistent?: boolean;
 }
 export interface GovernanceBudget {

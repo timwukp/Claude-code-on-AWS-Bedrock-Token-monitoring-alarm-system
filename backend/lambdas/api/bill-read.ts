@@ -12,7 +12,7 @@ import { CloudWatchClient, GetMetricDataCommand, ListMetricsCommand } from '@aws
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { BillBlock, BillLineItem, MantleCounts, billModelKey, buildBill, mantleConsistent } from './bill-calc';
-import { readLoggedByModelDay } from '../shared/logged-estimate';
+import { computeLoggedByModelDay, readLoggedByModelDay } from '../shared/logged-estimate';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const cw = new CloudWatchClient({});
@@ -87,14 +87,21 @@ export async function readMantle(fromDay: string, toDay: string): Promise<{ perM
  * then shows nothing rather than an empty comparison. Mantle failures (no grant, no namespace) leave the
  * dollar comparison intact with `mantle: null` on every row.
  */
-export async function billBlockFor(fromDay: string, toDay: string): Promise<(BillBlock & { mantleInconsistent?: boolean }) | null> {
+export async function billBlockFor(fromDay: string, toDay: string, tenantId?: string): Promise<(BillBlock & { mantleInconsistent?: boolean }) | null> {
   const { lines, asOf } = await readBillLines(fromDay, toDay);
   if (!asOf) return null;
-  const [logged, mantle] = await Promise.all([
+  const billedDays = [...new Set(lines.map((l) => l.day))].sort();
+  const [logged, mantle, tenantRows] = await Promise.all([
     readLoggedByModelDay(fromDay, toDay),
     readMantle(fromDay, toDay).catch((err) => { console.warn('bill: Mantle counts unavailable', (err as Error).message); return null; }),
+    // The viewer's own share, on the same days, so the account-wide figures can be read against the tenant-scoped page (qa F-PR73-001).
+    tenantId && billedDays.length
+      ? computeLoggedByModelDay(billedDays[0], billedDays[billedDays.length - 1], 1, [tenantId]).catch(() => null)
+      : Promise.resolve(null),
   ]);
-  const block = buildBill(lines, logged, mantle?.perModel ?? new Map(), { from: fromDay, to: toDay }, asOf);
+  const tenantLogged = tenantRows ? new Map<string, number>() : null;
+  if (tenantRows && tenantLogged) for (const r of tenantRows) tenantLogged.set(r.day, (tenantLogged.get(r.day) ?? 0) + r.usd);
+  const block = buildBill(lines, logged, mantle?.perModel ?? new Map(), { from: fromDay, to: toDay }, asOf, tenantLogged);
   if (mantle && !mantleConsistent(mantle.perModel, mantle.fleetInferences)) return { ...block, mantleInconsistent: true };
   return block;
 }
