@@ -22,6 +22,10 @@
 8. `infra/lib/stacks/etl-stack.ts`, `infra/lib/stacks/api-stack.ts`
 9. `frontend/src/api/client.ts`, `frontend/src/pages/CostsPage.tsx`, `frontend/src/pages/OverviewPage.tsx`,
    `frontend/src/pages/LatencyPage.tsx`
+10. qa round 1 on the PR (owner chose to ride it here): `infra/lib/stacks/automation-stack.ts` — the Budget's CostFilters
+    name all three Bedrock service names (it named "Amazon Bedrock" only → watched 0.02% of spend, F-PR73-006);
+    `frontend/src/lib/help-content.ts` `budget.actual` caveat; `docs/RECONCILIATION.md` "payer account" section
+    corrected. `bill.scope` + `tenantLoggedEstimateUsd` for F-PR73-001.
 
 Non-source riders: `.sdlc/active` (handover from `qa-leftovers`), `intent/qa-leftovers/*` → shipped,
 `intent/mantle-visibility/*`, `docs/research-mantle-unlogged-spend.md`, `CHANGELOG.md`, `docs/RECONCILIATION.md`,

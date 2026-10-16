@@ -6,13 +6,17 @@ pages proves nothing about correctness**. The 2026-10 incident (`docs/incidents/
 ~70 % understatement that every cross-page check passed. The only check that can catch that class of error is a
 comparison with the bill itself. This runbook is that comparison.
 
-## Why it must run from the payer account
+## Where the bill is (corrected 2026-10-16)
 
-In this deployment the monitored account is a **member of an AWS Organization**; Bedrock charges are billed to the
-payer. Inside the monitored account, AWS Budgets and Cost Explorer therefore report **$0** for Amazon Bedrock (the
-Governance page's "No billing data on this account" state). The bill exists only in the payer account's Cost Explorer,
-so this runbook needs read access there (`ce:GetCostAndUsage` on the payer, or a CUR). Nothing in the repo can do this
-automatically from the monitored account; it is a human (or payer-side) task.
+An earlier version of this runbook said Cost Explorer in the monitored account reports **$0** for Bedrock and the bill
+exists only in the payer account. That was a filter mistake, not a billing fact: the check filtered SERVICE =
+"Amazon Bedrock", and **every Claude and OpenAI model line bills under SERVICE "Amazon Bedrock Service"** (MTD 2026-10:
+$4,385.80); "Amazon Bedrock" carries Guardrails and Nova ($0.82). The same mistake sat in the Budget's CostFilters, so
+the budget — and the Budget Action hard-stop built on it — watched 0.02% of the spend and read "on track" at 4.4× the
+limit (qa F-PR73-006, fixed in feature-40). Cost Explorer in this account has the whole bill; the daily collector
+(`BillCollectorFn`) reads it with SERVICE ∈ {"Amazon Bedrock Service", "Amazon Bedrock"} and the `bill` block on
+`/v1/costs` is the reconciliation. The payer-account path below remains valid only for an account **without** Cost
+Explorer access.
 
 ## Cadence
 
