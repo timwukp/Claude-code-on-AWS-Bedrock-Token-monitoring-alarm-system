@@ -211,7 +211,7 @@ export interface BillModelRow {
   mantle: { inferences: number; inputTokens: number; outputTokens: number } | null;
 }
 export interface BillBlock {
-  window: { from: string; to: string; daysBilled: number }; asOf: string | null;
+  window: { from: string; to: string; daysBilled: number; billedFrom: string | null; billedTo: string | null }; asOf: string | null;
   byModel: BillModelRow[];
   totalBilledUsd: number; totalLoggedEstimateUsd: number; totalUnloggedUsd: number; loggedSharePct: number | null;
   scope?: 'account'; tenantLoggedEstimateUsd?: number | null;

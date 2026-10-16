@@ -34,9 +34,10 @@
 | `backend/lambdas/shared/logged-estimate.ts` | `computeLoggedByModelDay` (every tenant from `SYSTEM#TENANTS`, bounded concurrency, profile-resolved, priced by `computeModelCost`), `storeLoggedByModelDay`, `readLoggedByModelDay` |
 | `backend/lambdas/ingestion/aggregator.ts` | `recordTenants` → `SYSTEM#TENANTS` (merged set) |
 | `backend/scripts/seed-tenant-index.ts` | one-time seed of `SYSTEM#TENANTS` from the table (2,524 tenants) |
-| `backend/lambdas/api/bill-calc.ts` / `.test.ts` | `billModelKey`, `buildBill` (day alignment, floor + `overEstimated`, totals, `loggedSharePct`), `mantleConsistent`; 11 cases, 2 mutation checks |
+| `backend/lambdas/api/bill-calc.ts` / `.test.ts` | `billModelKey`, `buildBill` (day alignment, floor + `overEstimated`, totals, `loggedSharePct`, `scope`, `tenantLoggedEstimateUsd`, `window.billedFrom/billedTo`), `mantleConsistent`; 12 cases, 2 mutation checks |
 | `backend/lambdas/api/bill-read.ts` | `readBillLines`, `readMantle` (Model series + fleet cross-check), `billBlockFor` |
 | `backend/lambdas/api/costs.ts`, `overview.ts`, `latency.ts` | `bill` block (all stored days / page window); `mantle` block |
+| `infra/lib/stacks/automation-stack.ts` | Budget CostFilters: `Amazon Bedrock` + `Amazon Bedrock Service` + `Amazon Bedrock AgentCore` (qa R2) |
 | `infra/lib/stacks/etl-stack.ts`, `api-stack.ts` | `BillCollectorFn` (06:30 UTC daily, `ce:GetCostAndUsage`, aggregates RW, tenants R); CostsFn/OverviewFn `cloudwatch:GetMetricData` + `ListMetrics` |
 | `frontend/src/api/client.ts`, `pages/CostsPage.tsx`, `pages/OverviewPage.tsx`, `pages/LatencyPage.tsx` | "Billed vs what the logs price" panel; unlogged amount on the spend tile; `bedrock-mantle` row |
 | `backend/package.json` / `package-lock.json` | `@aws-sdk/client-cost-explorer` |
@@ -44,7 +45,7 @@
 ## Gates
 | Gate | Result |
 |---|---|
-| Backend `jest` / `tsc --noEmit` | PASS — 397/397, 29 suites |
+| Backend `jest` / `tsc --noEmit` | PASS — 398/398, 31 suites |
 | Frontend `tsc --noEmit` / `vite build` | PASS |
 | `cdk synth -c env=ci` | PASS — 10 stacks |
 | `sdlc_ci_gate.py --require-active` | PASS — 16 source files, all named in the plan; approval bound to `e849de8` |
@@ -71,6 +72,15 @@ within the rounding of the two windows; 5,816 inferences in both.
 ## Served bundle (CloudFront, invalidation completed; `assets/index-CnuoitiL.js`)
 Present: "Billed vs what the logs price", "not logged (Bedrock Mantle)", "bedrock-mantle", "latency not published by
 AWS". Browser render left to qa's run on the PR.
+
+## qa rounds on the PR
+| Round / finding | Verdict | Action |
+|---|---|---|
+| R1 F-PR73-001 — panel compared an account-wide bill with one tenant's estimate without saying so | valid, in scope | `bill.scope: 'account'`, `tenantLoggedEstimateUsd`, panel retitled "Account bill vs all tenants' logged estimate" (3dec18c) |
+| R2 HIGH — AWS Budgets "$0.82 MTD, on track" vs $3,174 billed | **valid, real governance defect** (I verified: the Budget filtered SERVICE = "Amazon Bedrock", which carries Guardrails + Nova; every model line bills under "Amazon Bedrock Service", MTD $4,385.80 — the hard-stop could never fire) | owner chose to fold it in: CostFilters now name all three Bedrock service names (141ade5); RECONCILIATION "payer account" section and the help caveat that repeated the "$0 under a payer" premise corrected. **Automation stack redeploy needed** (`cdk diff`: in-place `Service` update, no replacement, no IAM) |
+| R2 F-PR73-R01 — Overview spend tile shows the bill without saying it covers only 14 billed days of the 30-day window | valid, in scope | `window.billedFrom/billedTo` added to the block; both pages print "bill <first> → <last> (N billed days of this window)" instead of "through <today>" (which also overstated coverage by Cost Explorer's one-day lag) |
+| R2 `/v1/quotas` 6.14 s first load | cold start of a 6-batch GetMetricData path; warm 0.3–0.6 s held (#72) | not changed here; stated |
+| R2 /dora singular/plural, unknown URL renders Overview, "Athena 20 rows" while the table is empty | pre-existing, outside this chain | not changed; candidates for a later qa-leftovers chain |
 
 ## Known limits, stated rather than fixed
 - Cost Explorer lags about a day; the panel says "bill through <day>" and compares only billed days.

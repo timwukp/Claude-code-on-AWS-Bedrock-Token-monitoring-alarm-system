@@ -221,7 +221,7 @@ export function CostsPage() {
 
       {bill && bill.byModel.length > 0 && (
         <Panel title="Account bill vs all tenants' logged estimate" helpId="cost.estimated-spend"
-               desc={`ACCOUNT-WIDE — the rest of this page is this tenant alone${bill.tenantLoggedEstimateUsd != null ? ` (this tenant's logged estimate on the same billed days: ${fmtUsd(bill.tenantLoggedEstimateUsd)})` : ''} · ${windowLabel} · bill through ${bill.window.to} (${bill.window.daysBilled} billed day${bill.window.daysBilled === 1 ? '' : 's'} in the window) · dollars from Cost Explorer, Mantle counts from CloudWatch${bill.asOf ? ` · collected ${bill.asOf.slice(0, 16).replace('T', ' ')} UTC` : ''}`}>
+               desc={`ACCOUNT-WIDE — the rest of this page is this tenant alone${bill.tenantLoggedEstimateUsd != null ? ` (this tenant's logged estimate on the same billed days: ${fmtUsd(bill.tenantLoggedEstimateUsd)})` : ''} · ${windowLabel} · bill ${bill.window.billedFrom ?? '—'} → ${bill.window.billedTo ?? '—'} (${bill.window.daysBilled} billed day${bill.window.daysBilled === 1 ? '' : 's'} in the window; Cost Explorer lags about a day) · dollars from Cost Explorer, Mantle counts from CloudWatch${bill.asOf ? ` · collected ${bill.asOf.slice(0, 16).replace('T', ' ')} UTC` : ''}`}>
           <table className="data">
             <thead>
               <tr><th>Model</th><th className="num">Billed (USD)</th><th className="num">Logged estimate (USD)</th><th className="num">Not logged (USD)</th><th>Bedrock Mantle</th></tr>

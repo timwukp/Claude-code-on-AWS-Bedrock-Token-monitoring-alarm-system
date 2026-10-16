@@ -40,7 +40,7 @@ describe('buildBill', () => {
   const b = buildBill(lines, logged, mantle, W, '2026-10-14T05:00:00Z');
 
   it('counts only the days the bill covers inside the window', () => {
-    expect(b.window).toEqual({ from: W.from, to: W.to, daysBilled: 3 });
+    expect(b.window).toEqual({ from: W.from, to: W.to, daysBilled: 3, billedFrom: '2026-10-06', billedTo: '2026-10-08' });
   });
   it('sums billed by model and by kind, folding both cache-write TTLs into cacheWrite', () => {
     const o = b.byModel.find((r) => r.model === 'opus-5-5')!;
@@ -78,7 +78,7 @@ describe('buildBill', () => {
   });
   it('an empty window yields a null share and no rows', () => {
     const e = buildBill(lines, logged, new Map(), { from: '2026-11-01', to: '2026-11-30' }, null); // the caller fetches Mantle for the window, so it is empty too
-    expect(e.byModel).toEqual([]); expect(e.loggedSharePct).toBeNull(); expect(e.window.daysBilled).toBe(0);
+    expect(e.byModel).toEqual([]); expect(e.loggedSharePct).toBeNull(); expect(e.window).toEqual({ from: '2026-11-01', to: '2026-11-30', daysBilled: 0, billedFrom: null, billedTo: null });
   });
 });
 

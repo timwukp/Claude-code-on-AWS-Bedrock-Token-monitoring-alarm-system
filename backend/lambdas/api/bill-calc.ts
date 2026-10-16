@@ -27,7 +27,7 @@ export interface BillModelRow {
 }
 
 export interface BillBlock {
-  window: { from: string; to: string; daysBilled: number };
+  window: { from: string; to: string; daysBilled: number; billedFrom: string | null; billedTo: string | null }; // from/to = requested; billedFrom/To = days Cost Explorer actually has (it lags ~1 day)
   asOf: string | null;
   byModel: BillModelRow[];
   totalBilledUsd: number;
@@ -110,7 +110,7 @@ export function buildBill(
   let tenantUsd: number | null = null;
   if (tenantLogged) { tenantUsd = 0; for (const [d, v] of tenantLogged) if (days.has(d)) tenantUsd += v; tenantUsd = round2(tenantUsd); }
   return {
-    window: { from: window.from, to: window.to, daysBilled: days.size },
+    window: { from: window.from, to: window.to, daysBilled: days.size, billedFrom: days.size ? [...days].sort()[0] : null, billedTo: days.size ? [...days].sort().at(-1)! : null },
     asOf,
     scope: 'account',
     tenantLoggedEstimateUsd: tenantUsd,
