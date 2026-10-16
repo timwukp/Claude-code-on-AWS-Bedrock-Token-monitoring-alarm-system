@@ -15,6 +15,7 @@ import { badRequest, ok, serverError } from '../shared/response';
 import { getTenantId } from '../shared/tenant';
 import * as registry from '../shared/project-registry';
 import { cacheWriteOf } from './cost-calc';
+import { billBlockFor } from './bill-read';
 import { profileModelMap } from '../shared/project-registry';
 import { ProjdayItem } from './project-calc';
 import { WindowKind, buildOverview, windowBounds } from './overview-calc';
@@ -79,14 +80,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     if (!kind) return badRequest('window must be one of 7, 30, 90, mtd');
 
     const bounds = windowBounds(new Date(), kind);
-    const [items, projects, watermark] = await Promise.all([
+    const [items, projects, watermark, bill] = await Promise.all([
       queryProjday(tenantId, bounds.priorFrom, bounds.to),
       registry.listProjects().catch(() => [] as registry.RegistryProject[]),
       rollupWatermark(),
+      // Billed vs logged for the selected window (feature-40). Account-wide on both sides; null until the
+      // daily bill collector has run. Never fails the page.
+      billBlockFor(bounds.from, bounds.to, tenantId).catch((err) => { console.warn('overview: bill block unavailable', (err as Error).message); return null; }),
     ]);
     const names = new Map(projects.map((p) => [p.projectId, p.name]));
     const result = buildOverview(items, bounds, names);
-    return ok({ tenantId, ...result, ...watermark });
+    return ok({ tenantId, ...result, ...watermark, bill });
   } catch (err) {
     console.error(err);
     return serverError();

@@ -324,6 +324,20 @@ export function LatencyPage() {
             {data.models.length === 0 && (
               <tr><td colSpan={7} className="muted">No invocations in this window.</td></tr>
             )}
+            {data.mantle && data.mantle.inferences > 0 && (
+              <tr style={{ background: 'var(--surface-2, transparent)' }}>
+                <td className="muted">
+                  <span className="mono" style={{ fontSize: 12 }}>bedrock-mantle</span>
+                  <span className="badge neutral" style={{ marginLeft: 6 }} title={data.mantle.note}>not logged</span>
+                  {data.mantle.inconsistent && <span className="badge warning" style={{ marginLeft: 6 }} title="Per-model and fleet Mantle series disagree by more than 1%">inconsistent</span>}
+                </td>
+                <td className="num">{data.mantle.inferences}</td>
+                <td colSpan={5} className="muted">
+                  latency not published by AWS for this endpoint · {data.mantle.clientErrors} client error{data.mantle.clientErrors === 1 ? '' : 's'}
+                  {data.mantle.models.length ? ` · ${data.mantle.models.map((m) => `${m.model} ${m.inferences}`).join(' · ')}` : ''} · not in the fleet figures above
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </Panel>

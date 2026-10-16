@@ -80,6 +80,10 @@ export const handler = async (): Promise<{ filesProcessed: number; aggregatesWri
     written++;
   }
 
+  // Tenant index (feature-40): the bill is account-wide, so the "billed vs logged" readers need every
+  // tenant's PROJDAY rows without scanning the table. Merged, never replaced.
+  await recordTenants(new Set([...allAggregates.values()].map((a) => a.tenant)));
+
   // `lastRunAt` moves on EVERY run, including one that found nothing new, so readers can tell "the
   // aggregator is healthy and the logs are quiet" from "the aggregator has stopped" (feature-36).
   await setWatermark(maxKeyTime);
@@ -361,6 +365,15 @@ async function writeRunawayAnomalies(hits: RunawayHit[]): Promise<void> {
     }
   }
   console.log(`aggregator: flagged ${hits.length} runaway request(s) above $${RUNAWAY_THRESHOLD_USD}`);
+}
+
+async function recordTenants(seen: Set<string>): Promise<void> {
+  if (seen.size === 0) return;
+  const cur = await ddb.send(new GetCommand({ TableName: TABLE, Key: { pk: 'SYSTEM#TENANTS', sk: 'all' } }));
+  const have: string[] = Array.isArray(cur.Item?.tenants) ? cur.Item!.tenants : [];
+  const merged = [...new Set([...have, ...seen])].sort();
+  if (merged.length === have.length) return;
+  await ddb.send(new PutCommand({ TableName: TABLE, Item: { pk: 'SYSTEM#TENANTS', sk: 'all', tenants: merged, updatedAt: new Date().toISOString() } }));
 }
 
 async function getWatermark(): Promise<number> {

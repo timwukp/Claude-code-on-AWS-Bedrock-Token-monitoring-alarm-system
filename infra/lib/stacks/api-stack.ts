@@ -226,6 +226,11 @@ export class ApiStack extends cdk.Stack {
     tables.aggregates.grantReadData(usageFn);
     tables.aggregates.grantReadData(costsFn);
     tables.tenants.grantReadData(costsFn); // feature-36: resolve profile-ARN-keyed rows to their model at read time
+    // Bedrock Mantle counts for the "billed vs logged" block (feature-40): CloudWatch AWS/BedrockMantle, read-only,
+    // no resource-level scoping exists for these actions.
+    for (const f of [costsFn, overviewFn]) {
+      f.addToRolePolicy(new iam.PolicyStatement({ actions: ['cloudwatch:GetMetricData', 'cloudwatch:ListMetrics'], resources: ['*'] }));
+    }
     tables.anomalies.grantReadData(anomaliesFn);
 
     // Functions that run Athena over the raw-log table need: Athena exec, Glue catalog read,
