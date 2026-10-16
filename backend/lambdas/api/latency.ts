@@ -473,7 +473,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     // Bedrock Mantle (feature-40): calls AWS/BedrockMantle counts but publishes no latency metric, and they
     // never reach the invocation logs. Reported as counts beside the fleet figures, never inside them.
-    const mantleCounts = await readMantle(start.toISOString().slice(0, 10), end.toISOString().slice(0, 10))
+    // Same inclusive UTC calendar days as the project section and /v1/overview — not the rolling 7×24 h the
+    // CloudWatch latency queries use — so a model's count matches the Cost page (qa F-PR73-N01: 2,856 vs 710).
+    const mantleDays = projdayRange(end, windowDays);
+    const mantleCounts = await readMantle(mantleDays.fromDay, mantleDays.toDay)
       .catch((err) => { console.warn('latency: Mantle counts unavailable', (err as Error).message); return null; });
     const mantle = mantleCounts ? {
       inferences: [...mantleCounts.perModel.values()].reduce((s, c) => s + c.inferences, 0),
