@@ -25,7 +25,7 @@ are grouped by development milestone rather than strict semver releases.
 - qa leftovers from #73: an unknown URL shows a not-found page instead of silently rendering the Overview; the Projects
   "Projects tracked" caption no longer counts table rows while the Athena scan is still running; DORA counts pluralise.
 - Incident record corrected: the "$0 bill" of 2026-10 was a service-name filter mistake ("Amazon Bedrock" vs "Amazon
-  Bedrock Service"), not a payer-account billing scope. (PR TBD)
+  Bedrock Service"), not a payer-account billing scope. (PR #75)
 
 
 ### Changed — OpenAI models priced from their AWS model cards; no $0 estimate is silent (feature-41)
