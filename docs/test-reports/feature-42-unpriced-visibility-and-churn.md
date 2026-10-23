@@ -1,6 +1,6 @@
 # Feature 42 — Cache churn, one bill panel, unpriced badges, honest drift checks (Chain B of the gateway study)
 
-- **Chain:** `intent/unpriced-visibility-and-churn/` · **Branch:** `feat/unpriced-visibility-and-churn` off `main@e08ae19` (post-#74) · **PR:** TBD
+- **Chain:** `intent/unpriced-visibility-and-churn/` · **Branch:** `feat/unpriced-visibility-and-churn` off `main@e08ae19` (post-#74) · **PR:** #75
 - **Origin:** plan `floating-enchanting-kahan` (approved 2026-10-14) Chain B; items #2, #8, #9 of the LLM-gateway study plus three
   qa leftovers from #73 on pages this chain owns.
 - **Date:** 2026-10-23
