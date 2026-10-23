@@ -31,7 +31,7 @@ export function GovernancePage() {
         <Kpi label="Monthly budget" value={b?.limitUsd ? fmtUsd(b.limitUsd) : '—'} accent="var(--primary)" />
         <Kpi label="Actual spend (AWS billed)" value={b?.actualUsd != null ? fmtUsd(b.actualUsd) : '—'}
              accent="var(--accent-blue)"
-             foot={b?.actualPct != null ? `${b.actualPct}% of budget · from AWS Budgets` : 'from AWS Budgets'} />
+             foot={`${b?.actualPct != null ? `${b.actualPct}% of budget · ` : ''}from AWS Budgets: all three Bedrock services (models, Guardrails/Nova, AgentCore), month to date incl. today — wider than the Cost page's bill panel, which is model usage only, through its last billed day`} />
         <Kpi label="Forecasted (AWS billed)" value={b?.forecastedUsd != null ? fmtUsd(b.forecastedUsd) : '—'}
              accent="var(--accent-amber)"
              foot={b?.forecastedPct != null ? `${b.forecastedPct}% of budget · from AWS Budgets` : 'from AWS Budgets'} />

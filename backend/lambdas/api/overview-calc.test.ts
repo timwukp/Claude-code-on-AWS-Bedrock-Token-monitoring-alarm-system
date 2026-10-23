@@ -35,6 +35,18 @@ describe('buildOverview', () => {
   const now = new Date('2026-09-18T12:00:00Z');
   const b = windowBounds(now, '7'); // cur 09-12..09-18, prior 09-05..09-11
 
+  it('names the current-window models the card cannot price, with their usage (feature-41)', () => {
+    const r = buildOverview([
+      item('2026-09-13', 'alpha', 3_000_000),                                              // priced
+      item('2026-09-14', 'alpha', 10, 20, 'openai.gpt-9-nebula'),                          // not on the card
+      item('2026-09-15', 'beta', 5, 0, 'arn:aws:bedrock:us-east-1:111122223333:inference-profile/openai.gpt-9-nebula'), // same model, ARN form
+      item('2026-09-07', 'alpha', 999, 0, 'amazon.nova-pro-v1:0'),                         // prior window → not listed
+    ], b, new Map(), CARD);
+    expect(r.unpricedModels).toEqual([{ modelId: 'openai.gpt-9-nebula', inputTokens: 15, outputTokens: 20, cacheReadTokens: 0, cacheWriteTokens: 0, invocations: 2 }]);
+    expect(r.spend.currentUsd).toBe(3); // the unpriced rows are in the total at $0 — which is why they are named
+    expect(r.byModel.map((m) => m.modelId)).toContain('openai.gpt-9-nebula');
+  });
+
   it('prices current and prior periods separately and reports a signed delta', () => {
     const r = buildOverview([
       item('2026-09-13', 'alpha', 3_000_000),          // $3 current

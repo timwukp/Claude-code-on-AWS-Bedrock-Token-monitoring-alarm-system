@@ -220,15 +220,15 @@ describe('cache writes are priced (feature-36)', () => {
     expect(s.totalCacheNetUsd).toBeCloseTo(-(12.5 - 2_000_000 * 5e-6), 6);
   });
 
-  it('GPT-5.6 writes cost 1.25× input on both TTL columns (one 30-minute TTL); earlier GPT rows cost 0', () => {
-    // Bedrock prompt-caching guide, "GPT-5.6 and later models": writes billed at 1.25× the uncached input rate.
+  it('GPT-5.6 writes cost 1.25× input on both TTL columns (one 30-minute TTL); gpt-oss rows cost 0', () => {
+    // Model card (2026-10-23): gpt-5.6-sol input $4 / MTok, "Input — 30-minute cache write" $5 = 1.25×.
     const sol = matchRate('openai.gpt-5.6-sol');
-    expect(sol.cacheWrite5mPerToken * 1e6).toBeCloseTo(1.5625, 9);
-    expect(sol.cacheWrite1hPerToken * 1e6).toBeCloseTo(1.5625, 9);
-    const old = matchRate('openai.gpt-5-2025');
-    expect(old.key).toBe('gpt-5');
-    expect(old.cacheWrite5mPerToken).toBe(0);
-    expect(old.cacheWrite1hPerToken).toBe(0);
+    expect(sol.cacheWrite5mPerToken * 1e6).toBeCloseTo(5, 9);
+    expect(sol.cacheWrite1hPerToken * 1e6).toBeCloseTo(5, 9);
+    const oss = matchRate('openai.gpt-oss-20b-1:0');
+    expect(oss.key).toBe('gpt-oss-20b');
+    expect(oss.cacheWrite5mPerToken).toBe(0);
+    expect(oss.cacheWrite1hPerToken).toBe(0);
   });
 });
 
@@ -293,7 +293,7 @@ describe('route factor (feature-38): the card is the global tier, every other ro
 describe('routeCaseSql mirrors routeMultiplier (feature-38)', () => {
   it('names the single-tier rows from the card and tests both id shapes for global', () => {
     const sql = routeCaseSql('m');
-    expect(sql).toBe("CASE WHEN m LIKE '%nova-micro%' THEN 1 WHEN m LIKE 'global.%' OR m LIKE '%/global.%' THEN 1 ELSE 1.1 END");
+    expect(sql).toBe("CASE WHEN m LIKE '%nova-micro%' OR m LIKE '%gpt-oss-120b%' OR m LIKE '%gpt-oss-20b%' THEN 1 WHEN m LIKE 'global.%' OR m LIKE '%/global.%' THEN 1 ELSE 1.1 END");
   });
   it('with no single-tier rows the CASE has only the global test', () => {
     const card = RATE_CARD.filter((r) => r.routeTiers);

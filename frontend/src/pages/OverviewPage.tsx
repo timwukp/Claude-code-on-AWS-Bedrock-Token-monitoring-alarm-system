@@ -3,6 +3,7 @@ import { api, DoraOverviewRow, GovernanceBudget, OverviewResponse } from '../api
 import { EmptyState } from '../components/EmptyState';
 import { KpiTile } from '../components/KpiTile';
 import { Panel } from '../components/Layout';
+import { UnpricedNote } from '../components/UnpricedNote';
 import { BUDGET_STATUS, budgetState } from '../lib/budget-status';
 import { fmtAgo, fmtSignedUsd, fmtTokens, fmtUsd } from '../lib/format';
 import { useTimeRange, Window } from '../lib/time-range';
@@ -69,7 +70,7 @@ export function OverviewPage() {
           value={ov ? fmtUsd(ov.spend.currentUsd) : ''}
           delta={ov && ov.spend.deltaPct != null ? { value: ov.spend.deltaPct, unit: 'pct', compareLabel: compare, goodDirection: 'down' } : undefined}
           sparkline={ov?.spend.daily.map((d) => d.usd)}
-          definition={ov ? `${range.label.toLowerCase()} · ${fmtTokens(spendTokens)} input + output + cache-read + cache-write tokens · token-based estimate, routes priced (global tier, standard ×1.1)${ov.bill && ov.bill.totalUnloggedUsd > 0 ? ` · bill ${ov.bill.window.billedFrom && ov.bill.window.billedTo ? `${ov.bill.window.billedFrom} → ${ov.bill.window.billedTo}` : `through ${ov.bill.window.to}`} (${ov.bill.window.daysBilled} billed day${ov.bill.window.daysBilled === 1 ? '' : 's'} of this window, not the full period): ${fmtUsd(ov.bill.totalBilledUsd)}, of which ${fmtUsd(ov.bill.totalUnloggedUsd)} not logged (Bedrock Mantle) — account-wide, all tenants` : ''}${ov.spend.deltaPct == null && ov.spend.priorUsd === 0 ? ' · no prior-period data to compare' : ''}` : undefined}
+          definition={ov ? `${range.label.toLowerCase()} · ${fmtTokens(spendTokens)} input + output + cache-read + cache-write tokens · token-based estimate, routes priced (global tier, standard ×1.1)${ov.bill && ov.bill.totalUnloggedUsd > 0 ? ` · bill ${ov.bill.window.billedFrom && ov.bill.window.billedTo ? `${ov.bill.window.billedFrom} → ${ov.bill.window.billedTo}` : `through ${ov.bill.window.to}`} (${ov.bill.window.daysBilled} billed day${ov.bill.window.daysBilled === 1 ? '' : 's'} of this window, not the full period): ${fmtUsd(ov.bill.totalBilledUsd)}, of which ${fmtUsd(ov.bill.totalUnloggedUsd)} not logged (Bedrock Mantle)${(ov.bill.billedZeroEstimateUsd ?? 0) > 0 ? `; ${fmtUsd(ov.bill.billedZeroEstimateUsd!)} of the logged estimate is list price for models billed $0.00` : ''} — account-wide, all tenants` : ''}${ov.spend.deltaPct == null && ov.spend.priorUsd === 0 ? ' · no prior-period data to compare' : ''}` : undefined}
           status={ov?.coverage.partial ? { tone: 'neutral', text: 'partial history' } : undefined} />
 
         <KpiTile label="Budget" helpId="overview.budget" link={{ to: '/governance', label: 'Governance' }}
@@ -77,7 +78,7 @@ export function OverviewPage() {
           value={budget && budget.limitUsd > 0 ? fmtUsd(budget.actualUsd) : '—'}
           status={BUDGET_STATUS[bState]}
           definition={bState === 'ok' || bState === 'forecast-over' || bState === 'over'
-            ? `of ${fmtUsd(budget!.limitUsd)} budget, month to date · forecast ${fmtUsd(budget!.forecastedUsd)} · AWS Budgets billed spend — not the token estimate in the Spend tile`
+            ? `of ${fmtUsd(budget!.limitUsd)} budget, month to date · forecast ${fmtUsd(budget!.forecastedUsd)} · AWS Budgets billed spend across all three Bedrock services incl. today — not the token estimate in the Spend tile, and wider than its bill figure (model usage only, through the last billed day)`
             : bState === 'no-billing-data' ? `of ${fmtUsd(budget!.limitUsd)} budget · AWS Budgets reports no billed spend for this account this month` : 'no Bedrock budget configured'} />
 
         <KpiTile label="Anomalies" helpId="overview.anomalies" link={{ to: '/anomalies', label: 'Anomalies' }}
@@ -127,6 +128,7 @@ export function OverviewPage() {
             Latest logged call {ov.rollupsAsOf ? `${ov.rollupsAsOf.slice(11, 16)} UTC (${fmtAgo(ov.rollupsAsOf)})` : 'unknown'}{ov.rollupsLastRunAt ? ` · rollups last ran ${ov.rollupsLastRunAt.slice(11, 16)} UTC (${fmtAgo(ov.rollupsLastRunAt)})` : ''} · new logs are rolled up every 15 minutes · figures are token-based estimates, not the AWS bill.
           </p>
         )}
+        {ov && <UnpricedNote models={ov.unpricedModels} scope={range.label.toLowerCase()} />}
       </Panel>
     </>
   );

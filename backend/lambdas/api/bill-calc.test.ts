@@ -16,7 +16,8 @@ describe('billModelKey', () => {
     expect(billModelKey('us.anthropic.claude-sonnet-4-6')).toBe('sonnet');
   });
   it('an unknown model keeps its normalized id as the key', () => {
-    expect(billModelKey('openai.gpt-6-luna')).toBe('openai.gpt-6-luna');
+    expect(billModelKey('openai.gpt-9-nebula')).toBe('openai.gpt-9-nebula');
+    expect(billModelKey('openai.gpt-6-luna')).toBe('gpt-6-luna'); // priced since feature-41
   });
 });
 
@@ -63,7 +64,7 @@ describe('buildBill', () => {
   it('totals and the logged share', () => {
     expect(b.totalBilledUsd).toBe(1551.41);
     expect(b.totalLoggedEstimateUsd).toBe(770);
-    expect(b.loggedSharePct).toBe(49.6);
+    expect(b.loggedSharePct).toBe(48.3); // Σ min(billed, logged) / Σ billed = (450 + 300) / 1551.41 — fable's $20 over-estimate explains none of opus's bill (was 49.6 with a total-level cap)
     expect(b.dollarsSource).toBe('cost-explorer'); expect(b.tokensSource).toBe('cloudwatch');
     expect(b.byModel[0].model).toBe('opus-5-5'); // sorted by billed
     expect(b.byModel.find((r) => r.model === 'DeepSeek-R1')!.byKind.other).toBe(1.41); // unknown model: key = its id as billed
@@ -75,6 +76,22 @@ describe('buildBill', () => {
     expect(t.tenantLoggedEstimateUsd).toBe(150);
     expect(buildBill(lines, logged, mantle, W, null).tenantLoggedEstimateUsd).toBeNull();
     expect(t.note).toMatch(/Account-wide/);
+  });
+  it('flags a model the logs price but the bill charged $0.00 for (billedZero), and sums that list-price estimate', () => {
+    // The OpenAI case on this account: gpt-5.6-sol usage priced at its card, Cost Explorer has a $0 line (or none).
+    const zeroLines = [...lines, line('2026-10-07', 'openai.gpt-6-luna', 'output', 0)];
+    const l2 = new Map(logged); l2.set('us.openai.gpt-5.6-sol', new Map([['2026-10-07', 95.13]])); l2.set('openai.gpt-6-luna', new Map([['2026-10-07', 0.004]]));
+    const z = buildBill(zeroLines, l2, new Map(), W, null);
+    const sol = z.byModel.find((r) => r.model === 'gpt-5.6-sol')!;
+    expect(sol).toMatchObject({ billedUsd: 0, loggedEstimateUsd: 95.13, unloggedUsd: 0, billedZero: true, overEstimated: true });
+    expect(z.byModel.find((r) => r.model === 'gpt-6-luna')!.billedZero).toBeUndefined(); // $0.004 rounds to nothing on both sides — not a finding
+    expect(z.byModel.find((r) => r.model === 'opus-5-5')!.billedZero).toBeUndefined();
+    expect(z.billedZeroEstimateUsd).toBe(95.13);
+    expect(z.totalBilledUsd).toBe(b.totalBilledUsd);           // a $0 row adds nothing to the bill
+    expect(z.totalUnloggedUsd).toBe(b.totalUnloggedUsd);       // nor to "unlogged"
+    expect(z.loggedSharePct).toBe(b.loggedSharePct);           // share is capped at the bill, so the list-price surplus cannot inflate it
+    expect(z.note).toMatch(/billedZero/);
+    expect(b.billedZeroEstimateUsd).toBe(0);
   });
   it('an empty window yields a null share and no rows', () => {
     const e = buildBill(lines, logged, new Map(), { from: '2026-11-01', to: '2026-11-30' }, null); // the caller fetches Mantle for the window, so it is empty too

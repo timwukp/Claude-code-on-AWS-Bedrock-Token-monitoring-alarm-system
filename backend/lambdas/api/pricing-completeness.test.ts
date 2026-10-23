@@ -38,8 +38,14 @@ const UNPRICED_BY_DESIGN: Record<string, string> = {};
  * Source: docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html, read 2026-10-08.
  */
 const CACHE_WRITE_FREE: Record<string, string> = {
-  'gpt-5': 'OpenAI GPT-5.5 and earlier on Bedrock: "Cache writes have no additional fee on these models"',
+  'gpt-oss-20b': 'AWS Price List (2026-10-23) has no cache-write usage type for gpt-oss',
+  'gpt-oss-120b': 'AWS Price List (2026-10-23) has no cache-write usage type for gpt-oss',
   'nova-micro': 'Amazon Nova: implicit prompt caching only; no cache-write rate is published',
+};
+/** Rows whose cache-READ rate is legitimately zero — the Price List publishes no cache-read usage type for them. */
+const CACHE_READ_FREE: Record<string, string> = {
+  'gpt-oss-20b': 'AWS Price List (2026-10-23) has no cache-read usage type for gpt-oss',
+  'gpt-oss-120b': 'AWS Price List (2026-10-23) has no cache-read usage type for gpt-oss',
 };
 
 describe('rate card completeness — every observed token kind is priced', () => {
@@ -65,6 +71,7 @@ describe('rate card completeness — every observed token kind is priced', () =>
       for (const kind of kinds) {
         if (UNPRICED_BY_DESIGN[kind]) continue;
         if (kind === 'cacheWriteTokens' && CACHE_WRITE_FREE[rate.key]) continue;
+        if (kind === 'cacheReadTokens' && CACHE_READ_FREE[rate.key]) continue;
         const counts = { modelId: rate.key, [kind]: 1_000_000 } as unknown as TokenCounts;
         if (!(computeModelCost(counts, [rate]).estimatedUsd > 0)) zeros.push(`${rate.key}:${kind}`);
       }
@@ -74,7 +81,7 @@ describe('rate card completeness — every observed token kind is priced', () =>
   });
 
   it('CACHE_WRITE_FREE names only rows that exist on the card (a renamed row must not keep an exemption alive)', () => {
-    for (const key of Object.keys(CACHE_WRITE_FREE)) expect(RATE_CARD.map((r) => r.key)).toContain(key);
+    for (const key of [...Object.keys(CACHE_WRITE_FREE), ...Object.keys(CACHE_READ_FREE)]) expect(RATE_CARD.map((r) => r.key)).toContain(key);
   });
 
   it('cache writes cost MORE than plain input, never less (Bedrock bills 1.25× for 5-minute, 2× for 1-hour TTL)', () => {

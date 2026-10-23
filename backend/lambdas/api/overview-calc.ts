@@ -6,7 +6,7 @@
  * sparkline, and per-project movers. All three are one PROJDAY range read priced with the same rate
  * card the Cost page uses, so the Overview reconciles with Cost and Projects by construction.
  */
-import { ModelRate, RATE_CARD, computeModelCost } from './cost-calc';
+import { ModelRate, RATE_CARD, UnpricedModel, collectUnpriced, computeModelCost } from './cost-calc';
 import { ProjdayItem } from './project-calc';
 
 export type WindowKind = '7' | '30' | '90' | 'mtd';
@@ -64,6 +64,8 @@ export interface OverviewResult {
   window: WindowBounds;
   spend: OverviewSpend;
   byModel: OverviewModelRow[];
+  /** Models in the current window the card has no row for — in `byModel` and `spend` at $0 (feature-41). */
+  unpricedModels: UnpricedModel[];
   movers: OverviewMover[];
   coverage: { firstDayWithData: string | null; partial: boolean };
 }
@@ -145,6 +147,7 @@ export function buildOverview(
     byModel: [...byModel.values()]
       .map((m) => ({ ...m, estimatedUsd: round2(m.estimatedUsd), cacheSavingsUsd: round2(m.cacheSavingsUsd), cacheReadUsd: round2(m.cacheReadUsd), cacheWriteUsd: round2(m.cacheWriteUsd), cacheNetUsd: round2(m.cacheNetUsd) }))
       .sort((a, b) => b.estimatedUsd - a.estimatedUsd),
+    unpricedModels: collectUnpriced(byModel.values(), card),
     movers,
     // Partial when the earliest rollup day is inside the prior window — the comparison is then
     // against an incomplete baseline and the page must say so rather than show a clean delta.

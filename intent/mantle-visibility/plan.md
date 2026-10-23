@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** e849de83bce185a99485c2b8cd642dfdc3c10512
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #72 (qa-leftovers, feature-39); the only chain in flight (peer's B waits).
 

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../api/client';
+import { api, UnpricedModel } from '../api/client';
 import { Kpi, Panel } from '../components/Layout';
+import { UnpricedNote } from '../components/UnpricedNote';
 import { fmtTokens, fmtUsd } from '../lib/format';
 
 /**
@@ -53,6 +54,7 @@ export function ProjectsPage() {
   const [apiTotalUsd, setApiTotalUsd] = useState<number | null>(null);
   const [apiProjectCount, setApiProjectCount] = useState<number | null>(null);
   const [rollupsAsOf, setRollupsAsOf] = useState<string | null>(null);
+  const [unpriced, setUnpriced] = useState<UnpricedModel[] | undefined>(undefined);
   const [apiTotalCost, setApiTotalCost]     = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -76,6 +78,7 @@ export function ProjectsPage() {
           setApiTotalTokens(r.totalTokens != null ? Number(r.totalTokens) : null);
           setApiTotalUsd(r.totalEstimatedUsd != null ? Number(r.totalEstimatedUsd) : null);
           setRollupsAsOf((r as { rollupsAsOf?: string | null }).rollupsAsOf ?? null);
+          setUnpriced(r.unpricedModels);
         })
         .catch((e) => { if (!cancelled) setError(String(e)); })
         .finally(() => { if (!cancelled) setLoading(false); });
@@ -204,7 +207,7 @@ export function ProjectsPage() {
       </div>
 
       <Panel title="Usage by project"
-             desc={"Attribution precedence per call: ① the project's application inference profile — the call is ROUTED through it, so the invocation log records the profile's ARN as modelId and the aggregator resolves its tums-project tag (config-routed, IAM-enforceable, zero per-call effort); ② requestMetadata.project_id set by the app; ③ identity hint for single-project principals; ④ untagged. Fast = managed DynamoDB rollups (all four tiers, incl. the one-time historical treatment). Full = async Athena over the immutable raw logs — live, call-time truth, so it can run ahead of the 15-minute rollups. Full resolves tiers ① and ②; it cannot resolve ③, and pre-profile history stays 'untagged' there, because an identity hint and the historical treatment exist only as rollup state and no raw-log field carries them. So expect a larger 'untagged' share in Full — that gap is those two tiers, not lost usage." + fullVsFast}>
+             desc={"Attribution precedence per call: ① the project's application inference profile — the call is ROUTED through it, so the invocation log records the profile's ARN as modelId and the aggregator resolves its tums-project tag (config-routed, IAM-enforceable, zero per-call effort); ② requestMetadata.project_id set by the app; ③ identity hint for single-project principals (an IAM role hint covers every session that assumes the role); ④ untagged. Fast = managed DynamoDB rollups (all four tiers, incl. the one-time historical treatment). Full = async Athena over the immutable raw logs — live, call-time truth, so it can run ahead of the 15-minute rollups. Full resolves tiers ① and ②; it cannot resolve ③, and pre-profile history stays 'untagged' there, because an identity hint and the historical treatment exist only as rollup state and no raw-log field carries them. So expect a larger 'untagged' share in Full — that gap is those two tiers, not lost usage." + fullVsFast}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
           <div style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
             {(['fast', 'full'] as const).map((s) => (
@@ -257,6 +260,7 @@ export function ProjectsPage() {
             </tbody>
           </table>
         )}
+        {source === 'fast' && <UnpricedNote models={unpriced} scope="this tenant's rollups (all time)" />}
       </Panel>
 
       {isAdmin && (

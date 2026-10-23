@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, BillBlock, OverviewResponse } from '../api/client';
+import { UnpricedNote } from '../components/UnpricedNote';
 import { EmptyState } from '../components/EmptyState';
 import { KpiTile } from '../components/KpiTile';
 import { Panel } from '../components/Layout';
@@ -217,6 +218,7 @@ export function CostsPage() {
         )}
         <p className="muted" style={{ fontSize: 12, marginTop: 12, marginBottom: 0 }}>{footer}</p>
         <p className="muted" style={{ fontSize: 12, marginTop: 8, marginBottom: 0 }}>{pricingNote}</p>
+        <UnpricedNote models={ov.unpricedModels} scope={windowLabel} />
       </Panel>
 
       {bill && bill.byModel.length > 0 && (
@@ -231,7 +233,7 @@ export function CostsPage() {
                 <tr key={r.model}>
                   <td className="mono" style={{ fontSize: 12 }}>{r.model}</td>
                   <td className="num">{fmtUsd(r.billedUsd)}</td>
-                  <td className="num">{fmtUsd(r.loggedEstimateUsd)}{r.overEstimated && <span className="badge warning" style={{ marginLeft: 6 }} title="Our logged estimate is above the bill for this model">over</span>}</td>
+                  <td className="num">{fmtUsd(r.loggedEstimateUsd)}{r.billedZero ? <span className="badge info" style={{ marginLeft: 6 }} title="The logs priced this model at its published rate, but Cost Explorer billed $0.00 for it on these days">billed $0</span> : r.overEstimated && <span className="badge warning" style={{ marginLeft: 6 }} title="Our logged estimate is above the bill for this model">over</span>}</td>
                   <td className="num"><strong>{fmtUsd(r.unloggedUsd)}</strong></td>
                   <td className="muted" style={{ fontSize: 12 }}>{r.mantle ? `${fmtInt(r.mantle.inferences)} inferences · ${fmtTokens(r.mantle.inputTokens)} in · ${fmtTokens(r.mantle.outputTokens)} out` : '—'}</td>
                 </tr>
@@ -247,7 +249,7 @@ export function CostsPage() {
               </tr>
             </tfoot>
           </table>
-          <p className="muted" style={{ fontSize: 12, marginTop: 12, marginBottom: 0 }}>{bill.note}{bill.mantleInconsistent ? ' Mantle per-model and fleet series disagree by more than 1% — the counts are shown but not trusted.' : ''}</p>
+          <p className="muted" style={{ fontSize: 12, marginTop: 12, marginBottom: 0 }}>{(bill.billedZeroEstimateUsd ?? 0) > 0 ? `${fmtUsd(bill.billedZeroEstimateUsd!)} of the logged estimate is list price for models the bill charged $0.00 for on these days (rows marked "billed $0") — the card is right for an account that is charged; here the bill is the truth. ` : ''}{bill.note}{bill.mantleInconsistent ? ' Mantle per-model and fleet series disagree by more than 1% — the counts are shown but not trusted.' : ''}</p>
         </Panel>
       )}
     </>

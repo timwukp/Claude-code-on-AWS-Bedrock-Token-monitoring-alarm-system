@@ -43,9 +43,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // 'Models used'. Check every numeric counter (input/output/cache-read and every
     // cache-write field from cacheWriteOf), so a row with only cache-write usage is still kept.
     const hasUsage = (t: TokenCounts) =>
-      Object.entries(t).some(([k, v]) => k !== 'modelId' && Number(v) > 0);
+      Object.entries(t).some(([k, v]) => k !== 'modelId' && k !== 'invocations' && Number(v) > 0);
     const items: TokenCounts[] = (res.Items ?? []).map((i): TokenCounts => ({
       modelId: resolveModel(String(i.modelId ?? i.sk ?? '')),
+      invocations: Number(i.invocations ?? 0),
       inputTokens: Number(i.inputTokens ?? 0),
       outputTokens: Number(i.outputTokens ?? 0),
       cacheReadTokens: Number(i.cacheReadTokens ?? 0),

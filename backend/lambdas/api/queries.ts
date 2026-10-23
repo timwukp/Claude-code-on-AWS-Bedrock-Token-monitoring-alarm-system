@@ -6,7 +6,7 @@ import {
   GetQueryResultsCommand,
 } from '@aws-sdk/client-athena';
 import { ok, badRequest, serverError } from '../shared/response';
-import { RATE_CARD, routeCaseSql } from './cost-calc';
+import { RATE_CARD, cardByKeyLength, routeCaseSql } from './cost-calc';
 import { listProfiles, profileResolvesModel } from '../shared/project-registry';
 import { getTenantId } from '../shared/tenant';
 
@@ -45,14 +45,14 @@ const tenantFilter = (tenantId: string) => {
 };
 
 /**
- * SQL CASE reproducing RATE_CARD's first-substring-match semantics (cost-calc.matchRate) so
- * Athena and the Fast path price identically; unknown models fall through to 0.
+ * SQL CASE reproducing matchRate's longest-key-wins semantics (keys tested longest first, so the
+ * first LIKE hit IS the longest) so Athena and the Fast path price identically; unknown → 0.
  */
 function rateCase(
   field: 'inPerToken' | 'outPerToken' | 'cacheReadPerToken' | 'cacheWrite5mPerToken',
   modelExpr = 'l.modelId',
 ): string {
-  const whens = RATE_CARD.map((r) => `WHEN ${modelExpr} LIKE '%${r.key.replace(/'/g, "''")}%' THEN ${r[field]}`).join(' ');
+  const whens = cardByKeyLength(RATE_CARD).map((r) => `WHEN ${modelExpr} LIKE '%${r.key.replace(/'/g, "''")}%' THEN ${r[field]}`).join(' ');
   return `CASE ${whens} ELSE 0 END`;
 }
 

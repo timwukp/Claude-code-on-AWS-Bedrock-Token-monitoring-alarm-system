@@ -308,7 +308,10 @@ export interface AttributionMaps {
  * Attribute one record to a project (#13). Precedence:
  *   1. application inference profile the call came through (authoritative — IAM-enforceable);
  *   2. caller-supplied requestMetadata.project_id;
- *   3. admin identity hint for the caller ARN;
+ *   3. admin identity hint for the caller ARN — exact, or (feature-41) the ROLE behind an assumed-role
+ *      session: `arn:aws:sts::<acct>:assumed-role/<role>/<session>` matches a hint written as the
+ *      IAM role (`arn:aws:iam::<acct>:role/<role>`) or as the session-less assumed-role prefix, so one
+ *      hint covers every session of a CI runner / agent role instead of one per session name;
  *   4. "untagged".
  * The model id is a separate question from the project: a profile whose underlying model is known
  * rewrites the model id so rate cards match, even when the profile carries no project tag — in
@@ -323,10 +326,30 @@ export function deriveProject(
   if (viaProfile && viaProfile.projectId !== 'untagged') return { projectId: viaProfile.projectId, effectiveModelId };
   const viaMetadata = r.requestMetadata?.project_id;
   if (viaMetadata) return { projectId: viaMetadata, effectiveModelId };
-  const arn = r.identity?.arn?.toLowerCase();
-  const viaIdentity = arn ? maps?.identities.get(arn) : undefined;
+  const arn = r.identity?.arn;
+  const viaIdentity = arn && maps ? lookupIdentityHint(arn, maps.identities) : undefined;
   if (viaIdentity) return { projectId: viaIdentity, effectiveModelId };
   return { projectId: 'untagged', effectiveModelId };
+}
+
+/**
+ * The keys an identity ARN can be hinted under, most specific first: itself; for an STS assumed-role
+ * session also the session-less prefix and the IAM role it was assumed from. All lower-cased, as the
+ * registry stores hints. Role paths are kept (`role/path/name` ↔ `assumed-role/name` is NOT equated:
+ * STS drops the path from the session ARN, and guessing one would attribute the wrong role).
+ */
+export function identityHintKeys(identityArn: string): string[] {
+  const arn = identityArn.toLowerCase();
+  const m = /^arn:([^:]+):sts::(\d{12}):assumed-role\/([^/]+)\/[^/]+$/.exec(arn);
+  if (!m) return [arn];
+  const [, partition, account, role] = m;
+  return [arn, `arn:${partition}:sts::${account}:assumed-role/${role}`, `arn:${partition}:iam::${account}:role/${role}`];
+}
+
+/** First hint that matches one of the ARN's keys, exact session before role. */
+export function lookupIdentityHint(identityArn: string, hints: Map<string, string>): string | undefined {
+  for (const k of identityHintKeys(identityArn)) { const p = hints.get(k); if (p) return p; }
+  return undefined;
 }
 
 /** Calendar-day bucket (UTC): "2026-06-03T06:54:27Z" -> "2026-06-03". */
