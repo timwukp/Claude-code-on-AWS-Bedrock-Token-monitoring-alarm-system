@@ -71,6 +71,30 @@ export class EtlStack extends cdk.Stack {
       targets: [new targets.LambdaFunction(aggregatorFn)],
     });
 
+    // --- Daily bill collector (feature-40) ---
+    // Copies Cost Explorer's Bedrock usage-type lines (last 4 days, DAILY) into the aggregates table so the API
+    // can show "billed vs what the logs price" without calling Cost Explorer per page view ($0.01/request).
+    // Needed because Bedrock Mantle traffic bills under the ordinary usage types but never reaches the
+    // invocation logs. ce:GetCostAndUsage supports no resource scoping.
+    const billCollectorFn = new NodejsFunction(this, 'BillCollectorFn', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      entry: lambdaEntry('ingestion', 'bill-collector.ts'),
+      projectRoot: BACKEND_ROOT,
+      depsLockFilePath: BACKEND_LOCK,
+      handler: 'handler',
+      timeout: cdk.Duration.minutes(5), // the logged side walks every tenant's PROJDAY rows (thousands of identity ARNs)
+      memorySize: 512,
+      tracing: lambda.Tracing.ACTIVE,
+      environment: { AGGREGATES_TABLE: tables.aggregates.tableName, TENANTS_TABLE: tables.tenants.tableName, BILL_LOOKBACK_DAYS: '4' },
+    });
+    tables.aggregates.grantReadWriteData(billCollectorFn);
+    tables.tenants.grantReadData(billCollectorFn); // profile cache: price profile-ARN rows as their model
+    billCollectorFn.addToRolePolicy(new iam.PolicyStatement({ actions: ['ce:GetCostAndUsage'], resources: ['*'] }));
+    new events.Rule(this, 'BillCollectorSchedule', {
+      schedule: events.Schedule.cron({ hour: '6', minute: '30' }), // 06:30 UTC daily — after Cost Explorer's overnight refresh
+      targets: [new targets.LambdaFunction(billCollectorFn)],
+    });
+
     // --- Heavy ETL: Fargate task on a daily Step Functions workflow ---
     const cluster = new ecs.Cluster(this, 'EtlCluster', { vpc });
     const taskDef = new ecs.FargateTaskDefinition(this, 'EtlTask', { cpu: 1024, memoryLimitMiB: 2048 });

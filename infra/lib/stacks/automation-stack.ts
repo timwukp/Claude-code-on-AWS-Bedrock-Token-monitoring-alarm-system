@@ -103,13 +103,17 @@ export class AutomationStack extends cdk.Stack {
     });
 
     // AWS Budgets — actual (80%) + forecasted (100%) on Bedrock service spend.
+    // Bedrock bills under THREE service names: every Claude / OpenAI model line is "Amazon Bedrock Service"
+    // (MTD 2026-10 $4,385.80), "Amazon Bedrock" carries Guardrails and Nova ($0.82), AgentCore has its own.
+    // Until feature-40 (qa F-PR73-006) the filter named only "Amazon Bedrock", so the budget — and the
+    // Budget Action hard-stop built on it — watched 0.02% of the spend and read "on track" at 4.4× the limit.
     const bedrockBudget = new budgets.CfnBudget(this, 'BedrockBudget', {
       budget: {
         budgetName: `bedrock-monthly-${cfg.env}`,
         budgetType: 'COST',
         timeUnit: 'MONTHLY',
         budgetLimit: { amount: cfg.governance.monthlyBudgetUsd, unit: 'USD' },
-        costFilters: { Service: ['Amazon Bedrock'] },
+        costFilters: { Service: ['Amazon Bedrock', 'Amazon Bedrock Service', 'Amazon Bedrock AgentCore'] },
       },
       notificationsWithSubscribers: [
         {

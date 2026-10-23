@@ -151,7 +151,10 @@ export const HELP = {
     what: 'Month-to-date Bedrock spend as AWS Billing has recorded it.',
     why: 'This is the number that will appear on the invoice; the Cost page’s figure is a token-based estimate.',
     how: 'AWS Budgets CalculatedSpend.ActualSpend. Billing data can lag up to 24 hours.',
-    caveats: ['Accounts without direct billing (e.g. under a payer account) show $0 here regardless of usage — that is a data-availability state, not zero spend.'],
+    caveats: [
+      'Bedrock bills under three service names; the budget must filter on all of them ("Amazon Bedrock", "Amazon Bedrock Service", "Amazon Bedrock AgentCore"). Until 2026-10-16 it named only the first, which carries Guardrails and Nova, and read $0.82 "on track" while the model lines billed $4,385 — a filter defect, not zero spend.',
+      'Accounts without Cost Explorer access (e.g. some member accounts under a payer) show $0 here regardless of usage — a data-availability state, not zero spend.',
+    ],
     labels: ['Actual spend (AWS billed)'],
   },
   'budget.forecast': {

@@ -3,7 +3,7 @@
 - **Intent:** ./intent.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Status:** signed-off
+- **Status:** shipped
 
 ## Behaviour
 1. `frontend/src/lib/format.ts` — `hourAxis(maxHours)` → `{ ticks, domain, tickFormatter }`: ≥ 48 h → ticks at whole-day
