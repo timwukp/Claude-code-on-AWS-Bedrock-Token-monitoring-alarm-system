@@ -49,8 +49,11 @@ The "Saved by prompt caching" KPI compounded it: it reported what cache *reads* 
    never asserted it. The UI qa agent compares pages with each other and with the page's own disclosures — never with an
    external bill.
 5. **The external anchor was blind.** The Budget tile (AWS Budgets) and Cost Explorer read **$0** for Bedrock in this
-   account because a payer account is billed. We explained that away on the tile ("no direct billing") instead of
-   treating it as "no external truth is available here — reconcile from the payer account".
+   account — and we concluded a payer account was billed. **That diagnosis was wrong** (found 2026-10-16, qa on #73):
+   the budget and our Cost Explorer checks filtered on SERVICE = "Amazon Bedrock", but every Claude model bills under
+   **"Amazon Bedrock Service"** ($4,385.80 in the first half of October vs $0.82 watched). The bill was in this account all
+   along under a different service name; the Budget Action hard-stop built on that filter could never have fired. We
+   explained the $0 away on the tile ("no direct billing") instead of asking why a $14k dashboard had a $0 bill.
 6. **Copy reinforced the frame.** "billing discounts them", "the cheapest tokens you can buy", "~89 % lower than full
    input pricing" — each true of reads, each silent about writes.
 7. **Reviewer blind spot.** In feature-27 the author of this document moved `cacheSavingsUsd` into Overview, sat next to
@@ -101,6 +104,12 @@ obvious the moment the two lists sat side by side.
   lands in its own chain: expect the figure to be ~9 % under the bill, and the page says so.~~ **Resolved by
   feature-38 (standard-route pricing, PR #71):** the standard tier is applied at read time and the lower-bound wording
   came out of the pages, help text and `RECONCILIATION.md`.
+- **Scope of "no known pricing gap" (added 2026-10-14):** that statement holds for traffic the invocation log captures
+  (`bedrock-runtime`). Calls through `bedrock-mantle` are billed (Cost Explorer SERVICE "Amazon Bedrock Service") but never
+  logged, so no rollup-based figure can include them — 5,818 inferences in the 30 days to 2026-10-13. Features 39–41 add a
+  CloudWatch-based estimate for them, shown separately and labelled as a floor, and stop unknown models from being priced
+  at a silent $0 (`unpricedModels`). The lesson is the same one as above, one layer out: a total that reconciles to the cent
+  with the bill still only covers the traffic you can see.
 
 ## Guards added (feature-37)
 
@@ -109,7 +118,7 @@ obvious the moment the two lists sat side by side.
 | `backend/lambdas/api/pricing-completeness.test.ts` | a token kind the parser extracts that the card does not price (derived from `parse.ts`, so a new kind fails until priced or allow-listed with a reason) |
 | `backend/lambdas/ingestion/rollup-fields.test.ts` | a rollup writer or maintenance script whose ADD list omits a counter its aggregate carries; any rollup shape carrying fewer counters than the hourly one |
 | `backend/scripts/check-rate-card.ts` | drift between the card and the AWS Price List (manual; CI once the role has `pricing:GetProducts`) |
-| `docs/RECONCILIATION.md` | monthly payer-account Cost Explorer vs dashboard comparison — the external truth this account cannot see |
+| `docs/RECONCILIATION.md` | monthly Cost Explorer vs dashboard comparison (rewritten in feature-40 once the service-name mistake was found: the bill is in this account cannot see |
 | qa rule request | "every token kind shown on Usage is also priced on Cost" |
 
 ## Lessons

@@ -109,6 +109,9 @@ export function CostsPage() {
     r.inputTokens + r.outputTokens + r.cacheReadTokens + (r.cacheWriteTokens ?? 0) > 0;
   const usedRows = ov.byModel.filter(hasTokens);
   const usedModels = mergeModelRows(usedRows).length;
+  // Unpriced models (feature-39): the API keeps their tokens and drops them from every $ figure; say so, loudly.
+  const unpriced = ov.unpricedModels ?? [];
+  const unpricedIds = new Set(unpriced.map((m) => m.modelId));
   const windowIds = countModelIds(mergeModelRows(usedRows));
   // All time includes every window, so every id seen in the window counts too. /v1/costs can list fewer ids
   // than the PROJDAY rollups behind the window (qa F-PR69-005: 90d said 24/33, all-time said 20/29).
@@ -192,7 +195,7 @@ export function CostsPage() {
                   <td className="num">{usdOrDash(m.cacheReadUsd)}</td>
                   <td className="num">{usdOrDash(m.cacheWriteUsd)}</td>
                   <td className="num">{usdOrDash(netKnown ? m.cacheNetUsd : null)}</td>
-                  <td className="num"><strong>{fmtUsd(m.estimatedUsd)}</strong></td>
+                  <td className="num">{m.ids.some((id) => unpricedIds.has(id)) ? <span className="badge warning" title="No rate on the card — tokens counted, dollars not">unpriced</span> : <strong>{fmtUsd(m.estimatedUsd)}</strong>}</td>
                 </tr>
               ))}
             </tbody>
@@ -221,35 +224,50 @@ export function CostsPage() {
         <UnpricedNote models={ov.unpricedModels} scope={windowLabel} />
       </Panel>
 
-      {bill && bill.byModel.length > 0 && (
-        <Panel title="Account bill vs all tenants' logged estimate" helpId="cost.estimated-spend"
-               desc={`ACCOUNT-WIDE — the rest of this page is this tenant alone${bill.tenantLoggedEstimateUsd != null ? ` (this tenant's logged estimate on the same billed days: ${fmtUsd(bill.tenantLoggedEstimateUsd)})` : ''} · ${windowLabel} · bill ${bill.window.billedFrom && bill.window.billedTo ? `${bill.window.billedFrom} → ${bill.window.billedTo}` : `through ${bill.window.to}`} (${bill.window.daysBilled} billed day${bill.window.daysBilled === 1 ? '' : 's'} in the window; Cost Explorer lags about a day) · dollars from Cost Explorer, Mantle counts from CloudWatch${bill.asOf ? ` · collected ${bill.asOf.slice(0, 16).replace('T', ' ')} UTC` : ''}`}>
-          <table className="data">
-            <thead>
-              <tr><th>Model</th><th className="num">Billed (USD)</th><th className="num">Logged estimate (USD)</th><th className="num">Not logged (USD)</th><th>Bedrock Mantle</th></tr>
-            </thead>
-            <tbody>
-              {bill.byModel.map((r) => (
-                <tr key={r.model}>
-                  <td className="mono" style={{ fontSize: 12 }}>{r.model}</td>
-                  <td className="num">{fmtUsd(r.billedUsd)}</td>
-                  <td className="num">{fmtUsd(r.loggedEstimateUsd)}{r.billedZero ? <span className="badge info" style={{ marginLeft: 6 }} title="The logs priced this model at its published rate, but Cost Explorer billed $0.00 for it on these days">billed $0</span> : r.overEstimated && <span className="badge warning" style={{ marginLeft: 6 }} title="Our logged estimate is above the bill for this model">over</span>}</td>
-                  <td className="num"><strong>{fmtUsd(r.unloggedUsd)}</strong></td>
-                  <td className="muted" style={{ fontSize: 12 }}>{r.mantle ? `${fmtInt(r.mantle.inferences)} inferences · ${fmtTokens(r.mantle.inputTokens)} in · ${fmtTokens(r.mantle.outputTokens)} out` : '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="total-row">
-                <td>Total{bill.loggedSharePct != null ? <span className="muted"> · logged share {bill.loggedSharePct}%</span> : ''}</td>
-                <td className="num">{fmtUsd(bill.totalBilledUsd)}</td>
-                <td className="num">{fmtUsd(bill.totalLoggedEstimateUsd)}</td>
-                <td className="num"><strong>{fmtUsd(bill.totalUnloggedUsd)}</strong></td>
-                <td />
-              </tr>
-            </tfoot>
-          </table>
-          <p className="muted" style={{ fontSize: 12, marginTop: 12, marginBottom: 0 }}>{(bill.billedZeroEstimateUsd ?? 0) > 0 ? `${fmtUsd(bill.billedZeroEstimateUsd!)} of the logged estimate is list price for models the bill charged $0.00 for on these days (rows marked "billed $0") — the card is right for an account that is charged; here the bill is the truth. ` : ''}{bill.note}{bill.mantleInconsistent ? ' Mantle per-model and fleet series disagree by more than 1% — the counts are shown but not trusted.' : ''}</p>
+      {bill && (
+        <Panel title="Account bill vs all tenants' logged estimate" helpId="cost.mantle"
+               desc={`ACCOUNT-WIDE — the rest of this page is this tenant alone${bill.tenantLoggedEstimateUsd != null ? ` (this tenant's logged estimate on the same billed days: ${fmtUsd(bill.tenantLoggedEstimateUsd)})` : ''}. Dollars are the bill (Cost Explorer, daily); "not logged" = billed − what the invocation logs price, today almost entirely bedrock-mantle traffic.`}>
+          {bill.byModel.length === 0 ? (
+            <p className="muted" style={{ marginTop: 0 }}>No billed usage in this window{bill.window?.billedTo ? ` (billed through ${bill.window.billedTo})` : ''}.</p>
+          ) : (
+            <>
+              <table className="data">
+                <thead>
+                  <tr><th>Model</th><th className="num">Billed (USD)</th><th className="num">Logged estimate (USD)</th><th className="num">Not logged (USD)</th><th className="num">Mantle inferences</th><th className="num">Mantle tokens</th></tr>
+                </thead>
+                <tbody>
+                  {bill.byModel.map((r) => (
+                    <tr key={r.model}>
+                      <td className="mono" style={{ fontSize: 12 }}>
+                        {r.model}
+                        {r.overEstimated && <span className="badge warning" style={{ marginLeft: 6 }} title="Our logged estimate is above the bill for this model — a rate-card or route problem to check, not a Mantle gap">estimate above bill</span>}
+                      </td>
+                      <td className="num">{fmtUsd(r.billedUsd)}</td>
+                      <td className="num">{fmtUsd(r.loggedEstimateUsd)}{r.billedZero ? <span className="badge info" style={{ marginLeft: 6 }} title="The logs priced this model at its published rate, but the bill charged $0.00 for it on these days">billed $0</span> : null}</td>
+                      <td className={`num ${r.unloggedUsd > 0 ? 'delta-up' : 'muted'}`}><strong>{fmtUsd(r.unloggedUsd)}</strong></td>
+                      <td className="num muted">{r.mantle ? fmtInt(r.mantle.inferences) : <span aria-label="no Mantle traffic">—</span>}</td>
+                      <td className="num muted">{r.mantle ? fmtTokens(r.mantle.inputTokens + r.mantle.outputTokens) : <span aria-label="no Mantle traffic">—</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="total-row">
+                    <td>Total{bill.loggedSharePct != null ? <span className="muted"> · {Math.round(bill.loggedSharePct)}% of the bill is logged</span> : ''}</td>
+                    <td className="num">{fmtUsd(bill.totalBilledUsd)}</td>
+                    <td className="num">{fmtUsd(bill.totalLoggedEstimateUsd)}</td>
+                    <td className="num"><strong>{fmtUsd(bill.totalUnloggedUsd)}</strong></td>
+                    <td colSpan={2} />
+                  </tr>
+                </tfoot>
+              </table>
+              <p className="muted" style={{ fontSize: 12, marginTop: 12, marginBottom: 0 }}>
+                {(bill.billedZeroEstimateUsd ?? 0) > 0 ? `${fmtUsd(bill.billedZeroEstimateUsd!)} of the logged estimate is for models the bill charged $0.00 for (see "billed $0"). ` : ''}
+                Bill {bill.window?.billedFrom ?? '…'} → {bill.window?.billedTo ?? '…'} ({bill.window?.daysBilled ?? '?'} billed days of this window; Cost Explorer lags about a day).
+                Mantle token counts come from CloudWatch and are shown for scale only — they carry no cache split (they are mostly cache reads), so they are never multiplied by a rate.
+                Unlogged traffic has no per-project attribution. See docs/RECONCILIATION.md.
+              </p>
+            </>
+          )}
         </Panel>
       )}
     </>

@@ -49,6 +49,7 @@ results. One report per feature (mapped to a GitHub issue / PR).
 | qa leftovers (/dora one-unit axis; /usage time axis zero-filled; /v1/quotas 6–11 s → 0.3–0.6 s) | — | #72 | [feature-39](./feature-39-qa-leftovers.md) | PASS (gates + live measurement) |
 | Mantle visibility (daily bill collector; billed vs logged per model; Mantle counts on /costs, /overview, /latency) | — | #73 | [feature-40](./feature-40-mantle-visibility.md) | PASS (gates + live: unlogged $1,096.96 = Mantle) |
 | OpenAI rates from model cards + longest-key matchRate; unpricedModels on three endpoints; billedZero in the bill panel; role-prefix identity hints | — | #74 | [feature-41](./feature-41-openai-rates-and-unpriced.md) | PASS (gates + local live: gpt-5.6-sol $103.25, three endpoints agree) |
+| Cache churn per project; one bill panel; unpriced badges; drift script covers Astra/Nova/gpt-oss + allow-list; 404 page; copy fixes | — | TBD | [feature-42](./feature-42-unpriced-visibility-and-churn.md) | PASS (gates) |
 Each report records: scope, unit-test results, build/synth gates, real-AWS validation evidence,
 any defect found+fixed during validation, and a verdict. Reports are written before opening the
 PR; a feature is only PR-ready when all gates are green.

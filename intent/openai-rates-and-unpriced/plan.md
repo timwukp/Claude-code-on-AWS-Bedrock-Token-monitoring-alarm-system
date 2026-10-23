@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** dc60133947c71692db298676bfec99e147b06cd6
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #73 (mantle-visibility, feature-40); the only chain in flight (the peer's
 chain B waits for this one, per the owner's one-chain rule).

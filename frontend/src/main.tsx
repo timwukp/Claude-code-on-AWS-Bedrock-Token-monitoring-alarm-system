@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter, Navigate, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { EmptyState } from './components/EmptyState';
 import './styles.css';
 import { configureAuth, getUserEmail } from './auth/cognito';
 import { LoginGate } from './auth/LoginGate';
@@ -34,11 +35,23 @@ const PAGE_META: Record<string, { title: string; sub: string; windows?: readonly
   '/latency': { title: 'Model-hop Latency', sub: 'Bedrock service time across the end-to-end chain — measured hops only, fleet-wide' },
 };
 
+const NOT_FOUND_META = { title: 'Page not found', sub: 'This address is not part of the portal', windows: [] as readonly Window[], fixedCaption: '' };
+
+/** An unknown URL says so instead of silently showing the Overview (qa F-PR73: the path used to be rewritten to "/"). */
+function NotFoundPage() {
+  const { pathname } = useLocation();
+  return (
+    <EmptyState kind="empty" icon="alert" title={`No page at ${pathname}`}
+      detail="Check the address, or pick a page from the sidebar. Nothing was loaded for this URL."
+      action={{ label: 'Back to Overview', to: '/' }} />
+  );
+}
+
 function Shell({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<string | null>(null);
   useEffect(() => { getUserEmail().then(setUser); }, []);
   const { pathname } = useLocation();
-  const meta = PAGE_META[pathname] ?? PAGE_META['/'];
+  const meta = PAGE_META[pathname] ?? NOT_FOUND_META;
   return <Layout title={meta.title} subtitle={meta.sub} user={user} windows={meta.windows} fixedCaption={meta.fixedCaption}>{children}</Layout>;
 }
 
@@ -57,7 +70,7 @@ function App() {
           <Route path="/roi" element={<Shell><RoiPage /></Shell>} />
           <Route path="/latency" element={<Shell><LatencyPage /></Shell>} />
           <Route path="/settings" element={<Shell><SettingsPage /></Shell>} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Shell><NotFoundPage /></Shell>} />
         </Routes>
       </BrowserRouter>
     </LoginGate>

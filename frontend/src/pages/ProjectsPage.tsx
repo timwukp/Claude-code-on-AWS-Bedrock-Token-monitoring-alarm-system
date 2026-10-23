@@ -187,7 +187,9 @@ export function ProjectsPage() {
              chip={srcChip(apiProjectCount != null ? 'rollups' : rowSource)}
              foot={source === 'full'
                ? (apiProjectCount != null
-                   ? `from the DynamoDB rollups, all four attribution tiers — the table below shows ${rows.length} Athena row(s), which resolve only tiers ① and ②, so the two counts differ by design`
+                   ? (loading
+                       ? 'from the DynamoDB rollups, all four attribution tiers — the Athena scan is still running; its rows (tiers ① and ② only) appear below when it finishes'
+                       : `from the DynamoDB rollups, all four attribution tiers — the table below shows ${rows.length} Athena row${rows.length === 1 ? '' : 's'}, which resolve only tiers ① and ②, so the two counts differ by design`)
                    : 'rows in the table below — Athena over the raw logs, so it counts only projects whose attribution is resolvable at call time (tiers ① and ②)')
                : 'rows in the table below — the DynamoDB rollups, all four attribution tiers'} />
         <Kpi label="Total tokens" value={fmtTokens(totalTokens)} accent="var(--accent-blue)"
@@ -240,11 +242,13 @@ export function ProjectsPage() {
             </span>
           </div>
         ) : (
+          <>
           <table className="data">
             <thead>
               <tr>
                 <th>Project</th><th>Cost center</th>
                 <th className="num">Users</th><th className="num">Tokens</th><th className="num">Est. USD</th>
+                <th className="num" title="Cache writes as a share of all cache traffic">Cache churn</th>
               </tr>
             </thead>
             <tbody>
@@ -255,10 +259,12 @@ export function ProjectsPage() {
                   <td className="num">{r.users ?? '—'}</td>
                   <td className="num">{fmtTokens(Number(r.tokens ?? 0))}</td>
                   <td className="num"><strong>{fmtUsd(Number(r.estimatedUsd ?? 0))}</strong></td>
+                  <td className={`num ${r.cacheWriteShare != null && r.cacheWriteShare >= 0.5 ? 'delta-up' : 'muted'}`}>{r.cacheWriteShare == null ? <span aria-label={source === 'full' ? 'not available in the Athena view' : 'no cache traffic'}>—</span> : `${Math.round(Number(r.cacheWriteShare) * 100)}%`}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </>
         )}
         {source === 'fast' && <UnpricedNote models={unpriced} scope="this tenant's rollups (all time)" />}
       </Panel>
