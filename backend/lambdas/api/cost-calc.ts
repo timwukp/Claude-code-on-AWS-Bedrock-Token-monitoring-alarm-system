@@ -71,9 +71,8 @@ function rate(
 export const RATE_CARD: ModelRate[] = [
   // Bedrock on-demand GLOBAL-tier pricing (aws.amazon.com/bedrock/pricing, us-east-1); the standard
   // tier is this ×1.1 and is applied by routeMultiplier() from the model id's route, not stored here.
-  // matchRate takes the FIRST substring hit, so a point release must sit above its family row:
-  // 'fable-5' also matches 'fable-5-1', 'opus' matches 'opus-5-5', 'sonnet' matches 'sonnet-5-5'.
-  // Point-release rows below: AWS Price List (AmazonBedrockFoundationModels, us-east-1, Global
+  // matchRate takes the LONGEST matching key (feature-41), so 'fable-5-1' beats 'fable-5' and
+  // 'gpt-5.6-luna' can never fall on a 'gpt-5' row whatever the order here. Point-release rows below: AWS Price List (AmazonBedrockFoundationModels, us-east-1, Global
   // standard), read 2026-09-30; cache-write columns re-read 2026-10-05 (e.g. fable-5-1 $12.50 / $20
   // per MTok = 1.25× / 2× its $10 input).
   rate('fable-5-1', 0.00001, 0.00005, 0.00000025),
@@ -93,25 +92,83 @@ export const RATE_CARD: ModelRate[] = [
   // $0.035 / $0.14 per MTok, cache read $0.00875 (0.25×), cache write $0.00 (no write charge).
   // Reached through untagged inference profiles that priced at $0 before feature-36 (qa F-PR68-002).
   rate('nova-micro', 0.000000035, 0.00000014, 0.00000000875, { m5: 0, h1: 0 }, { routeTiers: false }),
-  // OpenAI models served on Bedrock (QA finding: gpt-5.6-sol usage priced to $0.00). Rates
-  // follow the published GPT-5-family on-demand pricing ($1.25/M in, $10/M out, 0.1× cache
-  // reads); confirm against aws.amazon.com/bedrock/pricing when adding successors. Cache writes:
-  // the Bedrock prompt-caching guide (read 2026-10-08) bills GPT-5.6-and-later writes at 1.25× the
-  // uncached input rate with one 30-minute TTL, so both TTL columns carry 1.25×; earlier GPT models
-  // have implicit caching only, no published write fee, and 0 logged write tokens here → 0. (Cost
-  // Explorer is silent on these models under the Bedrock service filter — no lines of any kind — so
-  // it neither confirms nor refutes; the guide is the source.)
-  rate('gpt-5.6-sol', 0.00000125, 0.00001, 0.000000125, { m5: 0.0000015625, h1: 0.0000015625 }),
-  rate('gpt-5', 0.00000125, 0.00001, 0.000000125, { m5: 0, h1: 0 }),
+  // OpenAI frontier models on Bedrock — AWS model cards (docs.aws.amazon.com/bedrock/latest/userguide/
+  // model-card-openai-<model>.html), read 2026-10-23: Global CRIS tier, short context (≤ 272K input
+  // tokens); In-Region and Geo CRIS are ×1.1 (applied by routeMultiplier), cache read 0.1× input, one
+  // 30-minute cache-write TTL at 1.25× input (both TTL columns carry it). Long context (> 272K input)
+  // is 2× input / cache and 1.5× output on the cards; the rollups cannot tell a long-context call
+  // apart, so it is under-estimated here — stated in docs/VERIFICATION.md. The earlier gpt-5.6-sol row
+  // ($1.25 / $10, assumed from the GPT-5 family in feature-36) was 3.2× too low against its card.
+  // Note for this account: Cost Explorer has billed $0 for every OpenAI model, every service,
+  // 2026-06-01 → 10-22 (gpt-5.6-sol has no line at all); the bill panel says so per model
+  // (`billedZero`) rather than the card pricing them at $0 — another account IS charged these rates.
+  gpt('gpt-5.6-luna', 0.20, 1.20),
+  gpt('gpt-5.6-sol', 4.00, 20.00),
+  gpt('gpt-5.6-terra', 2.00, 12.00),
+  gpt('gpt-6-astra', 10.00, 50.00),
+  gpt('gpt-6-luna', 0.10, 0.50),
+  gpt('gpt-6-sol', 2.00, 10.00),
+  // gpt-oss — AWS Price List (AmazonBedrock, us-east-1, `USE1-gpt-oss-20b-*` / `-120b-*`), read
+  // 2026-10-23: $0.07 / $0.30 and $0.15 / $0.60 per MTok, one tier, no cache rows → no cache charges.
+  rate('gpt-oss-120b', 0.00000015, 0.0000006, 0, { m5: 0, h1: 0 }, { routeTiers: false }),
+  rate('gpt-oss-20b', 0.00000007, 0.0000003, 0, { m5: 0, h1: 0 }, { routeTiers: false }),
+  // No generic 'gpt-5' row: a GPT id without its own card row is reported as unpriced (see
+  // collectUnpriced) instead of being priced at a guess.
 ];
+
+/** An OpenAI frontier-model row from its card's Global CRIS "$ per 1M tokens" figures. */
+function gpt(key: string, inPerMTok: number, outPerMTok: number): ModelRate {
+  const inPerToken = round12(inPerMTok / 1e6);
+  return rate(key, inPerToken, round12(outPerMTok / 1e6), round12(inPerToken * 0.1), { m5: inPerToken * CACHE_WRITE_5M_MULT, h1: inPerToken * CACHE_WRITE_5M_MULT });
+}
 
 // An unknown model prices at 0 on every kind, so it has no tiers to speak of either (live check: 'nova-pro' read ×1.1 on $0).
 const ZERO_RATE: ModelRate = rate('', 0, 0, 0, undefined, { routeTiers: false });
 
 /** First matching rate by modelId substring; zero rate if unknown (so cost shows 0, not wrong). */
 export function matchRate(modelId: string, card: ModelRate[] = RATE_CARD): ModelRate {
-  for (const r of card) if (modelId.includes(r.key)) return r;
-  return ZERO_RATE;
+  // Longest matching key wins, so a point release ('fable-5-1') beats its family ('fable-5') and a
+  // name that merely contains a shorter key ('gpt-5.6-luna' ⊃ 'gpt-5') cannot fall on the wrong row.
+  let best: ModelRate | undefined;
+  for (const r of card) if (r.key && modelId.includes(r.key) && (!best || r.key.length > best.key.length)) best = r;
+  return best ?? ZERO_RATE;
+}
+
+/** Card keys longest first — the order a SQL CASE must test them in to reproduce matchRate. */
+export function cardByKeyLength(card: ModelRate[] = RATE_CARD): ModelRate[] {
+  return [...card].sort((a, b) => b.key.length - a.key.length);
+}
+
+/** Whether the card has a row for this model; false means every kind prices at $0. */
+export function isPriced(modelId: string, card: ModelRate[] = RATE_CARD): boolean {
+  return matchRate(normalizeModelId(modelId), card).key !== '';
+}
+
+/** A logged model the card cannot price, with the usage that therefore shows as $0. */
+export interface UnpricedModel {
+  modelId: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; invocations: number;
+}
+
+/**
+ * The models in `rows` with no card row, merged by normalized id, zero-usage rows dropped, largest
+ * first. Carried on /v1/costs, /v1/overview and /v1/projects so a $0 estimate is never silent.
+ */
+export function collectUnpriced(
+  rows: Iterable<{ modelId: string; inputTokens?: number; outputTokens?: number; cacheReadTokens?: number; cacheWriteTokens?: number; invocations?: number }>,
+  card: ModelRate[] = RATE_CARD,
+): UnpricedModel[] {
+  const out = new Map<string, UnpricedModel>();
+  for (const r of rows) {
+    const id = normalizeModelId(r.modelId);
+    if (isPriced(id, card)) continue;
+    const e = out.get(id) ?? { modelId: id, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, invocations: 0 };
+    e.inputTokens += r.inputTokens ?? 0; e.outputTokens += r.outputTokens ?? 0; e.cacheReadTokens += r.cacheReadTokens ?? 0;
+    e.cacheWriteTokens += r.cacheWriteTokens ?? 0; e.invocations += r.invocations ?? 0;
+    out.set(id, e);
+  }
+  return [...out.values()]
+    .filter((m) => m.inputTokens + m.outputTokens + m.cacheReadTokens + m.cacheWriteTokens > 0)
+    .sort((a, b) => (b.inputTokens + b.outputTokens + b.cacheReadTokens + b.cacheWriteTokens) - (a.inputTokens + a.outputTokens + a.cacheReadTokens + a.cacheWriteTokens));
 }
 
 /**
@@ -127,6 +184,8 @@ export function routeCaseSql(modelExpr: string, card: ModelRate[] = RATE_CARD): 
 
 export interface TokenCounts {
   modelId: string;
+  /** Call count when the source row has one (rollups do); only carried into `unpricedModels`. */
+  invocations?: number;
   inputTokens?: number;
   outputTokens?: number;
   cacheReadTokens?: number;
@@ -227,6 +286,8 @@ export function computeModelCost(t: TokenCounts, card: ModelRate[] = RATE_CARD):
 
 export interface CostSummary {
   byModel: ModelCost[];
+  /** Logged models the card has no row for — their usage is in `byModel` at $0 (feature-41). */
+  unpricedModels: UnpricedModel[];
   totalEstimatedUsd: number;
   totalEstimatedUsdUpperBound: number;
   totalCacheReadUsd: number;
@@ -251,9 +312,10 @@ export function summarizeCosts(items: TokenCounts[], card: ModelRate[] = RATE_CA
   for (const raw of items) {
     const id = normalizeModelId(raw.modelId);
     const acc = merged.get(id) ?? {
-      modelId: id, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0,
+      modelId: id, invocations: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0,
       cacheWriteTokens: 0, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0,
     };
+    acc.invocations += raw.invocations ?? 0;
     acc.inputTokens += raw.inputTokens ?? 0;
     acc.outputTokens += raw.outputTokens ?? 0;
     acc.cacheReadTokens += raw.cacheReadTokens ?? 0;
@@ -268,6 +330,7 @@ export function summarizeCosts(items: TokenCounts[], card: ModelRate[] = RATE_CA
   const sum = (pick: (m: ModelCost) => number) => round6(byModel.reduce((s, m) => s + pick(m), 0));
   return {
     byModel,
+    unpricedModels: collectUnpriced(merged.values(), card),
     totalEstimatedUsd: sum((m) => m.estimatedUsd),
     totalEstimatedUsdUpperBound: sum((m) => m.estimatedUsdUpperBound),
     totalCacheReadUsd: sum((m) => m.cacheReadUsd),

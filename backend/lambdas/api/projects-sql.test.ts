@@ -86,7 +86,7 @@ describe('buildFullSql prices cache writes at the 5-minute rate (feature-36)', (
 describe('buildFullSql applies the route factor per row (feature-38)', () => {
   it('multiplies each row by the route CASE inside the SUM (the query is not grouped by model)', () => {
     const sql = buildFullSql(TENANT, []);
-    expect(sql).toContain("* (CASE WHEN l.modelId LIKE '%nova-micro%' THEN 1 WHEN l.modelId LIKE 'global.%' OR l.modelId LIKE '%/global.%' THEN 1 ELSE 1.1 END)) AS est_usd");
+    expect(sql).toContain("* (CASE WHEN l.modelId LIKE '%nova-micro%' OR l.modelId LIKE '%gpt-oss-120b%' OR l.modelId LIKE '%gpt-oss-20b%' THEN 1 WHEN l.modelId LIKE 'global.%' OR l.modelId LIKE '%/global.%' THEN 1 ELSE 1.1 END)) AS est_usd");
     expect(sql).toMatch(/SUM\(\(l\.input\.inputTokenCount \* /);
   });
 });

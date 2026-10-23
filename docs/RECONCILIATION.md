@@ -69,6 +69,16 @@ from its tokens (no cache split there). A rising unlogged share is not a pricing
 - **Unknown-TTL cache writes.** Where the logged response body carries no 5 m / 1 h split, writes are priced at the
   5-minute rate with a 1-hour upper bound (`estimatedUsdUpperBound`).
 - **Unresolved inference-profile ids** are reported `unpriced: true` and excluded; the Cost page lists them.
+- **Models the card cannot price** (feature-41) are listed as `unpricedModels` on `/v1/costs`, `/v1/overview`,
+  `/v1/projects` and rendered on the pages; they sit in every total at $0. Add the published rate to the card.
+- **Models the bill charged $0.00 for** (feature-41) — on this account every OpenAI model so far (whole bill
+  2026-06-01 → 10-22, every service: $0 lines with non-zero quantity, none at all for gpt-5.6-sol). The card still prices
+  them at the published model-card rates, because another account is charged them; the bill panel marks the row
+  `billedZero` and sums the list-price surplus (`billedZeroEstimateUsd`). Reconcile the Claude rows to ≤ 0.1%; do not
+  expect OpenAI rows to reconcile until the bill carries a non-zero line for them. The logged share is Σ min(billed,
+  logged) per model, so a surplus on one model cannot "explain" another model's bill.
+- **Long-context OpenAI calls** (> 272K input tokens) bill at 2× input / cache and 1.5× output per the model cards;
+  the rollups cannot tell them apart, so the estimate is a floor for such calls.
 - **Bill rounding and credits** — the bill is net of any credits; the estimate is gross.
 
 ## What a clean reconciliation does not prove

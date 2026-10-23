@@ -1,6 +1,6 @@
 import {
   AttributionMaps, InvocationRecord, aggregate, aggregateByProject, aggregateByProjectDay,
-  dayBucketOf, deriveProject,
+  dayBucketOf, deriveProject, identityHintKeys,
 } from './parse';
 
 const AIP = 'arn:aws:bedrock:us-east-1::application-inference-profile/abc123opaque';
@@ -35,6 +35,35 @@ describe('deriveProject precedence', () => {
     expect(deriveProject(stranger, maps()).projectId).toBe('untagged');
     expect(deriveProject(rec({ modelId: AIP })).projectId).toBe('untagged'); // no maps → no resolution
     expect(deriveProject(rec({ requestMetadata: { project_id: 'p' } })).projectId).toBe('p');
+  });
+});
+
+describe('identity hints match the role behind an assumed-role session (feature-41)', () => {
+  const SESSION = 'arn:aws:sts::111122223333:assumed-role/CiRunnerRole/i-0abc123session';
+  it('lists the session, the session-less prefix and the IAM role, lower-cased, in that order', () => {
+    expect(identityHintKeys(SESSION)).toEqual([
+      'arn:aws:sts::111122223333:assumed-role/cirunnerrole/i-0abc123session',
+      'arn:aws:sts::111122223333:assumed-role/cirunnerrole',
+      'arn:aws:iam::111122223333:role/cirunnerrole',
+    ]);
+    expect(identityHintKeys('arn:aws:iam::111122223333:user/Alice')).toEqual(['arn:aws:iam::111122223333:user/alice']);
+    expect(identityHintKeys('arn:aws:iam::111122223333:role/CiRunnerRole')).toEqual(['arn:aws:iam::111122223333:role/cirunnerrole']); // a role ARN is not a session
+  });
+  it('a hint written as the IAM role attributes every session of that role', () => {
+    const m: AttributionMaps = { profiles: new Map(), identities: new Map([['arn:aws:iam::111122223333:role/cirunnerrole', 'proj-ci']]) };
+    expect(deriveProject(rec({ identity: { arn: SESSION } }), m).projectId).toBe('proj-ci');
+    expect(deriveProject(rec({ identity: { arn: 'arn:aws:sts::111122223333:assumed-role/CiRunnerRole/another-session' } }), m).projectId).toBe('proj-ci');
+    expect(deriveProject(rec({ identity: { arn: 'arn:aws:sts::111122223333:assumed-role/OtherRole/s' } }), m).projectId).toBe('untagged');
+    expect(deriveProject(rec({ identity: { arn: 'arn:aws:sts::999988887777:assumed-role/CiRunnerRole/s' } }), m).projectId).toBe('untagged'); // another account's role of the same name
+  });
+  it('an exact session hint beats the role hint, and the session-less prefix form also works', () => {
+    const m: AttributionMaps = { profiles: new Map(), identities: new Map([
+      ['arn:aws:iam::111122223333:role/cirunnerrole', 'proj-ci'],
+      ['arn:aws:sts::111122223333:assumed-role/cirunnerrole/i-0abc123session', 'proj-special'],
+      ['arn:aws:sts::111122223333:assumed-role/agentrole', 'proj-agent'],
+    ]) };
+    expect(deriveProject(rec({ identity: { arn: SESSION } }), m).projectId).toBe('proj-special');
+    expect(deriveProject(rec({ identity: { arn: 'arn:aws:sts::111122223333:assumed-role/AgentRole/x' } }), m).projectId).toBe('proj-agent');
   });
 });
 

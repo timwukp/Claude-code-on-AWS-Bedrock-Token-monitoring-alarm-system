@@ -23,6 +23,10 @@ export interface BillModelRow {
   unloggedUsd: number;
   /** Our logged estimate exceeded the bill for this model — an over-estimate on our side, surfaced not hidden. */
   overEstimated?: boolean;
+  /** The logs priced this model at the card's published rate but Cost Explorer billed $0.00 for it on these days
+   * (e.g. every OpenAI model on this account so far). The card is right for an account that IS charged; here the
+   * bill is the truth and the estimate is the list price of what was free. */
+  billedZero?: boolean;
   mantle: { inferences: number; inputTokens: number; outputTokens: number } | null;
 }
 
@@ -33,6 +37,8 @@ export interface BillBlock {
   totalBilledUsd: number;
   totalLoggedEstimateUsd: number;
   totalUnloggedUsd: number;
+  /** Sum of the logged estimates for rows flagged `billedZero` — list price of usage the bill charged nothing for. */
+  billedZeroEstimateUsd: number;
   /** loggedEstimate ÷ billed, in percent; null when nothing is billed in the window. */
   loggedSharePct: number | null;
   /** Both dollar sides are ACCOUNT-wide (the bill has no tenant); the pages' other figures are the viewer's tenant. */
@@ -47,7 +53,8 @@ export interface BillBlock {
 export const BILL_NOTE = 'Account-wide: the bill has no tenant, so both sides here sum every tenant; the other figures on this '
   + 'page are this tenant alone. Unlogged = billed − what the invocation logs price. Bedrock Mantle calls bill under the same '
   + 'usage types but never reach the invocation log, so they have no cache split and no project attribution; their '
-  + 'CloudWatch counts are shown as the explanation and are not priced. Cost Explorer lags about a day.';
+  + 'CloudWatch counts are shown as the explanation and are not priced. A row marked billedZero is the opposite case: the logs '
+  + 'priced the model at its published card rate but the bill charged $0.00 for it on these days. Cost Explorer lags about a day.';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -93,7 +100,7 @@ export function buildBill(
     const r = row(billModelKey(model));
     r.mantle = { inferences: (r.mantle?.inferences ?? 0) + c.inferences, inputTokens: (r.mantle?.inputTokens ?? 0) + c.inputTokens, outputTokens: (r.mantle?.outputTokens ?? 0) + c.outputTokens };
   }
-  let billed = 0, loggedTotal = 0, unlogged = 0;
+  let billed = 0, loggedTotal = 0, unlogged = 0, billedZeroEstimate = 0, explained = 0;
   const byModel = [...rows.values()].map((r) => {
     const diff = r.billedUsd - r.loggedEstimateUsd;
     const out: BillModelRow = {
@@ -104,7 +111,9 @@ export function buildBill(
       unloggedUsd: round2(Math.max(0, diff)),
     };
     if (diff < -0.005) out.overEstimated = true;
+    if (r.billedUsd < 0.005 && r.loggedEstimateUsd >= 0.005) { out.billedZero = true; billedZeroEstimate += r.loggedEstimateUsd; }
     billed += r.billedUsd; loggedTotal += r.loggedEstimateUsd; unlogged += Math.max(0, diff);
+    explained += Math.min(r.billedUsd, r.loggedEstimateUsd); // a model's over-estimate explains none of another model's bill
     return out;
   }).sort((a, b) => b.billedUsd - a.billedUsd);
   let tenantUsd: number | null = null;
@@ -118,7 +127,8 @@ export function buildBill(
     totalBilledUsd: round2(billed),
     totalLoggedEstimateUsd: round2(loggedTotal),
     totalUnloggedUsd: round2(unlogged),
-    loggedSharePct: billed > 0 ? Math.round((Math.min(loggedTotal, billed) / billed) * 1000) / 10 : null,
+    billedZeroEstimateUsd: round2(billedZeroEstimate),
+    loggedSharePct: billed > 0 ? Math.round((explained / billed) * 1000) / 10 : null,
     dollarsSource: 'cost-explorer',
     tokensSource: 'cloudwatch',
     note: BILL_NOTE,

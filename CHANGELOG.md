@@ -6,6 +6,27 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Changed — OpenAI models priced from their AWS model cards; no $0 estimate is silent (feature-41)
+- **`matchRate` takes the longest matching key** (the Athena rate CASE tests keys longest-first), so `openai.gpt-5.6-luna`
+  can no longer land on a `gpt-5` row (qa F-PR73-N02) and point releases need no hand ordering.
+- **OpenAI rows from primary sources** (`docs/research-openai-pricing-sources.md`): gpt-5.6-luna / sol / terra and
+  gpt-6-astra / luna / sol from the AWS model cards (Global CRIS tier, short context; cache read 0.1×, one 30-minute
+  write TTL at 1.25×; In-Region / Geo CRIS = ×1.1 via `routeMultiplier`); gpt-oss-20b / 120b from the Price List. The
+  feature-36 `gpt-5.6-sol` row ($1.25 / $10, assumed) was **3.2× under its card** ($4 / $20); the generic `gpt-5` row
+  is removed — an unknown GPT id is now reported, not guessed.
+- **`unpricedModels`** on `/v1/costs`, `/v1/overview`, `/v1/projects` (fast) and an "unpriced" note on the Cost, Overview
+  and Projects pages: every logged model the card cannot price, with its tokens and calls. Live on this account: six
+  single-call models (deepseek-r1, two kimi, llama3-8b, ministral-3b, nova-pro) that had sat in the totals at $0.
+- **Bill panel: `billedZero`.** Cost Explorer has billed this account $0.00 for every OpenAI model, every service,
+  2026-06-01 → 10-22 (gpt-5.6-sol has no line at all). The card keeps the published rate — another account is charged
+  it — and the bill panel marks such rows "billed $0" and sums the list-price surplus (`billedZeroEstimateUsd`). The
+  logged share is now Σ min(billed, logged) per model, so one model's surplus cannot explain another's bill.
+- **Identity hints match the role behind an assumed-role session**: a hint written as `arn:aws:iam::<acct>:role/<r>`
+  (or the session-less `assumed-role/<r>`) attributes every `assumed-role/<r>/<session>` caller — one hint per CI
+  runner or agent role instead of one per session. Exact session hints still win; role paths are never guessed.
+- Governance / Overview / help now say why the AWS Budget figure is larger than the bill panel's (three Bedrock
+  services, month to date incl. today, vs model usage through the last billed day).
+
 ### Added — the spend the invocation logs never see (feature-40)
 - **Since 2026-10-06, Bedrock Mantle traffic bills under the ordinary usage types but never reaches the invocation
   logs** — for Opus 5.5, 2026-10-06 → 10-13, that was $1,098 of $1,748 (63%), proven by Cost Explorer − logs matching

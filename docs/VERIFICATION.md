@@ -63,7 +63,7 @@ and is unit-tested offline; the handler (`aggregator.ts`) wires it to S3 + Dynam
 
 - **Auth (Cognito)** — SRP sign-in yields a JWT; the API rejects unauthenticated calls with 401.
 - **`GET /v1/usage`, `/v1/costs`, `/v1/anomalies`, `/v1/projects`** — all return tenant-scoped
-  data; costs apply a per-MTok rate card pricing every logged token kind — input, output, cache read (0.1×) and cache write (1.25× / 2× by TTL); completeness is enforced by `pricing-completeness.test.ts` and drift by `scripts/check-rate-card.ts`.
+  data; costs apply a per-MTok rate card pricing every logged token kind — input, output, cache read (0.1×) and cache write (1.25× / 2× by TTL); completeness is enforced by `pricing-completeness.test.ts` and drift by `scripts/check-rate-card.ts` (Claude rows, Price List). `matchRate` takes the LONGEST matching key (feature-41). OpenAI frontier rows come from the AWS model cards (`docs/research-openai-pricing-sources.md`): Global CRIS tier, short context; long-context calls (> 272K input) are under-estimated and models with no row are listed as `unpricedModels` rather than priced at $0 silently.
 - **`POST /v1/queries` + `GET /v1/queries/{id}`** — async Athena forensic queries return rows.
 - **Frontend** — React/Vite SPA on S3 + CloudFront (OAC + WAF); CORS preflight from the
   CloudFront origin returns 204 allowing `Authorization`.

@@ -179,6 +179,11 @@ const repoPath = (repo: string) => repo.split('/').map(encodeURIComponent).join(
 
 
 export type OverviewWindow = 7 | 30 | 90 | 'mtd';
+/** A logged model the rate card cannot price; its usage sits in the page's totals at $0 (feature-41). */
+export interface UnpricedModel {
+  modelId: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; invocations: number;
+}
+
 export interface OverviewResponse {
   tenantId: string;
   window: { kind: '7' | '30' | '90' | 'mtd'; days: number; from: string; to: string; priorFrom: string; priorTo: string };
@@ -194,6 +199,8 @@ export interface OverviewResponse {
     /** Read savings − cache-write premium; negative when caching cost more than it saved (feature-37). */
     cacheNetUsd?: number;
   }[];
+  /** Absent from API builds deployed before feature-41. */
+  unpricedModels?: UnpricedModel[];
   movers: { projectId: string; name: string | null; currentUsd: number; priorUsd: number; deltaUsd: number; deltaPct: number | null }[];
   coverage: { firstDayWithData: string | null; partial: boolean };
   rollupsAsOf: string | null;
@@ -208,12 +215,16 @@ export interface BillModelRow {
   model: string; billedUsd: number;
   byKind?: { input: number; output: number; cacheRead: number; cacheWrite: number; other: number };
   loggedEstimateUsd: number; unloggedUsd: number; overEstimated?: boolean;
+  /** The logs priced this model at its published rate but the bill charged $0.00 for it on these days (feature-41). */
+  billedZero?: boolean;
   mantle: { inferences: number; inputTokens: number; outputTokens: number } | null;
 }
 export interface BillBlock {
   window: { from: string; to: string; daysBilled: number; billedFrom: string | null; billedTo: string | null }; asOf: string | null;
   byModel: BillModelRow[];
   totalBilledUsd: number; totalLoggedEstimateUsd: number; totalUnloggedUsd: number; loggedSharePct: number | null;
+  /** List-price estimate of the rows flagged billedZero (feature-41). */
+  billedZeroEstimateUsd?: number;
   scope?: 'account'; tenantLoggedEstimateUsd?: number | null;
   dollarsSource: 'cost-explorer'; tokensSource: 'cloudwatch'; note: string; mantleInconsistent?: boolean;
 }
@@ -261,12 +272,12 @@ export const api = {
     request<{ points: UsagePoint[] }>(
       `v1/usage${from || to ? `?from=${from ?? ''}&to=${to ?? ''}` : ''}`,
     ),
-  costs: () => request<{ byModel: any[]; totalEstimatedUsd: number; bill?: BillBlock | null }>('v1/costs'),
+  costs: () => request<{ byModel: any[]; totalEstimatedUsd: number; bill?: BillBlock | null; unpricedModels?: UnpricedModel[] }>('v1/costs'),
   anomalies: () => request<{ anomalies: any[] }>('v1/anomalies'),
   // source 'fast' reads pre-aggregated rollups from DynamoDB (quick, project_id codes);
   // 'full' runs the Athena join for human-readable project names + cost centers.
   projects: (source: 'fast' | 'full' = 'fast') =>
-    request<{ projects: any[]; source?: string; totalTokens?: number | string; totalEstimatedUsd?: number }>(`v1/projects${source === 'fast' ? '?source=fast' : ''}`),
+    request<{ projects: any[]; source?: string; totalTokens?: number | string; totalEstimatedUsd?: number; unpricedModels?: UnpricedModel[] }>(`v1/projects${source === 'fast' ? '?source=fast' : ''}`),
   quotas: () => request<{ throttles: { throttledCount: number; clientErrors: number; throttled: boolean }; headroom: any[] }>('v1/quotas'),
   governance: () => request<{ budget: GovernanceBudget | null; enforcement: any }>('v1/governance'),
   overview: (window: OverviewWindow) => request<OverviewResponse>(`v1/overview?window=${window}`),

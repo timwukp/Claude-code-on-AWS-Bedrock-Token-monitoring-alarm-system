@@ -103,7 +103,7 @@ export function SettingsPage() {
         </div>
         <div className="inline-form" style={{ marginBottom: 12, flexWrap: 'wrap' }}>
           <input value={form.repos} onChange={(e) => setForm({ ...form, repos: e.target.value })} placeholder="Repos, comma-separated (owner/name, owner/name)" style={{ minWidth: 420 }} disabled={projBusy} aria-label="Repos" />
-          <input value={form.identityArns} onChange={(e) => setForm({ ...form, identityArns: e.target.value })} placeholder="Identity ARNs (optional, comma-separated)" style={{ minWidth: 320 }} disabled={projBusy} aria-label="Identity ARNs" />
+          <input value={form.identityArns} onChange={(e) => setForm({ ...form, identityArns: e.target.value })} placeholder="Identity ARNs (optional, comma-separated; an IAM role ARN covers every session that assumes it)" style={{ minWidth: 320 }} disabled={projBusy} aria-label="Identity ARNs" title="Caller ARNs attributed to this project when no inference profile or requestMetadata names one. arn:aws:iam::<account>:role/<role> matches every arn:aws:sts::<account>:assumed-role/<role>/<session>." />
           <button className="btn-primary" onClick={saveProject} disabled={projBusy || !form.id.trim() || !form.name.trim()}>Save project</button>
           {projMsg && <span className={projMsg.kind === 'err' ? 'error-text' : 'muted'} style={{ marginTop: 0, fontSize: 13 }} role="status">{projMsg.text}</span>}
         </div>

@@ -5,7 +5,7 @@ import {
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { ok, serverError } from '../shared/response';
-import { cacheWriteOf, computeModelCost, normalizeModelId, routeCaseSql, summarizeCosts, TokenCounts } from './cost-calc';
+import { cacheWriteOf, computeModelCost, normalizeModelId, routeCaseSql, summarizeCosts, TokenCounts, UnpricedModel } from './cost-calc';
 import { listProfiles, listProjects, profileModelMap } from '../shared/project-registry';
 import { getTenantId } from '../shared/tenant';
 
@@ -216,7 +216,7 @@ export function buildFullSql(tenantId: string, profiles: { arn: string; projectI
 /** Page-level totals from the SAME #MODEL rollups and rate card the Cost page uses, so the
  * two pages agree numerically. Per-project rows keep uniform reference rates (attribution
  * only — PROJECT rollups don't record modelId). */
-async function modelTotals(tenantId: string): Promise<{ totalTokens: number; totalEstimatedUsd: number }> {
+async function modelTotals(tenantId: string): Promise<{ totalTokens: number; totalEstimatedUsd: number; unpricedModels: UnpricedModel[] }> {
   const res = await ddb.send(new QueryCommand({
     TableName: AGGREGATES_TABLE,
     KeyConditionExpression: 'pk = :pk',
@@ -225,6 +225,7 @@ async function modelTotals(tenantId: string): Promise<{ totalTokens: number; tot
   const profiles = await profileModelMap(); // profile-ARN-keyed rows price as their model (qa F-PR69-004)
   const items: TokenCounts[] = (res.Items ?? []).map((i: any) => ({
     modelId: profiles.get(String(i.modelId ?? '')) ?? String(i.modelId ?? ''),
+    invocations: Number(i.invocations ?? 0),
     inputTokens: Number(i.inputTokens ?? 0),
     outputTokens: Number(i.outputTokens ?? 0),
     cacheReadTokens: Number(i.cacheReadTokens ?? 0),
@@ -232,7 +233,8 @@ async function modelTotals(tenantId: string): Promise<{ totalTokens: number; tot
   }));
   const s = summarizeCosts(items);
   const totalTokens = s.byModel.reduce((t, m) => t + m.inputTokens + m.outputTokens, 0);
-  return { totalTokens, totalEstimatedUsd: s.totalEstimatedUsd };
+  // Models the card cannot price are inside totalEstimatedUsd at $0 — named here so the page can say so (feature-41).
+  return { totalTokens, totalEstimatedUsd: s.totalEstimatedUsd, unpricedModels: s.unpricedModels };
 }
 
 /** ISO time of the last aggregator run (SYSTEM#WATERMARK), or null. */
