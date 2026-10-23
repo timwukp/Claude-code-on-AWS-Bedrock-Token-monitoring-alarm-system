@@ -69,6 +69,7 @@ export function ProjectsPage() {
     setLoading(true);
     setError(null);
     setApiProjectCount(null);
+    setServedFrom('');
     if (source === 'fast') {
       api.projects('fast')
         .then((r) => {

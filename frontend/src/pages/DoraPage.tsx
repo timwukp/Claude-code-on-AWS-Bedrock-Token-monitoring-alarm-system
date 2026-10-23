@@ -149,10 +149,12 @@ export function DoraPage() {
   const repoKey = (r: string) => r.trim().toLowerCase();
   const trackedSet = useMemo(() => new Set((repos ?? []).map((r) => repoKey(r.repo))), [repos]);
 
-  // Selected repo: URL param if it is tracked, else the first tracked repo.
+  // Selected repo: URL param if it is tracked, else the tracked repo with the most stored merges — the
+  // registry is alphabetical, and its first entry can be a repo with no merges at all (qa F-PR75-003).
   const selected = useMemo(() => {
     if (!repos?.length) return null;
-    return repos.find((r) => r.repo.toLowerCase() === (repoParam ?? '').toLowerCase()) ?? repos[0];
+    return repos.find((r) => r.repo.toLowerCase() === (repoParam ?? '').toLowerCase())
+      ?? repos.reduce((best, r) => (r.prCount > best.prCount ? r : best), repos[0]);
   }, [repos, repoParam]);
 
   const setRepo = (repo: string) => setParams((p) => { p.set('repo', repo); return p; }, { replace: true });

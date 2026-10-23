@@ -57,8 +57,13 @@
 
 Screenshots were reviewed by eye for the two Costs panels and the Overview tiles; no label collisions or overflow at 1440 px.
 
-## Live (after push — qa)
-_To be filled._
+## Live (after push — qa, run 1 on `23a1f14`): FAIL — 1 HIGH + 3 LOW, triaged on the PR
+| ID | Sev | Finding | Disposition |
+|---|---|---|---|
+| F-PR75-001 | HIGH | Full (Athena + names) fails to load | **Environmental, not this PR.** Athena: `HIVE_BAD_DATA … 'inputtokencount' … UnmodifiableMap can not be coerced to an INTEGER`. Bedrock's large-body delivery writes bodies >100 KB to `…/HH/data/` **inside the table's LOCATION**; on 2026-10-23 ~15:xx UTC the first OpenAI Responses-API body (`us.openai.gpt-6-luna`, top-level `input` = array of 51 messages) was coerced positionally into the `input` struct. 180,935 body objects = 40.1 GB of the table's 41.7 GB. `ignore.malformed.json`, string-typed counts and the Hive SerDe were tested on scratch tables and all fail on some legal body shape → bodies must leave the prefix (separate chain, IaC deploy). The deployed API was not changed by this PR; main fails identically. |
+| F-PR75-002 | LOW | "served from: dynamodb" badge stays while Full is loading or failed | Fixed in this PR — the badge is cleared at the start of every load (`ProjectsPage.tsx`). |
+| F-PR75-003 | LOW | DORA lands on an empty repo (alphabetically first) | Fixed in this PR — default is the tracked repo with the most stored merges (`DoraPage.tsx`). |
+| F-PR75-004 | LOW | llmops-agentic-system: 33 AI merges, $0 spend → ROI "needs 0% capacity" | Attribution gap (its Claude Code usage is not tagged to the project), disclosed on screen ("no usage recorded in window"); belongs to the registry/attribution backlog, not this PR. |
 
 ## After merge — owner action
 `Tums-dev-Api` deploy (OverviewFn + ProjectsFn code) so the Cache churn columns fill; until then they read "—" by design.
