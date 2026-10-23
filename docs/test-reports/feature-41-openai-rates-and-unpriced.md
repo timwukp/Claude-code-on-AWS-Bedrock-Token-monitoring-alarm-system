@@ -1,6 +1,6 @@
 # Feature 41 — OpenAI rates from their model cards; no $0 estimate is silent
 
-- **Chain:** `intent/openai-rates-and-unpriced/` · **Branch:** `feat/openai-rates-and-unpriced` off `main@dc60133` (post-#73) · **PR:** TBD
+- **Chain:** `intent/openai-rates-and-unpriced/` · **Branch:** `feat/openai-rates-and-unpriced` off `main@dc60133` (post-#73) · **PR:** #74
 - **Origin:** the gateway study's chain A, reordered after C (feature-40) by the owner; qa F-PR73-N02 (gpt-5.6-luna
   labelled `gpt-5`) is its visible symptom.
 - **Date:** 2026-10-23
