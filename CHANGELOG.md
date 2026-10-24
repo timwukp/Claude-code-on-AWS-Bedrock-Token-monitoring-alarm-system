@@ -17,7 +17,7 @@ are grouped by development milestone rather than strict semver releases.
 - ETL runs incrementally from a watermark (previous day always re-read), tolerates any body shape inside a record, forces
   Parquet dtypes to the Glue schema, and reads with a 16-way thread pool (full backfill in minutes, not hours).
 - New infra jest harness (`infra/test`); `cd infra && npm test` joins the validation gates.
-- Incident record: `docs/incidents/2026-10-athena-body-collision.md`. (PR TBD)
+- Incident record: `docs/incidents/2026-10-athena-body-collision.md`. (PR #76)
 
 ### Changed — OpenAI models priced from their AWS model cards; no $0 estimate is silent (feature-41)
 - **`matchRate` takes the longest matching key** (the Athena rate CASE tests keys longest-first), so `openai.gpt-5.6-luna`

@@ -1,6 +1,6 @@
 # Feature 43 — Lakehouse P0: curated table for the Full view, working ETL, failure alarm
 
-- **Chain:** `intent/lakehouse-p0-stabilise/` · **Branch:** `feat/lakehouse-p0-stabilise` off `main@e08ae19` (#74) · **PR:** TBD
+- **Chain:** `intent/lakehouse-p0-stabilise/` · **Branch:** `feat/lakehouse-p0-stabilise` off `main@e08ae19` (#74) · **PR:** #76
 - **Origin:** plan `floating-enchanting-kahan` (lakehouse programme, approved 2026-10-24), chain 1 of 4. Triggered by qa
   F-PR75-001 and the root-cause work in `docs/incidents/2026-10-athena-body-collision.md`.
 - **Date:** 2026-10-24
