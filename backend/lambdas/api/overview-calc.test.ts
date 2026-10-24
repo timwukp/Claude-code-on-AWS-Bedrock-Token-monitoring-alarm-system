@@ -137,6 +137,21 @@ describe('buildOverview', () => {
     expect(r.movers.map((m) => Math.abs(m.deltaUsd))).toEqual([...r.movers.map((m) => Math.abs(m.deltaUsd))].sort((x, y) => y - x));
   });
 
+  it('movers carry the cache-write share of the current window (writes ÷ (reads + writes)), null without cache traffic', () => {
+    const r = buildOverview([
+      { ...item('2026-09-13', 'churny', 1_000_000), cacheReadTokens: 1_000_000, cacheWriteTokens: 3_000_000, cacheWrite5mTokens: 3_000_000 },
+      { ...item('2026-09-13', 'steady', 1_000_000), cacheReadTokens: 9_000_000, cacheWriteTokens: 1_000_000, cacheWrite5mTokens: 1_000_000 },
+      item('2026-09-13', 'nocache', 1_000_000),
+      // prior-window cache traffic must not count toward the current share
+      { ...item('2026-09-07', 'steady', 0), cacheReadTokens: 0, cacheWriteTokens: 50_000_000, cacheWrite5mTokens: 50_000_000 },
+    ], b, new Map(), CARD);
+    const by = Object.fromEntries(r.movers.map((m) => [m.projectId, m]));
+    expect(by.churny.cacheWriteShare).toBe(0.75);
+    expect(by.steady.cacheWriteShare).toBe(0.1);
+    expect(by.nocache.cacheWriteShare).toBeNull();
+    expect(by.steady).toMatchObject({ cacheReadTokens: 9_000_000, cacheWriteTokens: 1_000_000 });
+  });
+
   it('flags partial coverage when the earliest rollup day is inside the prior window, and when there is no data at all', () => {
     const partial = buildOverview([item('2026-09-08', 'alpha', 1), item('2026-09-13', 'alpha', 1)], b, new Map(), CARD);
     expect(partial.coverage).toEqual({ firstDayWithData: '2026-09-08', partial: true });

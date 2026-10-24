@@ -261,11 +261,12 @@ async function fastProjects(tenantId: string): Promise<any[]> {
     profileModelMap(),
   ]);
   const names = new Map(registryProjects.map((p) => [p.projectId, { name: p.name, costCenter: p.costCenter ?? '—' }]));
-  const byProject = new Map<string, { tokens: number; estimatedUsd: number; users: Set<string> }>();
+  const byProject = new Map<string, { tokens: number; estimatedUsd: number; users: Set<string>; cacheRead: number; cacheWrite: number }>();
   for (const it of res.Items ?? []) {
     const projectId = String(it.projectId ?? 'untagged');
-    const e = byProject.get(projectId) ?? { tokens: 0, estimatedUsd: 0, users: new Set<string>() };
+    const e = byProject.get(projectId) ?? { tokens: 0, estimatedUsd: 0, users: new Set<string>(), cacheRead: 0, cacheWrite: 0 };
     e.tokens += Number(it.inputTokens ?? 0) + Number(it.outputTokens ?? 0);
+    e.cacheRead += Number(it.cacheReadTokens ?? 0); e.cacheWrite += cacheWriteOf(it).cacheWriteTokens ?? 0;
     // Per-model pricing (#13): the sk has always carried modelId — use the real rate card.
     e.estimatedUsd += computeModelCost({
       modelId: normalizeModelId(profiles.get(String(it.modelId ?? '')) ?? String(it.modelId ?? '')),
@@ -285,6 +286,10 @@ async function fastProjects(tenantId: string): Promise<any[]> {
       costCenter: names.get(projectId)?.costCenter ?? '—',
       users: v.users.size, tokens: v.tokens,
       estimatedUsd: Math.round(v.estimatedUsd * 1e6) / 1e6,
+      // Cache churn (feature-42): writes ÷ (reads + writes); null without cache traffic. A rising share means prefixes
+      // are written and not re-read — a router switching models mid-conversation looks like this.
+      cacheReadTokens: v.cacheRead, cacheWriteTokens: v.cacheWrite,
+      cacheWriteShare: v.cacheRead + v.cacheWrite > 0 ? Math.round((v.cacheWrite / (v.cacheRead + v.cacheWrite)) * 1000) / 1000 : null,
     }))
     .sort((a, b) => b.tokens - a.tokens);
 }

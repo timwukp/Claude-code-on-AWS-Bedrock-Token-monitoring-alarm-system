@@ -98,6 +98,7 @@ const METRIC_MAP: readonly { dora: string; here: string; deviation: string }[] =
 ];
 
 const TOP_N = 10;
+const plural = (n: number, word: string, pluralWord = `${word}s`) => `${n} ${n === 1 ? word : pluralWord}`;
 
 /**
  * Long tables open on their top rows and grow on request (table standard 4). The caller sorts; this
@@ -148,10 +149,12 @@ export function DoraPage() {
   const repoKey = (r: string) => r.trim().toLowerCase();
   const trackedSet = useMemo(() => new Set((repos ?? []).map((r) => repoKey(r.repo))), [repos]);
 
-  // Selected repo: URL param if it is tracked, else the first tracked repo.
+  // Selected repo: URL param if it is tracked, else the tracked repo with the most stored merges — the
+  // registry is alphabetical, and its first entry can be a repo with no merges at all (qa F-PR75-003).
   const selected = useMemo(() => {
     if (!repos?.length) return null;
-    return repos.find((r) => r.repo.toLowerCase() === (repoParam ?? '').toLowerCase()) ?? repos[0];
+    return repos.find((r) => r.repo.toLowerCase() === (repoParam ?? '').toLowerCase())
+      ?? repos.reduce((best, r) => (r.prCount > best.prCount ? r : best), repos[0]);
   }, [repos, repoParam]);
 
   const setRepo = (repo: string) => setParams((p) => { p.set('repo', repo); return p; }, { replace: true });
@@ -211,7 +214,7 @@ export function DoraPage() {
   const noData = !!m && m.sample.mergedPrs === 0;
 
   // One line of sample provenance per card: what was counted, over what window. Nothing else.
-  const noMerges = `no merges to ${selected?.defaultBranch ?? 'the default branch'} in ${windowDays} days`;
+  const noMerges = `no merges to ${selected?.defaultBranch ?? 'the default branch'} in ${plural(windowDays, 'day')}`;
   const aiAssisted = m ? Object.values(m.byAssistant).reduce((a, b) => a + b, 0) : 0;
   const assistantBreakdown = m
     ? (Object.entries(m.byAssistant) as [Exclude<AssistedBy, null>, number][])
@@ -234,7 +237,7 @@ export function DoraPage() {
         {selected && (
           <span className="muted" style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <span className={`badge ${STATUS_BADGE[selected.status].cls}`}>{STATUS_BADGE[selected.status].text}</span>
-            last sync {fmtAgo(selected.lastSyncedAt)} · {selected.prCount} merged PRs stored for this repo since collection began, not only this window
+            last sync {fmtAgo(selected.lastSyncedAt)} · {plural(selected.prCount, 'merged PR')} stored for this repo since collection began, not only this window
           </span>
         )}
         <button className="btn-sm" onClick={refresh} style={{ marginLeft: 'auto' }}>Refresh</button>
@@ -292,7 +295,7 @@ export function DoraPage() {
                   <Kpi label="Deployment frequency" chip={<Chip text="proxy" />}
                        value={m.deploymentFrequency.all.n === 0 ? '—' : perWeek(m.deploymentFrequency.all.value)}
                        foot={m.deploymentFrequency.all.n === 0 ? noMerges
-                         : `${m.deploymentFrequency.all.n} merges to ${selected.repo}:${selected.defaultBranch} · ${windowDays} days`} />
+                         : `${plural(m.deploymentFrequency.all.n, 'merge')} to ${selected.repo}:${selected.defaultBranch} · ${plural(windowDays, 'day')}`} />
                   <Kpi label="Change lead time" chip={<Chip text="partial" />} value={fmtHours(m.leadTime.all.value)}
                        foot={m.leadTime.all.n === 0 ? noMerges
                          : `median first commit → merge · ${m.leadTime.all.n} changes`} />
@@ -316,7 +319,7 @@ export function DoraPage() {
               {noData ? (
                 <div className="empty">
                   <div className="big">📭</div>
-                  No PRs merged to <code>{selected.defaultBranch}</code> in the last {windowDays} days.<br />
+                  No PRs merged to <code>{selected.defaultBranch}</code> in the last {plural(windowDays, 'day')}.<br />
                   <span className="muted">Try a longer window{selected.prCount === 0 && !isBusy(selected.status) ? ', or check the sync status above' : ''}.</span>
                 </div>
               ) : (
@@ -370,7 +373,7 @@ export function DoraPage() {
                     <div className="kpi-grid" style={{ gridTemplateColumns: 'minmax(220px, 1fr)' }}>
                       <Kpi label="AI-assisted changes" value={fmtPct(m.aiParticipationPct)} accent="var(--primary)"
                            foot={m.sample.mergedPrs === 0 ? noMerges
-                             : <>{aiAssisted} of {m.sample.mergedPrs} PRs carry an AI co-author trailer
+                             : <>{aiAssisted} of {plural(m.sample.mergedPrs, 'PR')} {m.sample.mergedPrs === 1 ? 'carries' : 'carry'} an AI co-author trailer
                                {assistantBreakdown ? <> ({assistantBreakdown})</> : null}</>} />
                     </div>
                     <table className="data">
@@ -401,7 +404,7 @@ export function DoraPage() {
                     </p>
                   </Panel>
 
-                  <Panel title="Recent merged PRs" desc={`${detail!.recentPrs.length} most recent merges in the last ${windowDays} days (the API returns up to 25), newest first${prsTop.hidden > 0 ? ` · showing the newest ${prsTop.visible.length}` : ''}`}>
+                  <Panel title="Recent merged PRs" desc={`${plural(detail!.recentPrs.length, 'most recent merge')} in the last ${plural(windowDays, 'day')} (the API returns up to 25), newest first${prsTop.hidden > 0 ? ` · showing the newest ${prsTop.visible.length}` : ''}`}>
                     <table className="data">
                       <thead>
                         <tr><th>#</th><th>Title</th><th>Author</th><th>Merged</th><th className="num">Lead time</th><th>AI assistant</th><th>Flags</th></tr>
@@ -434,7 +437,7 @@ export function DoraPage() {
 
       {/* ---- all repos ---- */}
       {overview && overview.length > 0 && (
-        <Panel title="All tracked repositories" desc={`${overview.length} repositories, most merged PRs first — last ${windowDays} days, same definitions as above${reposTop.hidden > 0 ? ` · showing the top ${reposTop.visible.length}` : ''}`}>
+        <Panel title="All tracked repositories" desc={`${plural(overview.length, 'repository', 'repositories')}, most merged PRs first — last ${plural(windowDays, 'day')}, same definitions as above${reposTop.hidden > 0 ? ` · showing the top ${reposTop.visible.length}` : ''}`}>
           <table className="data">
             <thead>
               <tr><th>Repository</th><th className="num">Merged PRs</th><th className="num">AI %</th><th className="num">Deployment frequency</th><th className="num">Change lead time</th><th className="num">Change fail rate</th><th className="num">Recovery time</th><th>Status</th></tr>
@@ -462,7 +465,7 @@ export function DoraPage() {
       {/* ---- projects: delivery × cost (#13) ---- */}
       {projectRows && projectRows.length > 0 && (
         <Panel title="Projects — delivery × cost"
-               desc={`${projectRows.length} projects, highest estimated spend first — each pools DORA across its repos and prices its Bedrock usage from daily rollups, last ${windowDays} days${projTop.hidden > 0 ? ` · showing the top ${projTop.visible.length}` : ''}`}>
+               desc={`${plural(projectRows.length, 'project')}, highest estimated spend first — each pools DORA across its repos and prices its Bedrock usage from daily rollups, last ${windowDays} days${projTop.hidden > 0 ? ` · showing the top ${projTop.visible.length}` : ''}`}>
           <table className="data">
             <thead>
               <tr><th>Project</th><th className="num">Repos tracked / linked</th><th className="num">Merged PRs</th><th className="num">Deployment frequency</th><th className="num">Change lead time</th><th className="num">AI %</th><th className="num">Tokens</th><th className="num">Est. USD</th><th className="num">$ / merge</th></tr>

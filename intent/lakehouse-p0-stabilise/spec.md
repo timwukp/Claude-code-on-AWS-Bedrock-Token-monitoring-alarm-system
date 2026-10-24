@@ -3,7 +3,7 @@
 - **Intent:** ./intent.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Status:** signed-off
+- **Status:** shipped
 
 ## 1. Invocation source adapter (`backend/lambdas/api/invocation-source.ts`)
 - `InvocationSource { name, table, inputTokens(a), outputTokens(a), cacheReadTokens(a), cacheWriteTokens(a), identityArn(a),

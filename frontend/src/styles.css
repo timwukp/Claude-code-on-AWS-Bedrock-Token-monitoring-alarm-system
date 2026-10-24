@@ -308,6 +308,13 @@ table.data tfoot .total-row td { border-top: 1px solid var(--border); border-bot
 .seg button:disabled { cursor: default; opacity: 0.6; }
 .seg button:focus-visible { outline-offset: -2px; }
 
+/* ---------- Inline notice (unpriced models, not-logged traffic) ---------- */
+.notice { display: flex; gap: var(--sp-3); align-items: flex-start; padding: var(--sp-3) var(--sp-4); border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--surface-2); font-size: var(--fs-sm); color: var(--text); margin-bottom: var(--sp-4); }
+.notice.warn { border-color: color-mix(in srgb, var(--warning) 45%, transparent); background: color-mix(in srgb, var(--warning) 10%, var(--surface-2)); }
+.notice strong { font-weight: var(--fw-semibold); }
+.notice .mono { word-break: break-all; }
+
 /* ---------- Chart | Table twin ---------- */
 .chart-table-bar { display: flex; justify-content: flex-end; margin-bottom: var(--sp-2); }
 .chart-table-data { margin-top: var(--sp-1); }

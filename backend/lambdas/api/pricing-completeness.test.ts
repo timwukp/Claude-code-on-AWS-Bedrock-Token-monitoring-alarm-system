@@ -38,9 +38,9 @@ const UNPRICED_BY_DESIGN: Record<string, string> = {};
  * Source: docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html, read 2026-10-08.
  */
 const CACHE_WRITE_FREE: Record<string, string> = {
-  'gpt-oss-20b': 'AWS Price List (2026-10-23) has no cache-write usage type for gpt-oss',
-  'gpt-oss-120b': 'AWS Price List (2026-10-23) has no cache-write usage type for gpt-oss',
-  'nova-micro': 'Amazon Nova: implicit prompt caching only; no cache-write rate is published',
+  'nova-micro': 'Amazon Nova: implicit prompt caching only; the Price List line USE1-NovaMicro-cache-write-input-token-count is $0.00',
+  'gpt-oss-120b': 'gpt-oss on Bedrock: the Price List sells no cache rows for this model (read 2026-10-23)',
+  'gpt-oss-20b': 'gpt-oss on Bedrock: the Price List sells no cache rows for this model (read 2026-10-23)',
 };
 /** Rows whose cache-READ rate is legitimately zero — the Price List publishes no cache-read usage type for them. */
 const CACHE_READ_FREE: Record<string, string> = {

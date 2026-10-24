@@ -53,6 +53,9 @@ export function OverviewPage() {
   // Summed here from the per-model rows (which carry every priced kind) rather than read from spend.tokens,
   // so the figure matches its own definition even on an API build whose spend.tokens predates cache writes.
   const spendTokens = ov ? ov.byModel.reduce((n, m) => n + m.inputTokens + m.outputTokens + m.cacheReadTokens + (m.cacheWriteTokens ?? 0), 0) : 0;
+  const unpriced = ov?.unpricedModels ?? [];
+  const unpricedTokens = unpriced.reduce((n, m) => n + m.inputTokens + m.outputTokens + m.cacheReadTokens + m.cacheWriteTokens, 0);
+  const unloggedUsd = ov?.bill?.totalUnloggedUsd;
   const compare = ov ? `vs ${ov.window.priorFrom.slice(5)} – ${ov.window.priorTo.slice(5)}` : `vs prior ${range.label.toLowerCase().replace('last ', '')}`;
   const bState = budgetState(budget);
   // `df.value` is merges PER DAY (see dora-calc.ts); the DORA page multiplies by 7 to show a weekly
@@ -70,8 +73,8 @@ export function OverviewPage() {
           value={ov ? fmtUsd(ov.spend.currentUsd) : ''}
           delta={ov && ov.spend.deltaPct != null ? { value: ov.spend.deltaPct, unit: 'pct', compareLabel: compare, goodDirection: 'down' } : undefined}
           sparkline={ov?.spend.daily.map((d) => d.usd)}
-          definition={ov ? `${range.label.toLowerCase()} · ${fmtTokens(spendTokens)} input + output + cache-read + cache-write tokens · token-based estimate, routes priced (global tier, standard ×1.1)${ov.bill && ov.bill.totalUnloggedUsd > 0 ? ` · bill ${ov.bill.window.billedFrom && ov.bill.window.billedTo ? `${ov.bill.window.billedFrom} → ${ov.bill.window.billedTo}` : `through ${ov.bill.window.to}`} (${ov.bill.window.daysBilled} billed day${ov.bill.window.daysBilled === 1 ? '' : 's'} of this window, not the full period): ${fmtUsd(ov.bill.totalBilledUsd)}, of which ${fmtUsd(ov.bill.totalUnloggedUsd)} not logged (Bedrock Mantle)${(ov.bill.billedZeroEstimateUsd ?? 0) > 0 ? `; ${fmtUsd(ov.bill.billedZeroEstimateUsd!)} of the logged estimate is list price for models billed $0.00` : ''} — account-wide, all tenants` : ''}${ov.spend.deltaPct == null && ov.spend.priorUsd === 0 ? ' · no prior-period data to compare' : ''}` : undefined}
-          status={ov?.coverage.partial ? { tone: 'neutral', text: 'partial history' } : undefined} />
+          definition={ov ? `${range.label.toLowerCase()} · ${fmtTokens(spendTokens)} input + output + cache-read + cache-write tokens · token-based estimate, routes priced (global tier, standard ×1.1)${unpriced.length ? ` · excludes ${fmtTokens(unpricedTokens)} tokens on ${unpriced.length} unpriced model${unpriced.length === 1 ? '' : 's'}` : ''}${unloggedUsd != null && unloggedUsd > 0 ? ` · + ${fmtUsd(unloggedUsd)} billed but not logged (bedrock-mantle; Cost Explorer; not included)` : ''}${ov.spend.deltaPct == null && ov.spend.priorUsd === 0 ? ' · no prior-period data to compare' : ''}` : undefined}
+          status={unpriced.length ? { tone: 'warn', text: `${unpriced.length} unpriced model${unpriced.length === 1 ? '' : 's'}` } : ov?.coverage.partial ? { tone: 'neutral', text: 'partial history' } : undefined} />
 
         <KpiTile label="Budget" helpId="overview.budget" link={{ to: '/governance', label: 'Governance' }}
           state={budget === undefined ? 'loading' : 'ready'}
@@ -108,7 +111,7 @@ export function OverviewPage() {
         ) : (
           <table className="data">
             <thead>
-              <tr><th>Project</th><th className="num">This period</th><th className="num">Prior</th><th className="num">Change</th><th className="num">%</th></tr>
+              <tr><th>Project</th><th className="num">This period</th><th className="num">Prior</th><th className="num">Change</th><th className="num">%</th><th className="num" title="Cache writes as a share of all cache traffic this period">Cache churn</th></tr>
             </thead>
             <tbody>
               {ov.movers.map((m) => (
@@ -118,6 +121,7 @@ export function OverviewPage() {
                   <td className="num muted">{fmtUsd(m.priorUsd)}</td>
                   <td className={`num ${m.deltaUsd > 0 ? 'delta-up' : m.deltaUsd < 0 ? 'delta-down' : ''}`}>{fmtSignedUsd(m.deltaUsd)}</td>
                   <td className="num muted">{m.deltaPct == null ? <span aria-label="no prior spend">—</span> : `${m.deltaPct > 0 ? '+' : ''}${m.deltaPct.toFixed(0)}%`}</td>
+                  <td className={`num ${m.cacheWriteShare != null && m.cacheWriteShare >= 0.5 ? 'delta-up' : 'muted'}`}>{m.cacheWriteShare == null ? <span aria-label="no cache traffic">—</span> : `${Math.round(m.cacheWriteShare * 100)}%`}</td>
                 </tr>
               ))}
             </tbody>
