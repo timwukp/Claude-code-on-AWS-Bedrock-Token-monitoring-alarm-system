@@ -3,7 +3,7 @@
 - **Intent:** ./intent.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Status:** signed-off
+- **Status:** shipped
 
 ## Behaviour
 1. `backend/lambdas/api/cost-calc.ts` — `matchRate(id, card)` returns the row whose key is the longest substring of `id`

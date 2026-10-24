@@ -1,4 +1,5 @@
 import { projectExprFrom, sanitizeTenant, TEMPLATES } from './queries';
+import { CURATED_SOURCE as SRC } from './invocation-source';
 
 /**
  * Regression test for a real bug found during live validation: the tenant sanitizer stripped
@@ -53,14 +54,25 @@ describe('projectExprFrom / byProject attribution tiers', () => {
       ctxOf(projectExprFrom([{ arn: ARN, projectId: 'proj-alpha' }])));
     const project = sql.slice(sql.indexOf('COALESCE'), sql.indexOf('AS project'));
     expect(project.indexOf('CASE WHEN l.modelId')).toBeLessThan(project.indexOf('m.project_name'));
-    expect(project.indexOf('m.project_name')).toBeLessThan(project.indexOf("requestMetadata['project_id']"));
+    expect(project.indexOf('m.project_name')).toBeLessThan(project.indexOf("'$.project_id'"));
     expect(project).toContain("'untagged'");
   });
 
   it('omits the tier entirely when nothing resolves — identical to the pre-fix SQL', () => {
     const sql = TEMPLATES.byProject('arn:aws:iam::111111111111:user/demo', 90, ctxOf(null));
     expect(sql).not.toContain('CASE WHEN l.modelId =');
-    expect(sql).toContain("COALESCE(m.project_name, l.requestMetadata['project_id'], 'untagged') AS project");
+    expect(sql).toContain("COALESCE(m.project_name, json_extract_scalar(l.requestMetadata, '$.project_id'), 'untagged') AS project");
+  });
+
+  it('every template reads the curated table and prunes the scan by dt (qa F-PR75-001)', () => {
+    for (const [name, tpl] of Object.entries(TEMPLATES)) {
+      const sql = tpl('arn:aws:iam::111111111111:user/demo', 30, ctxOf(null));
+      expect(sql).toContain('FROM bedrock_invocations_curated');
+      expect(sql).not.toContain('bedrock_invocation_logs');
+      expect(sql).not.toMatch(/\binput\.inputTokenCount|identity\.arn|requestMetadata\['/);
+      expect(sql).toContain("l.dt >= date_format(date_add('day', -30, current_date), '%Y-%m-%d')");
+      expect(name).toBeTruthy();
+    }
   });
 });
 
@@ -80,14 +92,14 @@ describe('the SQL rate CASE mirrors matchRate\'s longest-key rule (feature-41)',
 describe('byProject prices cache writes (feature-36)', () => {
   const sql = TEMPLATES.byProject('arn:aws:iam::111111111111:user/demo', 90, { modelExpr: 'l.modelId', projectExpr: null });
   it('adds a cacheWriteInputTokenCount term priced from the card\'s 5-minute cache-write rate', () => {
-    expect(sql).toContain("SUM(COALESCE(l.input.cacheWriteInputTokenCount, 0))");
+    expect(sql).toContain(`SUM(${SRC.cacheWriteTokens('l')})`);
     // fable-5-1: $12.50 per MTok = 1.25e-5 per token; the CASE must carry that rate, not the input rate
     const cwTerm = sql.slice(sql.indexOf('cacheWriteInputTokenCount'), sql.indexOf('AS est_usd'));
     expect(cwTerm).toContain("LIKE '%fable-5-1%' THEN 0.0000125");
     expect(cwTerm).toContain("LIKE '%opus-4-8%' THEN 0.00000625");
   });
   it('still prices the other three kinds, each from its own rate column', () => {
-    const est = sql.slice(sql.indexOf('COALESCE(SUM(COALESCE(l.input.inputTokenCount'), sql.indexOf('AS est_usd'));
+    const est = sql.slice(sql.indexOf(`COALESCE(SUM(${SRC.inputTokens('l')}`), sql.indexOf('AS est_usd'));
     expect(est.match(/CASE WHEN/g)).toHaveLength(5); // four rate CASEs + the route CASE (feature-38)
     expect(est).toContain("cacheReadInputTokenCount, 0)), 0) * (CASE WHEN l.modelId LIKE '%gpt-5.6-terra%' THEN 2e-7");
     // derived rates render as exact decimals, not float artefacts (4e-6 × 1.25 must not become 4.999…e-6)
@@ -99,7 +111,7 @@ describe('byProject prices cache writes (feature-36)', () => {
 describe('byProject applies the route factor (feature-38)', () => {
   const sql = TEMPLATES.byProject('arn:aws:iam::111111111111:user/demo', 90, { modelExpr: 'l.modelId', projectExpr: null });
   it('multiplies the four priced terms by the route CASE: global 1, single-tier models 1, else 1.1', () => {
-    const est = sql.slice(sql.indexOf('(COALESCE(SUM(COALESCE(l.input.inputTokenCount'), sql.indexOf('AS est_usd'));
+    const est = sql.slice(sql.indexOf(`(COALESCE(SUM(${SRC.inputTokens('l')}`), sql.indexOf('AS est_usd'));
     expect(est).toContain("* (CASE WHEN l.modelId LIKE '%nova-micro%' OR l.modelId LIKE '%gpt-oss-120b%' OR l.modelId LIKE '%gpt-oss-20b%' THEN 1 WHEN l.modelId LIKE 'global.%' OR l.modelId LIKE '%/global.%' THEN 1 ELSE 1.1 END)");
     // the route CASE wraps all four terms (one factor, applied once), after the last rate CASE
     expect(est.lastIndexOf('ELSE 1.1 END')).toBeGreaterThan(est.lastIndexOf('cacheWriteInputTokenCount'));

@@ -46,6 +46,9 @@ export class ApiStack extends cdk.Stack {
       DORA_TABLE: tables.dora.tableName,
       ATHENA_WORKGROUP: athena.workgroupName,
       GLUE_DATABASE: `token_monitoring_${cfg.env}`,
+      // Athena templates read the ETL's curated Parquet table, never the raw delivery prefix
+      // (bodies live there — qa F-PR75-001). 'raw' exists only as a break-glass comparison.
+      INVOCATION_SOURCE: 'curated',
       // The Lambda response's Access-Control-Allow-Origin must match the preflight. A single
       // origin is echoed directly; multiple/none → "*" (demo). Production: set one origin.
       ALLOWED_ORIGIN: allowedOrigins?.length === 1 ? allowedOrigins[0] : '*',

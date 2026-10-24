@@ -24,6 +24,7 @@ deployable into any AWS account. See `README.md` and `docs/ARCHITECTURE.md`.
 ```bash
 make install        # installs infra + backend + frontend deps
 make test           # backend unit tests (Jest) — must pass
+cd infra && npm test  # CDK assertions — must pass
 make build          # backend type-check + frontend production build — must pass
 ```
 
@@ -50,9 +51,11 @@ make synth ENV=dev  # cdk synth all stacks
 1. `cd backend && npm test` — Jest.
 2. `cd backend && npx tsc --noEmit` — type-check.
 3. `cd frontend && npm run build` — build.
-4. `cd infra && npx cdk synth --context env=dev` — synth (needs a `dev.json`).
+4. `cd infra && npm test` — CDK assertions (`infra/test`, synthesises with the tracked `ci.json`).
+5. `cd infra && npx cdk synth --context env=dev` — synth (needs a `dev.json`).
+6. `cd backend/analysis && python3 -m unittest test_etl` — ETL pure logic (stdlib only).
 
-A change is not "done" until all four pass.
+A change is not "done" until all six pass.
 
 ## The CI QA loop's rules (owner decision, 2026-09-21)
 

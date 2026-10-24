@@ -9,6 +9,10 @@ process.env.ATHENA_WORKGROUP = 'wg';
 process.env.GLUE_DATABASE = 'db';
 
 import { buildFullSql, MAX_PROFILE_ROWS } from './projects';
+import { CURATED_SOURCE, RAW_SOURCE } from './invocation-source';
+
+const SRC = CURATED_SOURCE; // the default source; see 'reads the curated table' below
+const META_PROJECT = SRC.meta('l', 'project_id');
 
 const ARN = 'arn:aws:bedrock:us-east-1:111111111111:application-inference-profile/abc123';
 const TENANT = 'arn:aws:iam::111111111111:user/demo';
@@ -26,7 +30,7 @@ describe('buildFullSql', () => {
     const project = sql.slice(sql.indexOf('COALESCE'), sql.indexOf('AS project'));
     // pm/ap (AIP tier) must be evaluated before m/requestMetadata (metadata tier).
     expect(project.indexOf('pm.project_name')).toBeLessThan(project.indexOf('m.project_name'));
-    expect(project.indexOf('ap.project_id')).toBeLessThan(project.indexOf("requestMetadata['project_id']"));
+    expect(project.indexOf('ap.project_id')).toBeLessThan(project.indexOf(META_PROJECT));
     expect(project.trimEnd().endsWith("'untagged')")).toBe(true);
   });
 
@@ -40,7 +44,7 @@ describe('buildFullSql', () => {
     const sql = buildFullSql(TENANT, []);
     expect(sql).not.toContain('WITH');
     expect(sql).not.toContain('profile_map');
-    expect(sql).toContain("COALESCE(m.project_name, l.requestMetadata['project_id'], 'untagged')");
+    expect(sql).toContain(`COALESCE(m.project_name, ${META_PROJECT}, 'untagged')`);
     // Still a single-pass grouped query.
     expect(sql).toContain('GROUP BY 1, 2');
   });
@@ -51,7 +55,7 @@ describe('buildFullSql', () => {
     for (const profiles of [[], [{ arn: ARN, projectId: 'proj-alpha' }]]) {
       const sql = buildFullSql(TENANT, profiles);
       expect(sql.match(/GROUP BY/g)).toHaveLength(1);
-      expect(sql).toContain("COUNT(DISTINCT l.requestMetadata['user_id'])");
+      expect(sql).toContain(`COUNT(DISTINCT ${SRC.meta('l', 'user_id')})`);
     }
   });
 
@@ -78,7 +82,7 @@ describe('buildFullSql', () => {
 describe('buildFullSql prices cache writes at the 5-minute rate (feature-36)', () => {
   it('adds the cacheWriteInputTokenCount term at 1.25× the reference input rate', () => {
     const sql = buildFullSql(TENANT, []);
-    expect(sql).toContain('COALESCE(l.input.cacheWriteInputTokenCount, 0) * 0.00000625'); // per row, inside the route-weighted SUM (feature-38)
+    expect(sql).toContain(`${SRC.cacheWriteTokens('l')} * 0.00000625`); // per row, inside the route-weighted SUM (feature-38)
     expect(sql.indexOf('cacheWriteInputTokenCount')).toBeLessThan(sql.indexOf('AS est_usd'));
   });
 });
@@ -87,6 +91,29 @@ describe('buildFullSql applies the route factor per row (feature-38)', () => {
   it('multiplies each row by the route CASE inside the SUM (the query is not grouped by model)', () => {
     const sql = buildFullSql(TENANT, []);
     expect(sql).toContain("* (CASE WHEN l.modelId LIKE '%nova-micro%' OR l.modelId LIKE '%gpt-oss-120b%' OR l.modelId LIKE '%gpt-oss-20b%' THEN 1 WHEN l.modelId LIKE 'global.%' OR l.modelId LIKE '%/global.%' THEN 1 ELSE 1.1 END)) AS est_usd");
-    expect(sql).toMatch(/SUM\(\(l\.input\.inputTokenCount \* /);
+    expect(sql).toContain(`SUM((${SRC.inputTokens('l')} * `);
+  });
+
+  it('reads the curated Parquet table, never the raw delivery prefix (qa F-PR75-001)', () => {
+    const sql = buildFullSql(TENANT, []);
+    expect(sql).toContain(`FROM ${CURATED_SOURCE.table} l`);
+    expect(sql).not.toContain(RAW_SOURCE.table);
+    expect(sql).not.toContain('l.input.');
+    expect(sql).not.toContain('l.identity.arn');
+    expect(sql).toContain(CURATED_SOURCE.tenantPredicate('l', TENANT));
+    expect(sql).toContain(`SUM(${CURATED_SOURCE.inputTokens('l')} + ${CURATED_SOURCE.outputTokens('l')}) AS tokens`);
+  });
+
+  it('switches every expression together when INVOCATION_SOURCE=raw', () => {
+    process.env.INVOCATION_SOURCE = 'raw';
+    try {
+      const sql = buildFullSql(TENANT, []);
+      expect(sql).toContain(`FROM ${RAW_SOURCE.table} l`);
+      expect(sql).toContain("l.requestMetadata['project_id']");
+      expect(sql).toContain('l.input.inputTokenCount');
+      expect(sql).not.toContain('json_extract_scalar');
+    } finally {
+      delete process.env.INVOCATION_SOURCE;
+    }
   });
 });

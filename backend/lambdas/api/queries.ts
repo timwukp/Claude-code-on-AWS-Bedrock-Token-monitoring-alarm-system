@@ -9,10 +9,12 @@ import { ok, badRequest, serverError } from '../shared/response';
 import { RATE_CARD, cardByKeyLength, routeCaseSql } from './cost-calc';
 import { listProfiles, profileResolvesModel } from '../shared/project-registry';
 import { getTenantId } from '../shared/tenant';
+import { invocationSource } from './invocation-source';
 
 const athena = new AthenaClient({});
 const WORKGROUP = process.env.ATHENA_WORKGROUP!;
 const DATABASE = process.env.GLUE_DATABASE!;
+const src = () => invocationSource();
 
 /**
  * Forensic query endpoint (async Athena pattern):
@@ -39,10 +41,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
  * requestMetadata['tenant'] tag OR the caller IAM ARN (identity.arn), so the forensic queries
  * resolve the same tenant the dashboard aggregates use. (Verified against real logs.)
  */
-const tenantFilter = (tenantId: string) => {
-  const t = sanitizeTenant(tenantId);
-  return `(COALESCE(requestMetadata['tenant'], identity.arn) = '${t}')`;
-};
+const tenantFilter = (tenantId: string) => `(${src().tenantPredicate('l', sanitizeTenant(tenantId))})`;
 
 /**
  * SQL CASE reproducing matchRate's longest-key-wins semantics (keys tested longest first, so the
@@ -123,44 +122,56 @@ export const TEMPLATES: Record<string, (tenantId: string, days: number, ctx: Tem
   // requestMetadata) could only land in 'untagged', so this view reported ~99.97% untagged against
   // 20 attributed projects in Fast (qa F-1101). The two tiers still absent are the ones with no
   // raw-log signal at all: the admin identity hint and the one-time historical treatment.
-  byProject: (tenantId, _days, ctx) => `
+  byProject: (tenantId, days, ctx) => {
+    const s = src();
+    return `
     SELECT
-      COALESCE(${ctx.projectExpr ? `${ctx.projectExpr}, ` : ''}m.project_name, l.requestMetadata['project_id'], 'untagged') AS project,
+      COALESCE(${ctx.projectExpr ? `${ctx.projectExpr}, ` : ''}m.project_name, ${s.meta('l', 'project_id')}, 'untagged') AS project,
       COALESCE(m.cost_center, '—') AS cost_center,
-      COUNT(DISTINCT l.requestMetadata['user_id']) AS users,
-      COALESCE(SUM(COALESCE(l.input.inputTokenCount, 0) + COALESCE(l.output.outputTokenCount, 0)), 0) AS tokens,
-      (COALESCE(SUM(COALESCE(l.input.inputTokenCount, 0)), 0) * (${rateCase('inPerToken', ctx.modelExpr)})
-        + COALESCE(SUM(COALESCE(l.output.outputTokenCount, 0)), 0) * (${rateCase('outPerToken', ctx.modelExpr)})
-        + COALESCE(SUM(COALESCE(l.input.cacheReadInputTokenCount, 0)), 0) * (${rateCase('cacheReadPerToken', ctx.modelExpr)})
-        + COALESCE(SUM(COALESCE(l.input.cacheWriteInputTokenCount, 0)), 0) * (${rateCase('cacheWrite5mPerToken', ctx.modelExpr)}))
+      COUNT(DISTINCT ${s.meta('l', 'user_id')}) AS users,
+      COALESCE(SUM(${s.inputTokens('l')} + ${s.outputTokens('l')}), 0) AS tokens,
+      (COALESCE(SUM(${s.inputTokens('l')}), 0) * (${rateCase('inPerToken', ctx.modelExpr)})
+        + COALESCE(SUM(${s.outputTokens('l')}), 0) * (${rateCase('outPerToken', ctx.modelExpr)})
+        + COALESCE(SUM(${s.cacheReadTokens('l')}), 0) * (${rateCase('cacheReadPerToken', ctx.modelExpr)})
+        + COALESCE(SUM(${s.cacheWriteTokens('l')}), 0) * (${rateCase('cacheWrite5mPerToken', ctx.modelExpr)}))
         * (${routeCaseSql(ctx.modelExpr)}) AS est_usd
-    FROM bedrock_invocation_logs l
+    FROM ${s.table} l
     LEFT JOIN project_mapping m
-      ON l.requestMetadata['project_id'] = m.project_id
-    WHERE (COALESCE(l.requestMetadata['tenant'], l.identity.arn) = '${sanitizeTenant(tenantId)}')
+      ON ${s.meta('l', 'project_id')} = m.project_id
+    WHERE ${tenantFilter(tenantId)}
+      ${s.recentDays('l', days)}
     GROUP BY 1, 2, ${ctx.modelExpr}
     ORDER BY tokens DESC
-    LIMIT 500`,
+    LIMIT 500`;
+  },
 
-  topModels: (tenantId, days) => `
-    SELECT modelId,
-           SUM(input.inputTokenCount + output.outputTokenCount) AS total_tokens,
-           SUM(input.cacheReadInputTokenCount) AS cache_read_tokens,
+  topModels: (tenantId, days) => {
+    const s = src();
+    return `
+    SELECT ${s.modelId('l')} AS modelId,
+           SUM(${s.inputTokens('l')} + ${s.outputTokens('l')}) AS total_tokens,
+           SUM(${s.cacheReadTokens('l')}) AS cache_read_tokens,
            COUNT(*) AS invocations
-    FROM bedrock_invocation_logs
+    FROM ${s.table} l
     WHERE ${tenantFilter(tenantId)}
-      AND from_iso8601_timestamp("timestamp") >= date_add('day', -${days}, current_timestamp)
-    GROUP BY modelId ORDER BY total_tokens DESC LIMIT 20`,
+      ${s.recentDays('l', days)}
+      AND ${s.timestamp('l')} >= date_add('day', -${days}, current_timestamp)
+    GROUP BY 1 ORDER BY total_tokens DESC LIMIT 20`;
+  },
 
-  hourlyUsage: (tenantId, days) => `
-    SELECT date_trunc('hour', from_iso8601_timestamp("timestamp")) AS hour,
-           SUM(input.inputTokenCount) AS input_tokens,
-           SUM(output.outputTokenCount) AS output_tokens,
+  hourlyUsage: (tenantId, days) => {
+    const s = src();
+    return `
+    SELECT date_trunc('hour', ${s.timestamp('l')}) AS hour,
+           SUM(${s.inputTokens('l')}) AS input_tokens,
+           SUM(${s.outputTokens('l')}) AS output_tokens,
            COUNT(*) AS invocations
-    FROM bedrock_invocation_logs
+    FROM ${s.table} l
     WHERE ${tenantFilter(tenantId)}
-      AND from_iso8601_timestamp("timestamp") >= date_add('day', -${days}, current_timestamp)
-    GROUP BY 1 ORDER BY 1 DESC LIMIT 200`,
+      ${s.recentDays('l', days)}
+      AND ${s.timestamp('l')} >= date_add('day', -${days}, current_timestamp)
+    GROUP BY 1 ORDER BY 1 DESC LIMIT 200`;
+  },
 };
 
 async function startQuery(event: APIGatewayProxyEvent, tenantId: string) {
