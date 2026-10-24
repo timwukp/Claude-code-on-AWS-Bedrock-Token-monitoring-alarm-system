@@ -6,6 +6,19 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Fixed — the Full view reads curated Parquet, the ETL runs, and a failing ETL is heard (lakehouse P0)
+- **Full view and `/v1/queries` no longer read Bedrock's delivery prefix.** That Glue table also held the >100 KB
+  request/response bodies (`data/`, 96 % of every scan), and on 2026-10-23 the first OpenAI Responses-API body — whose
+  top-level `input` is an array — was coerced into the table's `input` struct and failed every query (qa F-PR75-001). The
+  templates now read `bedrock_invocations_curated` (CDK-defined Parquet with `dt` partition projection) through one adapter
+  module (`invocation-source.ts`); `INVOCATION_SOURCE=raw` remains as a break-glass comparison.
+- **The daily ETL had failed 90/90 runs since 2026-07-27** (`exec format error`: arm64 image on an x86_64 task) with no
+  alarm. Image is built `linux/amd64`, the task declares its platform, and `ExecutionsFailed` alarms on the governance topic.
+- ETL runs incrementally from a watermark (previous day always re-read), tolerates any body shape inside a record, forces
+  Parquet dtypes to the Glue schema, and reads with a 16-way thread pool (full backfill in minutes, not hours).
+- New infra jest harness (`infra/test`); `cd infra && npm test` joins the validation gates.
+- Incident record: `docs/incidents/2026-10-athena-body-collision.md`. (PR TBD)
+
 ### Changed — OpenAI models priced from their AWS model cards; no $0 estimate is silent (feature-41)
 - **`matchRate` takes the longest matching key** (the Athena rate CASE tests keys longest-first), so `openai.gpt-5.6-luna`
   can no longer land on a `gpt-5` row (qa F-PR73-N02) and point releases need no hand ordering.

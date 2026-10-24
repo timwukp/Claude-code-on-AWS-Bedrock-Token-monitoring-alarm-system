@@ -107,6 +107,13 @@ STORED AS INPUTFORMAT  'org.apache.hadoop.mapred.TextInputFormat'
 LOCATION 's3://<bucket>/model-logs/AWSLogs/<account-id>/BedrockModelInvocationLogs/<region>/';
 ```
 
+> **The dashboard does not query this table.** Its LOCATION is Bedrock's delivery prefix, which also receives every
+> request/response body over 100 KB under `…/HH/data/`; a body whose top-level keys overlap the record schema (an OpenAI
+> Responses request's `input` array, 2026-10-23) fails every query over it, and the bodies are 96 % of the bytes scanned.
+> The API reads `bedrock_invocations_curated` — the ETL's Parquet under `s3://<curated>/usage/dt=YYYY-MM-DD/`, defined in
+> CDK (`infra/lib/stacks/data-stack.ts`) with `dt` partition projection; see `docs/incidents/2026-10-athena-body-collision.md`.
+> Keep the raw table for ad-hoc forensics only, and expect it to break whenever a new body shape lands.
+
 > The date hierarchy is `YYYY/MM/DD/HH` under the region prefix — add Athena **partition
 > projection** keyed on that layout to prune scans. With `identity.arn` available you can
 > attribute usage per IAM principal directly; `requestMetadata` tags remain useful for

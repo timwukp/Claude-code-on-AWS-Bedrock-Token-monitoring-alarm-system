@@ -20,6 +20,8 @@ jobs:
         working-directory: infra
       - run: npm run build
         working-directory: infra
+      - run: npm test                          # CDK assertions (infra/test), synthesised with ci.json
+        working-directory: infra
       - run: npx cdk synth --context env=ci   # uses tracked placeholder config (no secrets)
         working-directory: infra
 
@@ -33,6 +35,8 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test --if-present
+      - run: python3 -m unittest test_etl     # Fargate ETL pure logic, stdlib only
+        working-directory: backend/analysis
 
   frontend:
     runs-on: ubuntu-latest

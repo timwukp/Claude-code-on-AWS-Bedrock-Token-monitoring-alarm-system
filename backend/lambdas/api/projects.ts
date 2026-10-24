@@ -8,6 +8,7 @@ import { ok, serverError } from '../shared/response';
 import { cacheWriteOf, computeModelCost, normalizeModelId, routeCaseSql, summarizeCosts, TokenCounts, UnpricedModel } from './cost-calc';
 import { listProfiles, listProjects, profileModelMap } from '../shared/project-registry';
 import { getTenantId } from '../shared/tenant';
+import { invocationSource } from './invocation-source';
 
 const athena = new AthenaClient({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -169,6 +170,7 @@ export const MAX_PROFILE_ROWS = 400;
  * Exported for unit tests: this is pure string building.
  */
 export function buildFullSql(tenantId: string, profiles: { arn: string; projectId: string }[]): string {
+  const src = invocationSource();
   const rows = profiles.slice(0, MAX_PROFILE_ROWS)
     .map((p) => `('${sanitize(p.arn)}', '${sanitize(p.projectId)}')`)
     .join(', ');
@@ -177,32 +179,33 @@ export function buildFullSql(tenantId: string, profiles: { arn: string; projectI
   const withClause = rows ? `WITH profile_map (profile_arn, project_id) AS (VALUES ${rows})\n      ` : '';
   const aipJoin = rows
     ? `LEFT JOIN profile_map ap
-        ON l.modelId = ap.profile_arn
+        ON ${src.modelId('l')} = ap.profile_arn
       LEFT JOIN project_mapping pm
         ON ap.project_id = pm.project_id
       `
     : '';
+  const metaProject = src.meta('l', 'project_id');
   // Name/cost-centre for an AIP-attributed row come from the same project_mapping CSV as the
   // metadata tier, so a project reads identically whichever tier attributed it.
   const project = rows
-    ? "COALESCE(pm.project_name, ap.project_id, m.project_name, l.requestMetadata['project_id'], 'untagged')"
-    : "COALESCE(m.project_name, l.requestMetadata['project_id'], 'untagged')";
+    ? `COALESCE(pm.project_name, ap.project_id, m.project_name, ${metaProject}, 'untagged')`
+    : `COALESCE(m.project_name, ${metaProject}, 'untagged')`;
   const costCenter = rows ? "COALESCE(pm.cost_center, m.cost_center, '—')" : "COALESCE(m.cost_center, '—')";
   return `
       ${withClause}SELECT
         ${project} AS project,
         ${costCenter} AS cost_center,
-        COUNT(DISTINCT l.requestMetadata['user_id']) AS users,
-        SUM(l.input.inputTokenCount + l.output.outputTokenCount) AS tokens,
-        SUM((l.input.inputTokenCount * ${IN}
-          + l.output.outputTokenCount * ${OUT}
-          + COALESCE(l.input.cacheReadInputTokenCount, 0) * ${CACHE}
-          + COALESCE(l.input.cacheWriteInputTokenCount, 0) * ${CACHE_WRITE})
-          * (${routeCaseSql('l.modelId')})) AS est_usd
-      FROM bedrock_invocation_logs l
+        COUNT(DISTINCT ${src.meta('l', 'user_id')}) AS users,
+        SUM(${src.inputTokens('l')} + ${src.outputTokens('l')}) AS tokens,
+        SUM((${src.inputTokens('l')} * ${IN}
+          + ${src.outputTokens('l')} * ${OUT}
+          + ${src.cacheReadTokens('l')} * ${CACHE}
+          + ${src.cacheWriteTokens('l')} * ${CACHE_WRITE})
+          * (${routeCaseSql(src.modelId('l'))})) AS est_usd
+      FROM ${src.table} l
       ${aipJoin}LEFT JOIN project_mapping m
-        ON l.requestMetadata['project_id'] = m.project_id
-      WHERE COALESCE(l.requestMetadata['tenant'], l.identity.arn) = '${sanitize(tenantId)}'
+        ON ${metaProject} = m.project_id
+      WHERE ${src.tenantPredicate('l', sanitize(tenantId))}
       GROUP BY 1, 2
       ORDER BY tokens DESC
       LIMIT 100`;

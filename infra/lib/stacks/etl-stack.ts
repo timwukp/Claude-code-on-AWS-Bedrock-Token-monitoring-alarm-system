@@ -8,6 +8,10 @@ import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as cw from 'aws-cdk-lib/aws-cloudwatch';
+import * as cwActions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import { Platform } from 'aws-cdk-lib/aws-ecr-assets';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as path from 'path';
 import { Construct } from 'constructs';
@@ -21,6 +25,7 @@ interface Props extends cdk.StackProps {
   rawLogBucket: s3.Bucket;
   curatedBucket: s3.Bucket;
   tables: DataTables;
+  alertTopic: sns.ITopic;
 }
 
 /**
@@ -31,7 +36,7 @@ interface Props extends cdk.StackProps {
 export class EtlStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: Props) {
     super(scope, id, props);
-    const { cfg, vpc, rawLogBucket, curatedBucket, tables } = props;
+    const { cfg, vpc, rawLogBucket, curatedBucket, tables, alertTopic } = props;
 
     // --- Lightweight aggregator (every 15 min) ---
     const aggregatorFn = new NodejsFunction(this, 'AggregatorFn', {
@@ -97,13 +102,17 @@ export class EtlStack extends cdk.Stack {
 
     // --- Heavy ETL: Fargate task on a daily Step Functions workflow ---
     const cluster = new ecs.Cluster(this, 'EtlCluster', { vpc });
-    const taskDef = new ecs.FargateTaskDefinition(this, 'EtlTask', { cpu: 1024, memoryLimitMiB: 2048 });
+    // The image platform and the task architecture must agree: an image built on an arm64 laptop
+    // ran as `exec format error` on every x86_64 task from 2026-07-27 to 2026-10-24 (0/90 successes).
+    const taskDef = new ecs.FargateTaskDefinition(this, 'EtlTask', {
+      cpu: 1024, memoryLimitMiB: 2048,
+      runtimePlatform: { cpuArchitecture: ecs.CpuArchitecture.X86_64, operatingSystemFamily: ecs.OperatingSystemFamily.LINUX },
+    });
     rawLogBucket.grantRead(taskDef.taskRole);
     curatedBucket.grantReadWrite(taskDef.taskRole);
 
     taskDef.addContainer('EtlContainer', {
-      // TODO: build & push backend/analysis Dockerfile; reference the ECR image here.
-      image: ecs.ContainerImage.fromAsset(path.join(__dirname, '..', '..', '..', 'backend', 'analysis')),
+      image: ecs.ContainerImage.fromAsset(path.join(__dirname, '..', '..', '..', 'backend', 'analysis'), { platform: Platform.LINUX_AMD64 }),
       logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'etl' }),
       environment: {
         RAW_LOG_BUCKET: rawLogBucket.bucketName,
@@ -128,5 +137,16 @@ export class EtlStack extends cdk.Stack {
       schedule: events.Schedule.cron({ hour: '2', minute: '0' }), // 02:00 UTC daily
       targets: [new targets.SfnStateMachine(stateMachine)],
     });
+
+    // A silent ETL is how the curated layer stayed empty for three months.
+    stateMachine.metricFailed({ period: cdk.Duration.hours(1), statistic: 'Sum' })
+      .createAlarm(this, 'EtlFailedAlarm', {
+        alarmDescription: `Bedrock-log ETL (${cfg.env}): a Step Functions execution failed — the curated Parquet layer is not being refreshed.`,
+        threshold: 1,
+        evaluationPeriods: 1,
+        comparisonOperator: cw.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cw.TreatMissingData.NOT_BREACHING,
+      })
+      .addAlarmAction(new cwActions.SnsAction(alertTopic));
   }
 }

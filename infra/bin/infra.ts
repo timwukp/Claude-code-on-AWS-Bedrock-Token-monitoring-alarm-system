@@ -38,11 +38,11 @@ const api = new ApiStack(app, `${prefix}-Api`, {
   dora: { collectorFn: dora.collectorFn, githubSecret: dora.githubSecret },
 });
 
-new AutomationStack(app, `${prefix}-Automation`, { env, cfg, tables: data.tables });
+const automation = new AutomationStack(app, `${prefix}-Automation`, { env, cfg, tables: data.tables });
 
 new EtlStack(app, `${prefix}-Etl`, {
   env, cfg, vpc: network.vpc, rawLogBucket: data.rawLogBucket,
-  curatedBucket: data.curatedBucket, tables: data.tables,
+  curatedBucket: data.curatedBucket, tables: data.tables, alertTopic: automation.alertTopic,
 });
 
 new FrontendStack(app, `${prefix}-Frontend`, { env, cfg, api: api.restApi, userPool: auth.userPool });
