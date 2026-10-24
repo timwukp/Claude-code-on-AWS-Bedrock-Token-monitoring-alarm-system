@@ -71,11 +71,60 @@ export class DataStack extends cdk.Stack {
     this.curatedBucket = secureBucket('CuratedBucket', cfg.curatedBucketName);
     const resultsBucket = secureBucket('AthenaResults', `${cfg.curatedBucketName}-athena-results`, 30);
 
-    // Glue database for the Bedrock invocation-log tables (created by ETL/DDL; see docs).
-    new glue.CfnDatabase(this, 'GlueDb', {
+    // Glue database for the Bedrock invocation-log tables.
+    const glueDb = new glue.CfnDatabase(this, 'GlueDb', {
       catalogId: cfg.account,
       databaseInput: { name: `token_monitoring_${cfg.env}` },
     });
+
+    // The table the API queries: flat Parquet the ETL writes under usage/dt=YYYY-MM-DD/ (columns =
+    // etl.py flatten_record). It deliberately does NOT sit on Bedrock's delivery prefix — that prefix
+    // also holds the >100 KB request/response bodies (`data/`), and a body shaped unlike the record
+    // schema fails every Athena query over it (qa F-PR75-001, 2026-10-23). Partition projection
+    // means no partition registration, and `dt` predicates prune the scan.
+    const curatedTable = new glue.CfnTable(this, 'CuratedInvocationsTable', {
+      catalogId: cfg.account,
+      databaseName: `token_monitoring_${cfg.env}`,
+      tableInput: {
+        name: 'bedrock_invocations_curated',
+        tableType: 'EXTERNAL_TABLE',
+        description: 'Bedrock invocation records flattened by the ETL; no bodies. Source for the dashboard Full view.',
+        parameters: {
+          classification: 'parquet',
+          'parquet.compression': 'SNAPPY',
+          'projection.enabled': 'true',
+          'projection.dt.type': 'date',
+          'projection.dt.format': 'yyyy-MM-dd',
+          'projection.dt.range': '2026-06-01,NOW',
+          'projection.dt.interval': '1',
+          'projection.dt.interval.unit': 'DAYS',
+          'storage.location.template': `s3://${this.curatedBucket.bucketName}/usage/dt=\${dt}/`,
+        },
+        partitionKeys: [{ name: 'dt', type: 'string' }],
+        storageDescriptor: {
+          location: `s3://${this.curatedBucket.bucketName}/usage/`,
+          inputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat',
+          outputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat',
+          serdeInfo: { serializationLibrary: 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe' },
+          columns: [
+            { name: 'timestamp', type: 'string' },
+            { name: 'accountId', type: 'string' },
+            { name: 'region', type: 'string' },
+            { name: 'requestId', type: 'string' },
+            { name: 'operation', type: 'string' },
+            { name: 'modelId', type: 'string' },
+            { name: 'inferenceRegion', type: 'string' },
+            { name: 'identityArn', type: 'string' },
+            { name: 'requestMetadata', type: 'string' },
+            { name: 'inputTokenCount', type: 'bigint' },
+            { name: 'cacheReadInputTokenCount', type: 'bigint' },
+            { name: 'cacheWriteInputTokenCount', type: 'bigint' },
+            { name: 'outputTokenCount', type: 'bigint' },
+          ],
+        },
+      },
+    });
+    curatedTable.addDependency(glueDb);
 
     const workgroup = new athena.CfnWorkGroup(this, 'Workgroup', {
       name: `token-monitoring-${cfg.env}`,

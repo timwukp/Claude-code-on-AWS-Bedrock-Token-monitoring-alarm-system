@@ -3,11 +3,11 @@
 - **Spec:** ./spec.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Accepted-for:** e08ae195024ec1e28bd060f8f49626625f7b4d38
+- **Accepted-for:** c087abbecc4261f6a6e55f2ed3325585352ae2f8
 - **Status:** accepted
 
-`Accepted-for` is the tip of `main` after PR #74 (feature-41), the merge base at branch time. Nothing else is in flight
-(Chain C #73 and Chain A #74 of the gateway-study plan are on main; this is Chain B).
+`Accepted-for` is the tip of `main` after PR #76 (lakehouse P0), rebound on 2026-10-24 when #76 merged ahead of this
+chain. Nothing else is in flight.
 
 ## Files changed
 1. `backend/lambdas/api/projects.ts` — fast rows: `cacheReadTokens`, `cacheWriteTokens`, `cacheWriteShare`.
@@ -24,8 +24,8 @@
 12. `frontend/src/lib/help-content.ts` — `cost.unpriced`, `cost.mantle` (rewritten), `project.cache-churn`.
 13. `frontend/src/styles.css` — `.notice` styles.
 
-Non-source riders: `.sdlc/active` (handover from `openai-rates-and-unpriced`), `intent/openai-rates-and-unpriced/*` →
-shipped, `intent/unpriced-visibility-and-churn/*`, `CHANGELOG.md`, `docs/incidents/2026-10-cache-write-omission.md`
+Non-source riders: `.sdlc/active` (handover from `lakehouse-p0-stabilise`), `intent/lakehouse-p0-stabilise/*` → shipped,
+`intent/openai-rates-and-unpriced/*` → shipped, `intent/unpriced-visibility-and-churn/*`, `CHANGELOG.md`, `docs/incidents/2026-10-cache-write-omission.md`
 (service-name correction), `docs/test-reports/feature-42-unpriced-visibility-and-churn.md` + index row.
 
 ## Verification
