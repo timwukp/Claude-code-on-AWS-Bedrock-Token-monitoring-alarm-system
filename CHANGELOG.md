@@ -6,6 +6,27 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Added — cache churn per project, one bill panel, honest drift checks for the new rows (feature-42)
+- **Cache churn** — cache writes as a share of all cache traffic, per project, on By project and on Overview's "What
+  changed" (`cacheWriteShare` on `/v1/projects?source=fast` rows and on `/v1/overview.movers`). Writes cost 1.25× input and
+  only pay off when re-read; a rising share means prefixes are written and not re-read — a router switching models
+  mid-conversation, or sessions shorter than the 5-minute cache, look exactly like this. "—" when a project has no cache
+  traffic. Per project only: the invocation log carries no session id.
+- **One bill panel on Cost.** The two bill-vs-logged panels (#73 and this chain's draft) are one: account-wide framing with
+  this tenant's logged estimate, "billed $0" and "estimate above bill" badges, Mantle inferences and tokens per row, and
+  "N % of the bill is logged" on the total line. The Overview Spend tile names the unlogged total. Help explains the
+  subtraction and why Mantle's token counts are never multiplied by a rate.
+- **Unpriced models** get an "unpriced" badge in the Cost table and a warn chip on the Overview Spend tile, beside #74's
+  `UnpricedNote`; help `cost.unpriced` says why a blank beats a zero.
+- **`scripts/check-rate-card.ts`** now compares every row AWS publishes: Claude and **GPT-6 Astra** from the Marketplace
+  price list (OpenAI servicenames; the single 30-minute cache-write TTL fills both columns), **Nova Micro and gpt-oss** from
+  the first-party `AmazonBedrock` list — all to the cent. Rows AWS does not publish (gated Mythos; the five OpenAI frontier
+  rows priced from the AWS model cards) are allow-listed with their source and date; any other absence fails the run.
+- qa leftovers from #73: an unknown URL shows a not-found page instead of silently rendering the Overview; the Projects
+  "Projects tracked" caption no longer counts table rows while the Athena scan is still running; DORA counts pluralise.
+- Incident record corrected: the "$0 bill" of 2026-10 was a service-name filter mistake ("Amazon Bedrock" vs "Amazon
+  Bedrock Service"), not a payer-account billing scope. (PR #75)
+
 ### Fixed — the Full view reads curated Parquet, the ETL runs, and a failing ETL is heard (lakehouse P0)
 - **Full view and `/v1/queries` no longer read Bedrock's delivery prefix.** That Glue table also held the >100 KB
   request/response bodies (`data/`, 96 % of every scan), and on 2026-10-23 the first OpenAI Responses-API body — whose

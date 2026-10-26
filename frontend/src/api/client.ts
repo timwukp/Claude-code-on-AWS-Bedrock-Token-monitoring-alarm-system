@@ -201,7 +201,9 @@ export interface OverviewResponse {
   }[];
   /** Absent from API builds deployed before feature-41. */
   unpricedModels?: UnpricedModel[];
-  movers: { projectId: string; name: string | null; currentUsd: number; priorUsd: number; deltaUsd: number; deltaPct: number | null }[];
+  movers: { projectId: string; name: string | null; currentUsd: number; priorUsd: number; deltaUsd: number; deltaPct: number | null;
+    /** Cache writes ÷ (reads + writes) this window; null without cache traffic (feature-42). */
+    cacheWriteShare?: number | null; cacheReadTokens?: number; cacheWriteTokens?: number }[];
   coverage: { firstDayWithData: string | null; partial: boolean };
   rollupsAsOf: string | null;
   /** When the aggregator last ran (feature-36), as distinct from the newest log it has folded in. */

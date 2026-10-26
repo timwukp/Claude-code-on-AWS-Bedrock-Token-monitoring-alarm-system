@@ -59,6 +59,10 @@ export interface OverviewModelRow {
 }
 export interface OverviewMover {
   projectId: string; name: string | null; currentUsd: number; priorUsd: number; deltaUsd: number; deltaPct: number | null;
+  /** Cache writes ÷ (cache reads + writes) in the current window; null when the project had no cache traffic. A rising
+   *  share means prefixes are written and not re-read — a router switching models mid-conversation looks like this. */
+  cacheWriteShare: number | null;
+  cacheReadTokens: number; cacheWriteTokens: number;
 }
 export interface OverviewResult {
   window: WindowBounds;
@@ -96,7 +100,7 @@ export function buildOverview(
   let currentUsd = 0, priorUsd = 0, tokens = 0, priorTokens = 0;
   const daily = new Map<string, { usd: number; tokens: number }>();
   const byModel = new Map<string, OverviewModelRow>();
-  const proj = new Map<string, { cur: number; prior: number }>();
+  const proj = new Map<string, { cur: number; prior: number; cr: number; cw: number }>();
   let firstDay: string | null = null;
 
   for (const it of items) {
@@ -104,9 +108,9 @@ export function buildOverview(
     if (firstDay === null || it.day < firstDay) firstDay = it.day;
     const { estimatedUsd: usd, cacheSavingsUsd, cacheReadUsd, cacheWriteUsd, cacheNetUsd } = priceOf(it, card);
     const tok = tokensOf(it);
-    const p = proj.get(it.projectId) ?? { cur: 0, prior: 0 };
+    const p = proj.get(it.projectId) ?? { cur: 0, prior: 0, cr: 0, cw: 0 };
     if (inCur(it.day)) {
-      currentUsd += usd; tokens += tok; p.cur += usd;
+      currentUsd += usd; tokens += tok; p.cur += usd; p.cr += it.cacheReadTokens; p.cw += it.cacheWriteTokens;
       const d = daily.get(it.day) ?? { usd: 0, tokens: 0 };
       d.usd += usd; d.tokens += tok; daily.set(it.day, d);
       const m = byModel.get(it.modelId) ?? {
@@ -133,6 +137,8 @@ export function buildOverview(
     .map(([projectId, v]) => ({
       projectId, name: names.get(projectId) ?? null,
       currentUsd: round2(v.cur), priorUsd: round2(v.prior), deltaUsd: round2(v.cur - v.prior), deltaPct: pct(v.cur, v.prior),
+      cacheWriteShare: v.cr + v.cw > 0 ? Math.round((v.cw / (v.cr + v.cw)) * 1000) / 1000 : null,
+      cacheReadTokens: v.cr, cacheWriteTokens: v.cw,
     }))
     .filter((m) => m.currentUsd > 0 || m.priorUsd > 0)
     .sort((a, b) => Math.abs(b.deltaUsd) - Math.abs(a.deltaUsd))

@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** e08ae195024ec1e28bd060f8f49626625f7b4d38
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #74 (feature-41). PR #75 (feature-42) is parked by the owner and not on
 main; its UI work is carried into lakehouse P3.
