@@ -58,10 +58,10 @@ export function OverviewPage() {
   const unloggedUsd = ov?.bill?.totalUnloggedUsd;
   const compare = ov ? `vs ${ov.window.priorFrom.slice(5)} – ${ov.window.priorTo.slice(5)}` : `vs prior ${range.label.toLowerCase().replace('last ', '')}`;
   const bState = budgetState(budget);
-  // `df.value` is merges PER DAY (see dora-calc.ts); the DORA page multiplies by 7 to show a weekly
-  // rate. Summing per-repo daily rates gives the organisation's merges per day; × 7 for the week.
-  const dfValues = (repos ?? []).map((r) => r.df.value).filter((v): v is number => typeof v === 'number');
-  const dfTotal = dfValues.length ? dfValues.reduce((a, b) => a + b, 0) * 7 : null;
+  // `df.value` is merges PER DAY rounded to 2 dp per repo (dora-calc.ts), so summing it accumulates rounding
+  // (qa F-PR80-001: 18.5 vs 79 merges / 30 d × 7 = 18.4). Sum the raw merge counts (`df.n`) and divide once.
+  const dfRepos = (repos ?? []).filter((r) => typeof r.df.value === 'number');
+  const dfTotal = dfRepos.length ? (dfRepos.reduce((a, r) => a + (r.df.n ?? 0), 0) / doraWindow(range.window)) * 7 : null;
   const syncedRepos = (repos ?? []).filter((r) => r.status === 'ok').length;
   const topRepo = (repos ?? []).filter((r) => typeof r.df.value === 'number').sort((a, b) => (b.df.value ?? 0) - (a.df.value ?? 0))[0];
 

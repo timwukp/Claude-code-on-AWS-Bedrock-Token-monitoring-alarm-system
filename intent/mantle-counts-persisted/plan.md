@@ -15,7 +15,8 @@
 3. `backend/lambdas/ingestion/bill-parse.ts`, `backend/lambdas/ingestion/bill-parse.test.ts`
 4. `backend/lambdas/api/bill-read.ts`, `backend/lambdas/api/bill-calc.ts`, `backend/lambdas/api/latency.ts`
 5. `infra/lib/stacks/etl-stack.ts`
-6. `frontend/src/api/client.ts`, `frontend/src/pages/CostsPage.tsx`
+6. `frontend/src/api/client.ts`, `frontend/src/pages/CostsPage.tsx`, `frontend/src/pages/OverviewPage.tsx` (qa F-PR80-001 rider:
+   the deployment-frequency tile sums raw merge counts `df.n` and divides once, instead of summing per-repo 2-dp daily rates)
 7. Docs: `docs/RECONCILIATION.md`, `CHANGELOG.md`, `docs/test-reports/feature-46-mantle-counts-persisted.md` (new),
    `docs/test-reports/README.md`
 8. SDLC: `intent/mantle-counts-persisted/intent.md`, `intent/mantle-counts-persisted/spec.md`,

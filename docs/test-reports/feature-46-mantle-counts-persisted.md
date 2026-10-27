@@ -46,6 +46,11 @@
 | `/v1/overview?window=mtd` opus-5-5 row | TBD — expect `mantle.inferences` 5,816, no `mantleInconsistent`, `mantleStoredThrough` = yesterday |
 | `/v1/latency?window=30` Mantle block | TBD — expect opus-5-5 listed again |
 
+## qa rounds on the PR
+| Round / finding | Verdict | Action |
+|---|---|---|
+| R1 F-PR80-001 — Overview "Deployment frequency, all repos" 18.5 / week vs 79 merges / 30 d × 7 = 18.4 | valid, pre-existing (the tile summed per-repo `df.value`, which dora-calc rounds to 2 dp per repo, then × 7 — rounding accumulates across repos) | rider: the tile sums the raw merge counts `df.n` and divides once by the window days (`OverviewPage.tsx`) |
+
 ## Known limits
 - The live tail (days after the last stored day) still discovers via `ListMetrics` — correct for recent days by
   definition. Metric Streams → bronze (P1) will replace the live read altogether.
