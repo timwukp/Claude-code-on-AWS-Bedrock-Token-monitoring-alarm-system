@@ -5,6 +5,10 @@ import { Kpi, Panel } from '../components/Layout';
 import { UnpricedNote } from '../components/UnpricedNote';
 import { fmtTokens, fmtUsd } from '../lib/format';
 
+/** Lookback window of the Full (Athena) scan. The rollups are all-time, so usage older than this
+ *  is in the rollups total but not in the Athena rows (F-PR77-001). */
+const FULL_WINDOW_DAYS = 90;
+
 /**
  * Usage attributed to projects/users. Attribution comes from Bedrock requestMetadata tags
  * (user_id, project_id) joined to a customer-supplied project mapping. See docs/ATTRIBUTION.md.
@@ -96,7 +100,7 @@ export function ProjectsPage() {
         // these totals exactly like the old sync path did; Fast and Full then agree on Est.
         // USD by construction (QA finding N-001).
         const [{ id }, fastTotals] = await Promise.all([
-          api.startQuery('byProject', 90),
+          api.startQuery('byProject', FULL_WINDOW_DAYS),
           api.projects('fast').then((r) => {
             setRollupsAsOf((r as { rollupsAsOf?: string | null }).rollupsAsOf ?? null);
             return {
@@ -178,12 +182,13 @@ export function ProjectsPage() {
   // a reader sees 21 projects above 5 rows and cannot tell whether that is a bug. It is not, and the
   // foot says why.
   const rowSource = source === 'full' ? 'Athena' : 'rollups';
-  // The gap needs its size beside it. Both sides are all-time; the curated Parquet is refreshed once
-  // a day while the rollups fold in new logs every 15 minutes, so the gap is the two tiers Full
-  // cannot resolve plus whatever arrived after the last ETL run — not lost usage.
+  // The gap needs its size beside it. The rollups are all-time but the Athena scan covers only the
+  // last FULL_WINDOW_DAYS days, and the curated Parquet is refreshed once a day while the rollups fold
+  // in new logs every 15 minutes. So the total gap is usage older than the window plus whatever arrived
+  // after the last ETL run. Tiers ③/④ only move usage into 'untagged'; they do not change the total.
   const fullDelta = apiTotalUsd != null ? Math.round((rowsCost - apiTotalUsd) * 100) / 100 : null;
   const fullVsFast = source === 'full' && !loading && !error && fullDelta !== null && apiTotalUsd
-    ? ` Right now the Athena rows total ${fmtUsd(rowsCost)}, ${fmtUsd(Math.abs(fullDelta))} (${(Math.abs(fullDelta) / apiTotalUsd * 100).toFixed(2)}%) ${fullDelta >= 0 ? 'above' : 'below'} the rollups' ${fmtUsd(apiTotalUsd)}${rollupsAsOf ? ` as of ${rollupsAsOf.slice(11, 16)} UTC` : ''}${fullThrough ? ` (curated data through ${fullThrough})` : ''}.`
+    ? ` Right now the Athena rows (last ${FULL_WINDOW_DAYS} days) total ${fmtUsd(rowsCost)}, ${fmtUsd(Math.abs(fullDelta))} (${(Math.abs(fullDelta) / apiTotalUsd * 100).toFixed(2)}%) ${fullDelta >= 0 ? 'above' : 'below'} the rollups' all-time ${fmtUsd(apiTotalUsd)}${rollupsAsOf ? ` as of ${rollupsAsOf.slice(11, 16)} UTC` : ''}${fullThrough ? ` (curated data through ${fullThrough})` : ''}.`
     : '';
   const srcChip = (text: string) => <span className="badge neutral">{text}</span>;
 
@@ -208,7 +213,7 @@ export function ProjectsPage() {
              chip={srcChip(apiTotalUsd != null ? 'rollups' : rowSource)}
              foot={apiTotalUsd != null && Math.abs(apiTotalUsd - rowsCost) > roundingBound + 1e-9
                ? (source === 'full'
-                   ? `Athena rows ${fmtUsd(rowsCost)} vs rollups ${fmtUsd(apiTotalUsd)} — the rollups fold in new logs every 15 min${rollupsAsOf ? ` (latest logged call ${rollupsAsOf.slice(11, 16)} UTC)` : ''}; Full reads the curated Parquet the ETL writes once a day${fullThrough ? ` (data through ${fullThrough})` : ''}, so the ${fmtUsd(Math.abs(rowsCost - apiTotalUsd))} gap is the two attribution tiers Full cannot resolve plus traffic since the last ETL run. Token figures count input + output only; prompt-cache reads and writes are priced but not counted, so a small token gap can carry a larger cost gap`
+                   ? `Athena rows ${fmtUsd(rowsCost)} vs rollups ${fmtUsd(apiTotalUsd)} — the rollups are all-time and fold in new logs every 15 min${rollupsAsOf ? ` (latest logged call ${rollupsAsOf.slice(11, 16)} UTC)` : ''}; Full scans only the last ${FULL_WINDOW_DAYS} days of the curated Parquet the ETL writes once a day${fullThrough ? ` (data through ${fullThrough})` : ''}, so the ${fmtUsd(Math.abs(rowsCost - apiTotalUsd))} gap is usage older than ${FULL_WINDOW_DAYS} days plus traffic since the last ETL run. The attribution tiers Full cannot resolve only move usage into 'untagged'; they do not change the total. Token figures count input + output only; prompt-cache reads and writes are priced but not counted, so a small token gap can carry a larger cost gap`
                    : `rows sum ${fmtUsd(rowsCost)} vs model rollups ${fmtUsd(apiTotalUsd)} — residual ${fmtUsd(Math.abs(apiTotalUsd - rowsCost))} predates per-project tracking`)
                : centDrift > 0
                  ? `per-model rates — same rate card as the Cost page · rows are shown to the cent, so their sum (${fmtUsd(rowsCost)}) can differ from this total by a few cents${rollupsAsOf ? ` · rollups as of ${rollupsAsOf.slice(11, 16)} UTC` : ''}`
