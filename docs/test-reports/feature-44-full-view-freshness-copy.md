@@ -1,6 +1,6 @@
 # Feature 44 — Full view freshness copy (mini chain after lakehouse P0)
 
-- **Chain:** `intent/full-view-freshness-copy/` · **Branch:** `feat/full-view-freshness-copy` off `main@c0361f2` (#75 + #76) · **PR:** TBD
+- **Chain:** `intent/full-view-freshness-copy/` · **Branch:** `feat/full-view-freshness-copy` off `main@c0361f2` (#75 + #76) · **PR:** #77
 - **Date:** 2026-10-27 · **Verdict:** PASS on gates; live check after the owner's Api + frontend deploy.
 
 ## What this report has to say plainly

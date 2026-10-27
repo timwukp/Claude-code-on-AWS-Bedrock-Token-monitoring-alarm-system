@@ -12,7 +12,7 @@ are grouped by development milestone rather than strict semver releases.
   "served from" chip now say "curated Parquet through <day>" and explain the gap as the two unresolvable tiers plus
   traffic since the last ETL run.
 - P0 had also given the `byProject` template a 90-day `dt` filter while the page compares it with all-time rollups; it is
-  all-time again and returns a trailing `data_through` column. (PR TBD)
+  all-time again and returns a trailing `data_through` column. (PR #77)
 
 ### Added — cache churn per project, one bill panel, honest drift checks for the new rows (feature-42)
 - **Cache churn** — cache writes as a share of all cache traffic, per project, on By project and on Overview's "What
