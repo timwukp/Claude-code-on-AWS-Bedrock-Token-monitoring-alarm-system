@@ -3,7 +3,7 @@
 - **Intent:** ./intent.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Status:** signed-off
+- **Status:** shipped
 
 ## 1. Cache churn (feature-42)
 - `GET /v1/projects?source=fast` rows gain `cacheReadTokens`, `cacheWriteTokens`, `cacheWriteShare` (writes ÷ (reads +

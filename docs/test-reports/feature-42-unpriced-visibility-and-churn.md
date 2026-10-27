@@ -57,6 +57,14 @@
 
 Screenshots were reviewed by eye for the two Costs panels and the Overview tiles; no label collisions or overflow at 1440 px.
 
+## Live after merge — deployed to dev 2026-10-26 together with #76
+- `/v1/projects?source=fast`: 20 project rows, every row carries `cacheWriteShare`. Values read 0 % for projects whose
+  PROJECT rollups predate the aggregator's cache-write capture (deployed 2026-10-23) — the Cache churn column is honest
+  only for traffic since then; lakehouse P2 recomputes it from bronze.
+- `/costs` renders the single bill panel; `/does-not-exist` renders the not-found page (owner login, 2026-10-26).
+- qa F-PR75-001 (Full view) was fixed by #76, not by this chain; F-PR75-004 is the attribution gap — the owner registered
+  `role/llmops-harness-execution` to `llmops-agentic-system` on 2026-10-27.
+
 ## Live (after push — qa, run 1 on `23a1f14`): FAIL — 1 HIGH + 3 LOW, triaged on the PR
 | ID | Sev | Finding | Disposition |
 |---|---|---|---|

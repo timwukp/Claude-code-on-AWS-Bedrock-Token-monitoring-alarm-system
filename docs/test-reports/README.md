@@ -51,6 +51,7 @@ results. One report per feature (mapped to a GitHub issue / PR).
 | OpenAI rates from model cards + longest-key matchRate; unpricedModels on three endpoints; billedZero in the bill panel; role-prefix identity hints | — | #74 | [feature-41](./feature-41-openai-rates-and-unpriced.md) | PASS (gates + local live: gpt-5.6-sol $103.25, three endpoints agree) |
 | Cache churn per project; one bill panel; unpriced badges; drift script covers Astra/Nova/gpt-oss + allow-list; 404 page; copy fixes | — | [#75](https://github.com/timwukp/Claude-code-on-AWS-Bedrock-Token-monitoring-alarm-system/pull/75) | [feature-42](./feature-42-unpriced-visibility-and-churn.md) | PASS (gates) |
 | Lakehouse P0: Full view reads curated Parquet (CDK table, source adapter); ETL image platform + failure alarm + incremental watermark; infra jest harness | — | [#76](https://github.com/timwukp/Claude-code-on-AWS-Bedrock-Token-monitoring-alarm-system/pull/76) | [feature-43](./feature-43-lakehouse-p0-stabilise.md) | PASS (gates) |
+| Full view freshness copy: curated Parquet "through <day>", lags rollups; byProject all-time again + data_through column | — | [#77](https://github.com/timwukp/Claude-code-on-AWS-Bedrock-Token-monitoring-alarm-system/pull/77) | [feature-44](./feature-44-full-view-freshness-copy.md) | PASS (gates) |
 Each report records: scope, unit-test results, build/synth gates, real-AWS validation evidence,
 any defect found+fixed during validation, and a verdict. Reports are written before opening the
 PR; a feature is only PR-ready when all gates are green.

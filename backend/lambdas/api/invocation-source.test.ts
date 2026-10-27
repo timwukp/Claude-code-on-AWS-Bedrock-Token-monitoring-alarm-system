@@ -33,6 +33,11 @@ describe('invocation sources', () => {
     expect(CURATED_SOURCE.recentDays('l', 30)).toBe("AND l.dt >= date_format(date_add('day', -30, current_date), '%Y-%m-%d')");
   });
 
+  it('day() yields the record day: the dt partition on curated, the timestamp prefix on raw', () => {
+    expect(CURATED_SOURCE.day('l')).toBe('l.dt');
+    expect(RAW_SOURCE.day('l')).toBe('substr(l."timestamp", 1, 10)');
+  });
+
   it('meta() only accepts identifier-like keys — the key is interpolated into SQL', () => {
     expect(() => CURATED_SOURCE.meta('l', "x'); DROP TABLE t; --")).toThrow();
     expect(() => RAW_SOURCE.meta('l', 'user-id')).toThrow();

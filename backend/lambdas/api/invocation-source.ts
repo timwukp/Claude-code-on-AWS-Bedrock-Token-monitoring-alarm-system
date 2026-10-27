@@ -17,6 +17,8 @@ export interface InvocationSource {
   modelId(alias: string): string;
   /** ISO-8601 record time as an Athena TIMESTAMP. */
   timestamp(alias: string): string;
+  /** The record's calendar day (YYYY-MM-DD) — the partition on curated, a prefix of the timestamp on raw. */
+  day(alias: string): string;
   /** `requestMetadata[key]`; `key` is interpolated, so it must be identifier-like. */
   meta(alias: string, key: string): string;
   /** `COALESCE(requestMetadata.tenant, identity.arn) = '<sanitised tenant>'` — the aggregator's rule. */
@@ -41,6 +43,7 @@ export const RAW_SOURCE: InvocationSource = {
   identityArn: (a) => `${a}.identity.arn`,
   modelId: (a) => `${a}.modelId`,
   timestamp: (a) => `from_iso8601_timestamp(${a}."timestamp")`,
+  day: (a) => `substr(${a}."timestamp", 1, 10)`,
   meta: (a, key) => `${a}.requestMetadata['${assertKey(key)}']`,
   tenantPredicate: (a, t) => `COALESCE(${a}.requestMetadata['tenant'], ${a}.identity.arn) = '${t}'`,
   recentDays: () => '',
@@ -56,6 +59,7 @@ export const CURATED_SOURCE: InvocationSource = {
   identityArn: (a) => `${a}.identityArn`,
   modelId: (a) => `${a}.modelId`,
   timestamp: (a) => `from_iso8601_timestamp(${a}."timestamp")`,
+  day: (a) => `${a}.dt`,
   meta: (a, key) => `json_extract_scalar(${a}.requestMetadata, '$.${assertKey(key)}')`,
   tenantPredicate: (a, t) => `COALESCE(json_extract_scalar(${a}.requestMetadata, '$.tenant'), ${a}.identityArn) = '${t}'`,
   recentDays: (a, days) => `AND ${a}.dt >= date_format(date_add('day', -${Math.floor(days)}, current_date), '%Y-%m-%d')`,
