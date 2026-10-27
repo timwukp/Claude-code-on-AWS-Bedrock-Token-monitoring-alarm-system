@@ -17,12 +17,17 @@
  * summed over every tenant's PROJDAY rows — and stores it as LOGGED#DAILY / <day>#<modelKey>. Tenants are
  * identity ARNs (thousands, one per AgentCore session), so that sum is done here once a day, never by a
  * page view.
+ *
+ * And the Bedrock Mantle counts for the same days (MANTLE#DAILY / MANTLE#FLEET, feature-46): CloudWatch's
+ * ListMetrics forgets a model two weeks after its last datapoint, so the models are asked for BY NAME —
+ * every model listed now, every model stored before, and every model the bill names in the window.
  */
 import { CostExplorerClient, GetCostAndUsageCommand } from '@aws-sdk/client-cost-explorer';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { BillLine, billLinesFrom } from './bill-parse';
 import { computeLoggedByModelDay, storeLoggedByModelDay } from '../shared/logged-estimate';
+import { fetchMantleDaily, listRecentMantleModels, mantleModelsToQuery, storeMantleDaily, storedMantleModels } from '../shared/mantle-metrics';
 
 const ce = new CostExplorerClient({ region: 'us-east-1' }); // Cost Explorer is a us-east-1 endpoint
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -52,7 +57,7 @@ export async function fetchBillLines(start: string, end: string): Promise<BillLi
   return billLinesFrom(results);
 }
 
-export const handler = async (event?: { start?: string; end?: string }): Promise<{ lines: number; days: number; start: string; end: string }> => {
+export const handler = async (event?: { start?: string; end?: string }): Promise<{ lines: number; days: number; start: string; end: string; mantleRows: number }> => {
   const today = new Date();
   const end = event?.end ?? day(today); // exclusive
   const start = event?.start ?? day(new Date(today.getTime() - LOOKBACK_DAYS * 86_400_000));
@@ -74,10 +79,20 @@ export const handler = async (event?: { start?: string; end?: string }): Promise
   const lastDay = day(new Date(Date.parse(end) - 86_400_000));
   const logged = await computeLoggedByModelDay(start, lastDay);
   await storeLoggedByModelDay(logged, collectedAt);
+  let mantleRows = 0;
+  try {
+    const [listed, stored] = await Promise.all([listRecentMantleModels(), storedMantleModels()]);
+    const models = mantleModelsToQuery(listed, stored, lines.map((l) => l.model));
+    const mantle = await fetchMantleDaily(models, start, lastDay);
+    await storeMantleDaily(mantle.rows, mantle.fleet, collectedAt);
+    mantleRows = mantle.rows.length;
+  } catch (err) {
+    console.warn('bill-collector: Mantle counts not stored', (err as Error).message); // the dollar side above is already stored
+  }
   await ddb.send(new PutCommand({
     TableName: TABLE,
-    Item: { pk: 'SYSTEM#BILL', sk: 'collector', lastRunAt: collectedAt, lastStart: start, lastEnd: end, lines: lines.length, days, loggedRows: logged.length },
+    Item: { pk: 'SYSTEM#BILL', sk: 'collector', lastRunAt: collectedAt, lastStart: start, lastEnd: end, lines: lines.length, days, loggedRows: logged.length, mantleRows },
   }));
-  console.log(`bill-collector: ${lines.length} bill line(s) over ${days} day(s), ${logged.length} logged day-model row(s), ${start} → ${end}`);
-  return { lines: lines.length, days, start, end };
+  console.log(`bill-collector: ${lines.length} bill line(s) over ${days} day(s), ${logged.length} logged day-model row(s), ${mantleRows} Mantle day-model row(s), ${start} → ${end}`);
+  return { lines: lines.length, days, start, end, mantleRows };
 };

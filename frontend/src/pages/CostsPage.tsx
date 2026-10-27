@@ -29,7 +29,8 @@ type SortKey = 'estimatedUsd' | 'inputTokens' | 'outputTokens' | 'cacheReadToken
 export function CostsPage() {
   const range = useTimeRange([7, 30, 90, 'mtd']);
   const [ov, setOv] = useState<OverviewResponse | null>(null);
-  const [allTime, setAllTime] = useState<AllTime | null>(null);
+  // undefined = still loading, null = the endpoint failed (qa F-PR77-006: the loading state must not read as an error)
+  const [allTime, setAllTime] = useState<AllTime | null | undefined>(undefined);
   const [widest, setWidest] = useState<OverviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'estimatedUsd', dir: -1 });
@@ -120,7 +121,7 @@ export function CostsPage() {
   const allTimeCounts = allTime ? modelCounts([...allTime.byModel, ...(widest?.byModel ?? []), ...ov.byModel]) : null;
   const footer = (allTimeCounts
     ? `All time: ${fmtUsd(allTime!.totalEstimatedUsd)} across ${plural(allTimeCounts.models, 'model')} (${plural(allTimeCounts.ids, 'id')}, counted the same way as the tile above) · the same rate card prices the By project and Overview pages, so their totals reconcile with this one.`
-    : 'All-time total unavailable — the costs endpoint did not respond.')
+    : allTime === undefined ? 'All-time total loading…' : 'All-time total unavailable — the costs endpoint did not respond.')
     + (centGap > 0 ? ` The shown rows sum to ${fmtUsd(sum('estimatedUsd'))}, ${plural(centGap, 'cent')} from the tile — per-model rounding${!showZero && zeroRows.length ? ` and ${plural(zeroRows.length, 'folded model')} below $${ZERO_COST_THRESHOLD.toFixed(2)}` : ''}.` : '');
   // What the estimate prices, in one place. Cache writes (the bill's largest token line) were priced at $0 until
   // feature-36; the standard-route tier (×1.1) was missing until feature-38. Nothing on the bill's token lines is
@@ -245,7 +246,7 @@ export function CostsPage() {
                       <td className="num">{fmtUsd(r.billedUsd)}</td>
                       <td className="num">{fmtUsd(r.loggedEstimateUsd)}{r.billedZero ? <span className="badge info" style={{ marginLeft: 6 }} title="The logs priced this model at its published rate, but the bill charged $0.00 for it on these days">billed $0</span> : null}</td>
                       <td className={`num ${r.unloggedUsd > 0 ? 'delta-up' : 'muted'}`}><strong>{fmtUsd(r.unloggedUsd)}</strong></td>
-                      <td className="num muted">{r.mantle ? fmtInt(r.mantle.inferences) : <span aria-label="no Mantle traffic">—</span>}</td>
+                      <td className="num muted">{r.mantle ? fmtInt(r.mantle.inferences) : bill.mantleInconsistent && r.unloggedUsd > 0 ? <span className="badge warning" title="The per-model Mantle series do not add up to the fleet total for this window, so this model's count could not be resolved — its unlogged dollars are real, the count is missing">unresolved</span> : <span aria-label="no Mantle traffic">—</span>}</td>
                       <td className="num muted">{r.mantle ? fmtTokens(r.mantle.inputTokens + r.mantle.outputTokens) : <span aria-label="no Mantle traffic">—</span>}</td>
                     </tr>
                   ))}
@@ -263,7 +264,7 @@ export function CostsPage() {
               <p className="muted" style={{ fontSize: 12, marginTop: 12, marginBottom: 0 }}>
                 {(bill.billedZeroEstimateUsd ?? 0) > 0 ? `${fmtUsd(bill.billedZeroEstimateUsd!)} of the logged estimate is for models the bill charged $0.00 for (see "billed $0"). ` : ''}
                 Bill {bill.window?.billedFrom ?? '…'} → {bill.window?.billedTo ?? '…'} ({bill.window?.daysBilled ?? '?'} billed days of this window; Cost Explorer lags about a day).
-                Mantle token counts come from CloudWatch and are shown for scale only — they carry no cache split (they are mostly cache reads), so they are never multiplied by a rate.
+                Mantle token counts come from CloudWatch{bill.mantleStoredThrough ? ` (stored daily by the collector through ${bill.mantleStoredThrough}; later days read live)` : ''} and are shown for scale only — they carry no cache split (they are mostly cache reads), so they are never multiplied by a rate.{bill.mantleInconsistent ? ' The per-model Mantle series and the fleet series disagree by more than 1% in this window — rows marked "unresolved" have unlogged dollars whose Mantle count could not be attributed.' : ''}
                 Unlogged traffic has no per-project attribution. See docs/RECONCILIATION.md.
               </p>
             </>
