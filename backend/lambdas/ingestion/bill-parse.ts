@@ -9,7 +9,8 @@
  *   APS1-openai.gpt-6-luna-mantle-input-tokens-global-standard             (another region prefix)
  * Anything that does not fit is kept as kind 'other' — the collector never drops a billed line.
  */
-export type BillKind = 'input' | 'output' | 'cacheRead' | 'cacheWrite5m' | 'cacheWrite1h' | 'other';
+/** cacheWrite30m is the OpenAI-on-Bedrock single TTL (billed 1.25× input, like the 5-minute Claude TTL). */
+export type BillKind = 'input' | 'output' | 'cacheRead' | 'cacheWrite5m' | 'cacheWrite30m' | 'cacheWrite1h' | 'other';
 export type BillRoute = 'global' | 'standard' | 'unknown';
 
 export interface ParsedUsageType {
@@ -34,13 +35,14 @@ export function parseUsageType(usageType: string): ParsedUsageType {
   const rest = regionMatch ? regionMatch[2] : usageType;
 
   // Current scheme: <model>-mantle-<kind words>[-1h][-global]-standard
-  const cur = rest.match(/^(.*?)-mantle-(input-tokens|output-tokens|cache-read-tokens|cache-write-tokens(?:-1h)?)(?:-(global-standard|standard))?$/);
+  const cur = rest.match(/^(.*?)-mantle-(input-tokens|output-tokens|cache-read-tokens|cache-write-tokens(?:-1h|-30m)?)(?:-(global-standard|standard))?$/);
   if (cur) {
     const [, model, kindWords, routeWords] = cur;
     const kind: BillKind = kindWords === 'input-tokens' ? 'input'
       : kindWords === 'output-tokens' ? 'output'
         : kindWords === 'cache-read-tokens' ? 'cacheRead'
-          : kindWords === 'cache-write-tokens-1h' ? 'cacheWrite1h' : 'cacheWrite5m';
+          : kindWords === 'cache-write-tokens-1h' ? 'cacheWrite1h'
+            : kindWords === 'cache-write-tokens-30m' ? 'cacheWrite30m' : 'cacheWrite5m';
     const route: BillRoute = routeWords === 'global-standard' ? 'global' : routeWords === 'standard' ? 'standard' : 'unknown';
     return { region, model, kind, route };
   }

@@ -8,16 +8,14 @@
  * Every fetch degrades to "absent" rather than failing the page: a missing collector, grant or namespace
  * leaves `bill` null and the rest of the response intact.
  */
-import { CloudWatchClient, GetMetricDataCommand, ListMetricsCommand } from '@aws-sdk/client-cloudwatch';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { BillBlock, BillLineItem, MantleCounts, billModelKey, buildBill, mantleConsistent } from './bill-calc';
 import { computeLoggedByModelDay, readLoggedByModelDay } from '../shared/logged-estimate';
+import { readMantle } from '../shared/mantle-metrics';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-const cw = new CloudWatchClient({});
 const TABLE = process.env.AGGREGATES_TABLE!;
-export const MANTLE_NS = 'AWS/BedrockMantle';
 
 export async function readBillLines(fromDay: string, toDay: string): Promise<{ lines: BillLineItem[]; asOf: string | null }> {
   const lines: BillLineItem[] = [];
@@ -39,55 +37,15 @@ export async function readBillLines(fromDay: string, toDay: string): Promise<{ l
 /** The logged side, stored by the daily collector (LOGGED#DAILY) — see shared/logged-estimate.ts. */
 export { readLoggedByModelDay as loggedEstimateByModelDay } from '../shared/logged-estimate';
 
-/** Mantle counts per Model over [from, to] (inclusive days), and the fleet inferences for the consistency check. */
-export async function readMantle(fromDay: string, toDay: string): Promise<{ perModel: Map<string, MantleCounts>; fleetInferences: number; clientErrors: number }> {
-  const models = new Set<string>();
-  let next: string | undefined;
-  do {
-    const res = await cw.send(new ListMetricsCommand({ Namespace: MANTLE_NS, MetricName: 'Inferences', NextToken: next }));
-    for (const m of res.Metrics ?? []) {
-      const dims = m.Dimensions ?? [];
-      if (dims.length === 1 && dims[0].Name === 'Model' && dims[0].Value) models.add(dims[0].Value);
-    }
-    next = res.NextToken;
-  } while (next);
-  const start = new Date(`${fromDay}T00:00:00Z`), end = new Date(new Date(`${toDay}T00:00:00Z`).getTime() + 86_400_000);
-  const period = 86_400; // daily datapoints, aligned to the UTC midnights the days are defined by; summed below
-  const list = [...models];
-  const metrics = ['Inferences', 'InferenceClientErrors', 'TotalInputTokens', 'TotalOutputTokens'] as const;
-  type Q = { Id: string; ReturnData: boolean; MetricStat: { Metric: { Namespace: string; MetricName: string; Dimensions?: { Name: string; Value: string }[] }; Period: number; Stat: string } };
-  const queries: Q[] = list.flatMap((model, i) => metrics.map((metricName, j) => ({
-    Id: `m${i}_${j}`, ReturnData: true,
-    MetricStat: { Metric: { Namespace: MANTLE_NS, MetricName: metricName, Dimensions: [{ Name: 'Model', Value: model }] }, Period: period, Stat: 'Sum' },
-  })));
-  queries.push({ Id: 'fleet', ReturnData: true, MetricStat: { Metric: { Namespace: MANTLE_NS, MetricName: 'Inferences' }, Period: period, Stat: 'Sum' } });
-  const perModel = new Map<string, MantleCounts>(list.map((m) => [m, { inferences: 0, clientErrors: 0, inputTokens: 0, outputTokens: 0 }]));
-  let fleetInferences = 0;
-  for (let s = 0; s < queries.length; s += 500) {
-    let token: string | undefined;
-    do {
-      const res = await cw.send(new GetMetricDataCommand({ MetricDataQueries: queries.slice(s, s + 500), StartTime: start, EndTime: end, NextToken: token }));
-      for (const r of res.MetricDataResults ?? []) {
-        const sum = (r.Values ?? []).reduce((a, b) => a + b, 0);
-        if (r.Id === 'fleet') { fleetInferences += sum; continue; }
-        const m = r.Id?.match(/^m(\d+)_(\d+)$/); if (!m) continue;
-        const c = perModel.get(list[Number(m[1])]); if (!c) continue;
-        const field = (['inferences', 'clientErrors', 'inputTokens', 'outputTokens'] as const)[Number(m[2])];
-        c[field] += sum;
-      }
-      token = res.NextToken;
-    } while (token);
-  }
-  const clientErrors = [...perModel.values()].reduce((a, c) => a + c.clientErrors, 0);
-  return { perModel, fleetInferences, clientErrors };
-}
+/** Mantle counts: stored days from the collector (MANTLE#DAILY) + a live tail for un-stored days (feature-46). */
+export { readMantle } from '../shared/mantle-metrics';
 
 /**
  * The whole block for a day window, or null when the collector has never run (no SYSTEM#BILL) — the page
  * then shows nothing rather than an empty comparison. Mantle failures (no grant, no namespace) leave the
  * dollar comparison intact with `mantle: null` on every row.
  */
-export async function billBlockFor(fromDay: string, toDay: string, tenantId?: string): Promise<(BillBlock & { mantleInconsistent?: boolean }) | null> {
+export async function billBlockFor(fromDay: string, toDay: string, tenantId?: string): Promise<(BillBlock & { mantleInconsistent?: boolean; mantleStoredThrough?: string | null }) | null> {
   const { lines, asOf } = await readBillLines(fromDay, toDay);
   if (!asOf) return null;
   const billedDays = [...new Set(lines.map((l) => l.day))].sort();
@@ -102,6 +60,7 @@ export async function billBlockFor(fromDay: string, toDay: string, tenantId?: st
   const tenantLogged = tenantRows ? new Map<string, number>() : null;
   if (tenantRows && tenantLogged) for (const r of tenantRows) tenantLogged.set(r.day, (tenantLogged.get(r.day) ?? 0) + r.usd);
   const block = buildBill(lines, logged, mantle?.perModel ?? new Map(), { from: fromDay, to: toDay }, asOf, tenantLogged);
-  if (mantle && !mantleConsistent(mantle.perModel, mantle.fleetInferences)) return { ...block, mantleInconsistent: true };
-  return block;
+  const out: BillBlock & { mantleInconsistent?: boolean; mantleStoredThrough?: string | null } = { ...block, mantleStoredThrough: mantle?.storedThrough ?? null };
+  if (mantle && !mantleConsistent(mantle.perModel, mantle.fleetInferences)) out.mantleInconsistent = true;
+  return out;
 }

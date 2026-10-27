@@ -3,7 +3,7 @@
 - **Intent:** ./intent.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Status:** signed-off
+- **Status:** shipped
 
 ## 1. Table specs (`spec/lakehouse/`, single source of truth)
 - `README.md` conventions; one `<layer>.<table>.schema.json` per table with `x-lakehouse { layer, table, storage, partition,

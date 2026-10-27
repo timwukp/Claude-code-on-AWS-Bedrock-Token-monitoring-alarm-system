@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** acf8dc7335583bc6069f4a7892d9c18c695b6950
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #77 (feature-44). The peer's Mantle-metrics chain may land before this one;
 if it does, this plan is rebound to the new tip.

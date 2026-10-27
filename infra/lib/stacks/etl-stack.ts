@@ -95,6 +95,8 @@ export class EtlStack extends cdk.Stack {
     tables.aggregates.grantReadWriteData(billCollectorFn);
     tables.tenants.grantReadData(billCollectorFn); // profile cache: price profile-ARN rows as their model
     billCollectorFn.addToRolePolicy(new iam.PolicyStatement({ actions: ['ce:GetCostAndUsage'], resources: ['*'] }));
+    // Mantle counts per model per day are stored beside the bill (feature-46); CloudWatch metric reads take no resource scoping.
+    billCollectorFn.addToRolePolicy(new iam.PolicyStatement({ actions: ['cloudwatch:GetMetricData', 'cloudwatch:ListMetrics'], resources: ['*'] }));
     new events.Rule(this, 'BillCollectorSchedule', {
       schedule: events.Schedule.cron({ hour: '6', minute: '30' }), // 06:30 UTC daily — after Cost Explorer's overnight refresh
       targets: [new targets.LambdaFunction(billCollectorFn)],

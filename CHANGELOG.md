@@ -6,6 +6,21 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Fixed — the first Lakehouse deploy (lakehouse-p1-deploy-fixes)
+- CUR export bucket: SSE-S3, both Data Exports principals with their own `aws:SourceArn` shapes, and the export waits for
+  the bucket policy — `AWS::BCMDataExports::Export` no longer fails "S3 bucket permission validation". Runbook for the
+  Lake Formation admin bootstrap of the CDK execution role, the S3 Tables name cooldown and RETAIN orphans
+  (`docs/LAKEHOUSE.md`). (PR #81)
+
+### Fixed — Mantle counts that vanished two weeks after the traffic stopped (feature-46)
+- CloudWatch `ListMetrics` lists only metrics with datapoints in the past ~2 weeks, so feature-40's per-model Mantle
+  discovery forgot opus-5-5 once its Mantle traffic stopped (10-11): the Cost page read "$1,115.68 not logged · Mantle —"
+  (qa on #77). The daily collector now stores Mantle counts per model per day (`MANTLE#DAILY`, fleet in `MANTLE#FLEET`),
+  asking CloudWatch by name for every model listed now, stored before or named by the bill; pages read the table plus a
+  live tail for un-stored days. `mantleInconsistent` is shown on the row ("unresolved"), not only in the note.
+- `bill-parse` recognises the OpenAI 30-minute cache-write usage type (`cacheWrite30m`); the Cost page's all-time footer
+  says "loading…" while `/v1/costs` is pending instead of reporting a failure (qa F-PR77-006).
+
 ### Added — lakehouse bronze: every source record lands verbatim in S3 Tables, governed (lakehouse P1)
 - **`LakehouseStack`**: Amazon S3 Tables bucket `tums-lakehouse-<env>` with `bronze`/`silver`/`gold` namespaces; bronze
   tables `bedrock_invocations`, `cw_metrics`, `otel_spans` declared once in `spec/lakehouse/*.schema.json` and generated

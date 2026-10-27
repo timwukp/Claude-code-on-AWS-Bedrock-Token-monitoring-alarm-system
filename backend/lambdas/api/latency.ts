@@ -36,7 +36,7 @@ import * as projectRegistry from '../shared/project-registry';
 import { projdayRange } from './project-calc';
 import { buildProjectLatencyRows, latencyCoverage } from './latency-projects';
 import { mantleConsistent } from './bill-calc';
-import { readMantle } from './bill-read';
+import { readMantle } from '../shared/mantle-metrics';
 
 const cw = new CloudWatchClient({});
 const bedrock = new BedrockClient({});
