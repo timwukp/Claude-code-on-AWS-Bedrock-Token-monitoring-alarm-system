@@ -111,6 +111,30 @@ for the Overview tiles; the Full view and `/v1/queries` switch from the curated 
 
 ## Runbooks
 
+**One-time account bootstrap (before the first Lakehouse deploy).** CloudFormation grants Lake Formation
+permissions as the CDK execution role, and Lake Formation only lets a *data lake administrator* grant on resources
+it does not own. Add the role once, as an existing administrator, keeping every current admin:
+
+```bash
+aws lakeformation get-data-lake-settings --output json > /tmp/lf-before.json   # keep: this is the undo
+python3 - <<'PY'
+import json, subprocess
+acct = subprocess.run(['aws','sts','get-caller-identity','--query','Account','--output','text'], capture_output=True, text=True).stdout.strip()
+s = json.load(open('/tmp/lf-before.json'))['DataLakeSettings']
+role = f'arn:aws:iam::{acct}:role/cdk-hnb659fds-cfn-exec-role-{acct}-us-east-1'
+if not any(a['DataLakePrincipalIdentifier'] == role for a in s['DataLakeAdmins']):
+    s['DataLakeAdmins'].append({'DataLakePrincipalIdentifier': role})
+json.dump(s, open('/tmp/lf-after.json', 'w'))
+PY
+aws lakeformation put-data-lake-settings --data-lake-settings file:///tmp/lf-after.json
+```
+
+Without it the first deploy fails on `AWS::LakeFormation::PrincipalPermissions` with "Resource does not exist or
+requester is not authorized" (dev, 2026-10-27, third attempt). Two more things learned on that day: a deleted S3
+Tables bucket name stays "in a transitional state" for ~10–15 minutes, so a failed first create cannot be retried
+immediately; and a failed first create leaves the RETAIN resources (three buckets, the Bedrock log group) behind —
+delete them (they are empty) before retrying, or CloudFormation will report the names as already taken.
+
 **First deploy order** (cross-stack references): `Tums-<env>-Automation` → `Data` → `Lakehouse` → `Logging`
 (adds the CloudWatch destination; needs the log group and bodies bucket from Lakehouse) → `Etl` → `Api`.
 Run `cdk diff` first; the owner authorises every deploy.

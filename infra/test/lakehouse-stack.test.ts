@@ -173,4 +173,23 @@ describe('LakehouseStack (bronze)', () => {
     const n = Object.keys(template.findResources('AWS::Glue::Integration')).length;
     expect([0, 2]).toContain(n);
   });
+
+  it('lets both Data Exports principals write the CUR bucket and creates the export after the policy (deploy 2026-10-27)', () => {
+    template.hasResourceProperties('AWS::S3::BucketPolicy', {
+      PolicyDocument: Match.objectLike({
+        Statement: Match.arrayWith([Match.objectLike({
+          Sid: 'AllowDataExportsWrite',
+          Principal: { Service: Match.arrayWith(['billingreports.amazonaws.com', 'bcm-data-exports.amazonaws.com']) },
+          Condition: Match.objectLike({ StringLike: { 'aws:SourceArn': Match.arrayWith([Match.stringLikeRegexp('^arn:aws:cur:us-east-1:.*:definition/\\*$'), Match.stringLikeRegexp('^arn:aws:bcm-data-exports:us-east-1:.*:export/\\*$')]) } }),
+        })]),
+      }),
+    });
+    const exports = template.findResources('AWS::BCMDataExports::Export');
+    const dep = (Object.values(exports)[0] as any).DependsOn as string[];
+    expect(dep.some((d) => /CurBucketPolicy/.test(d))).toBe(true);
+    template.hasResourceProperties('AWS::S3::Bucket', Match.objectLike({
+      BucketName: Match.stringLikeRegexp('^tums-lakehouse-cur-'),
+      BucketEncryption: { ServerSideEncryptionConfiguration: [{ ServerSideEncryptionByDefault: { SSEAlgorithm: 'AES256' } }] },
+    }));
+  });
 });
