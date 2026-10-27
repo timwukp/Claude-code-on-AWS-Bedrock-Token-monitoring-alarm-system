@@ -5,10 +5,6 @@ import { Kpi, Panel } from '../components/Layout';
 import { UnpricedNote } from '../components/UnpricedNote';
 import { fmtTokens, fmtUsd } from '../lib/format';
 
-/** Lookback window of the Full (Athena) scan. The rollups are all-time, so usage older than this
- *  is in the rollups total but not in the Athena rows (F-PR77-001). */
-const FULL_WINDOW_DAYS = 90;
-
 /**
  * Usage attributed to projects/users. Attribution comes from Bedrock requestMetadata tags
  * (user_id, project_id) joined to a customer-supplied project mapping. See docs/ATTRIBUTION.md.
@@ -100,7 +96,7 @@ export function ProjectsPage() {
         // these totals exactly like the old sync path did; Fast and Full then agree on Est.
         // USD by construction (QA finding N-001).
         const [{ id }, fastTotals] = await Promise.all([
-          api.startQuery('byProject', FULL_WINDOW_DAYS),
+          api.startQuery('byProject', 90), // byProject is all-time server-side; the API requires a days arg
           api.projects('fast').then((r) => {
             setRollupsAsOf((r as { rollupsAsOf?: string | null }).rollupsAsOf ?? null);
             return {
@@ -120,6 +116,8 @@ export function ProjectsPage() {
         const started = Date.now();
         const deadline = started + 600_000;
         setElapsedSec(0);
+        const ticker = setInterval(() => { if (!cancelled) setElapsedSec(Math.round((Date.now() - started) / 1000)); }, 1000);
+        try {
         for (;;) {
           if (cancelled) return;
           const res = await api.pollQuery(id);
@@ -143,8 +141,10 @@ export function ProjectsPage() {
             throw new Error('Athena query failed — most often the project_mapping table has not been created yet (see docs/ATTRIBUTION.md)');
           }
           if (Date.now() > deadline) throw new Error('Athena query still running after 10 minutes — the workgroup may be saturated; use Retry later');
-          setElapsedSec(Math.round((Date.now() - started) / 1000));
           await new Promise((r) => setTimeout(r, 2500));
+        }
+        } finally {
+          clearInterval(ticker);
         }
       })().catch((e) => {
         if (!cancelled) { setError(String(e).replace(/^Error: /, '')); setLoading(false); }
@@ -182,13 +182,13 @@ export function ProjectsPage() {
   // a reader sees 21 projects above 5 rows and cannot tell whether that is a bug. It is not, and the
   // foot says why.
   const rowSource = source === 'full' ? 'Athena' : 'rollups';
-  // The gap needs its size beside it. The rollups are all-time but the Athena scan covers only the
-  // last FULL_WINDOW_DAYS days, and the curated Parquet is refreshed once a day while the rollups fold
-  // in new logs every 15 minutes. So the total gap is usage older than the window plus whatever arrived
-  // after the last ETL run. Tiers ③/④ only move usage into 'untagged'; they do not change the total.
+  // The gap needs its size beside it. Both sides are all-time; the curated Parquet is refreshed once a
+  // day while the rollups fold in new logs every 15 minutes, so the total gap is traffic since the last
+  // ETL run (measured 2026-10-27: 0.03 % of all-time tokens). Tiers ③/④ only move usage into
+  // 'untagged'; they do not change the total (qa F-PR77-001).
   const fullDelta = apiTotalUsd != null ? Math.round((rowsCost - apiTotalUsd) * 100) / 100 : null;
   const fullVsFast = source === 'full' && !loading && !error && fullDelta !== null && apiTotalUsd
-    ? ` Right now the Athena rows (last ${FULL_WINDOW_DAYS} days) total ${fmtUsd(rowsCost)}, ${fmtUsd(Math.abs(fullDelta))} (${(Math.abs(fullDelta) / apiTotalUsd * 100).toFixed(2)}%) ${fullDelta >= 0 ? 'above' : 'below'} the rollups' all-time ${fmtUsd(apiTotalUsd)}${rollupsAsOf ? ` as of ${rollupsAsOf.slice(11, 16)} UTC` : ''}${fullThrough ? ` (curated data through ${fullThrough})` : ''}.`
+    ? ` Right now the Athena rows total ${fmtUsd(rowsCost)}, ${fmtUsd(Math.abs(fullDelta))} (${(Math.abs(fullDelta) / apiTotalUsd * 100).toFixed(2)}%) ${fullDelta >= 0 ? 'above' : 'below'} the rollups' ${fmtUsd(apiTotalUsd)}${rollupsAsOf ? ` as of ${rollupsAsOf.slice(11, 16)} UTC` : ''}${fullThrough ? ` (curated data through ${fullThrough})` : ''}.`
     : '';
   const srcChip = (text: string) => <span className="badge neutral">{text}</span>;
 
@@ -213,7 +213,7 @@ export function ProjectsPage() {
              chip={srcChip(apiTotalUsd != null ? 'rollups' : rowSource)}
              foot={apiTotalUsd != null && Math.abs(apiTotalUsd - rowsCost) > roundingBound + 1e-9
                ? (source === 'full'
-                   ? `Athena rows ${fmtUsd(rowsCost)} vs rollups ${fmtUsd(apiTotalUsd)} — the rollups are all-time and fold in new logs every 15 min${rollupsAsOf ? ` (latest logged call ${rollupsAsOf.slice(11, 16)} UTC)` : ''}; Full scans only the last ${FULL_WINDOW_DAYS} days of the curated Parquet the ETL writes once a day${fullThrough ? ` (data through ${fullThrough})` : ''}, so the ${fmtUsd(Math.abs(rowsCost - apiTotalUsd))} gap is usage older than ${FULL_WINDOW_DAYS} days plus traffic since the last ETL run. The attribution tiers Full cannot resolve only move usage into 'untagged'; they do not change the total. Token figures count input + output only; prompt-cache reads and writes are priced but not counted, so a small token gap can carry a larger cost gap`
+                   ? `Athena rows ${fmtUsd(rowsCost)} vs rollups ${fmtUsd(apiTotalUsd)} — both all-time; the rollups fold in new logs every 15 min${rollupsAsOf ? ` (latest logged call ${rollupsAsOf.slice(11, 16)} UTC)` : ''}, Full reads the curated Parquet the ETL writes once a day${fullThrough ? ` (data through ${fullThrough})` : ''}, so the ${fmtUsd(Math.abs(rowsCost - apiTotalUsd))} gap is traffic since the last ETL run. The attribution tiers Full cannot resolve only move usage into 'untagged'; they do not change the total. Token figures count input + output only; prompt-cache reads and writes are priced but not counted, so a small token gap can carry a larger cost gap`
                    : `rows sum ${fmtUsd(rowsCost)} vs model rollups ${fmtUsd(apiTotalUsd)} — residual ${fmtUsd(Math.abs(apiTotalUsd - rowsCost))} predates per-project tracking`)
                : centDrift > 0
                  ? `per-model rates — same rate card as the Cost page · rows are shown to the cent, so their sum (${fmtUsd(rowsCost)}) can differ from this total by a few cents${rollupsAsOf ? ` · rollups as of ${rollupsAsOf.slice(11, 16)} UTC` : ''}`
@@ -221,7 +221,7 @@ export function ProjectsPage() {
       </div>
 
       <Panel title="Usage by project"
-             desc={"Attribution precedence per call: ① the project's application inference profile — the call is ROUTED through it, so the invocation log records the profile's ARN as modelId and the aggregator resolves its tums-project tag (config-routed, IAM-enforceable, zero per-call effort); ② requestMetadata.project_id set by the app; ③ identity hint for single-project principals (an IAM role hint covers every session that assumes the role); ④ untagged. Fast = managed DynamoDB rollups (all four tiers, incl. the one-time historical treatment). Full = async Athena over the curated Parquet the ETL derives from the raw logs once a day — call-time attribution, but up to a day behind the 15-minute rollups. Full resolves tiers ① and ②; it cannot resolve ③, and pre-profile history stays 'untagged' there, because an identity hint and the historical treatment exist only as rollup state and no raw-log field carries them. So expect a larger 'untagged' share in Full — that gap is those two tiers, not lost usage." + fullVsFast}>
+             desc={"Attribution precedence per call: ① the project's application inference profile — the call is ROUTED through it, so the invocation log records the profile's ARN as modelId and the aggregator resolves its tums-project tag (config-routed, IAM-enforceable, zero per-call effort); ② requestMetadata.project_id set by the app; ③ identity hint for single-project principals (an IAM role hint covers every session that assumes the role); ④ untagged. Fast = managed DynamoDB rollups (all four tiers, incl. the one-time historical treatment). Full = async Athena over the curated Parquet the ETL derives from the raw logs once a day — call-time attribution, but up to a day behind the 15-minute rollups. Full resolves tiers ① and ②; it cannot resolve ③, and pre-profile history stays 'untagged' there, because an identity hint and the historical treatment exist only as rollup state and no raw-log field carries them. So expect a larger 'untagged' share in Full — those two tiers move usage into 'untagged' without changing the total; the total differs from the rollups only by traffic since the last ETL run." + fullVsFast}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
           <div style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
             {(['fast', 'full'] as const).map((s) => (
