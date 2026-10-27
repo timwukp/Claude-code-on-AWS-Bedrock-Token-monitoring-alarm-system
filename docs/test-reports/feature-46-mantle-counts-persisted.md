@@ -1,6 +1,6 @@
 # Feature 46 — Mantle counts that do not vanish two weeks after the traffic stops
 
-- **Chain:** `intent/mantle-counts-persisted/` · **Branch:** `feat/mantle-counts-persisted` off `main` after PR #79 · **PR:** TBD
+- **Chain:** `intent/mantle-counts-persisted/` · **Branch:** `feat/mantle-counts-persisted` off `main` after PR #79 · **PR:** #80
 - **Origin:** qa on PR #77 (live dev, 2026-10-27): opus-5-5 "$1,115.68 not logged · Mantle —" on the Cost page; qa F-PR77-006
   (loading state rendered as an error).
 - **Date:** 2026-10-27
