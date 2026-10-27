@@ -64,15 +64,28 @@ describe('projectExprFrom / byProject attribution tiers', () => {
     expect(sql).toContain("COALESCE(m.project_name, json_extract_scalar(l.requestMetadata, '$.project_id'), 'untagged') AS project");
   });
 
-  it('every template reads the curated table and prunes the scan by dt (qa F-PR75-001)', () => {
-    for (const [name, tpl] of Object.entries(TEMPLATES)) {
+  it('every template reads the curated table, never the raw delivery prefix (qa F-PR75-001)', () => {
+    for (const tpl of Object.values(TEMPLATES)) {
       const sql = tpl('arn:aws:iam::111111111111:user/demo', 30, ctxOf(null));
       expect(sql).toContain('FROM bedrock_invocations_curated');
       expect(sql).not.toContain('bedrock_invocation_logs');
       expect(sql).not.toMatch(/\binput\.inputTokenCount|identity\.arn|requestMetadata\['/);
-      expect(sql).toContain("l.dt >= date_format(date_add('day', -30, current_date), '%Y-%m-%d')");
-      expect(name).toBeTruthy();
     }
+  });
+
+  it('windowed templates prune by dt; byProject stays all-time because the page compares it with all-time rollups', () => {
+    const dtFilter = "l.dt >= date_format(date_add('day', -30, current_date), '%Y-%m-%d')";
+    expect(TEMPLATES.topModels('t', 30, ctxOf(null))).toContain(dtFilter);
+    expect(TEMPLATES.hourlyUsage('t', 30, ctxOf(null))).toContain(dtFilter);
+    expect(TEMPLATES.byProject('t', 90, ctxOf(null))).not.toContain('l.dt >=');
+  });
+
+  it('byProject reports how fresh the curated data is as a trailing data_through column, same value on every row', () => {
+    const sql = TEMPLATES.byProject('t', 90, ctxOf(null));
+    expect(sql).toContain('MAX(MAX(l.dt)) OVER () AS data_through');
+    // last select item, so the five positional columns the page maps (project … est_usd) keep their positions
+    expect(sql.indexOf('AS est_usd')).toBeLessThan(sql.indexOf('AS data_through'));
+    expect(sql.indexOf('AS data_through')).toBeLessThan(sql.indexOf('FROM bedrock_invocations_curated'));
   });
 });
 

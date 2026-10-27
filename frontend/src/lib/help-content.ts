@@ -233,8 +233,8 @@ export const HELP = {
   'project.source': {
     title: 'Fast vs Full',
     what: 'Two ways of computing the same table.',
-    why: 'Fast is instant and complete; Full is slower but reads the immutable raw logs.',
-    how: 'Fast = managed DynamoDB rollups, all four attribution tiers. Full = async Athena over raw logs, live call-time truth; it resolves tiers ① and ② but cannot resolve ③, and pre-profile history stays untagged there.',
+    why: 'Fast is instant, complete and 15 minutes fresh; Full re-derives attribution from each call but reads a copy refreshed once a day.',
+    how: 'Fast = managed DynamoDB rollups, all four attribution tiers, updated every 15 minutes. Full = async Athena over the curated Parquet the ETL writes from the raw logs once a day (the table says "through <day>"); it resolves tiers ① and ② but cannot resolve ③, and pre-profile history stays untagged there. Full never reads the raw delivery prefix directly — the request/response bodies stored there broke it in 2026-10.',
     docs: ATTR_DOC,
   },
 

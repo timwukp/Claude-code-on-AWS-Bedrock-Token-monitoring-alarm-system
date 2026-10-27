@@ -39,10 +39,16 @@
 | `cdk diff --context env=dev` (Data, Etl, Api) | Data `+AWS::Glue::Table`; Api `INVOCATION_SOURCE` on 12 Lambdas; Etl `+Alarm`, task definition replaced (RuntimePlatform), new image; Automation `+Output` (topic export) |
 | SDLC gate | PASS |
 
-## Live (after the owner's deploy) — to fill
-- Start `EtlStateMachine` once → SUCCEEDED; `s3://<curated>/usage/dt=*/part-0000.parquet` present for every day since 2026-06-03; watermark written.
-- `/projects` Full view returns rows (no "Athena query failed"); `/v1/queries` byProject/topModels/hourlyUsage return.
-- Forced failure (`ETL_MODE=full`, bad `RAW_LOG_BUCKET`) → alarm e-mail within the hour.
+## Live — deployed to dev 2026-10-26 (owner-authorised, run by the agent) with #75 in the same deploy
+| Check | Result |
+|---|---|
+| `cdk deploy` Automation → Data → Etl → Api; frontend published | all ✅ (Etl image rebuilt `linux/amd64`, task definition replaced) |
+| First `EtlStateMachine` run (full backfill) | **SUCCEEDED in 18 min**: 127,246 objects read → 265,282 rows across **123 `dt=` partitions** (2026-06-03 → 2026-10-26), 0 deferred; watermark written |
+| Athena over `bedrock_invocations_curated` | full count 1.1 s / **1.0 MB scanned** (was 41.7 GB); 30-day count prunes to 0 bytes |
+| ProjectsFn Full path (owner tenant) | 5 rows, Athena SUCCEEDED, **1.85 s / 3.1 MB**; the page showed the Athena rows within seconds |
+| `/v1/queries byProject` | `FROM bedrock_invocations_curated`, 1.8 s / 425 KB |
+| `EtlFailedAlarm` | created, state OK (forced-failure test not yet run) |
+| Follow-ups found during verification | page copy still described the raw-log/live behaviour, and `byProject` had gained a 90-day filter → fixed in `full-view-freshness-copy`; ETL container logs appear only at exit (`PYTHONUNBUFFERED=1` in P1) |
 
 ## After this chain
 P1 `lakehouse-p1-bronze` (S3 Tables, Firehose from the CloudWatch Logs destination, Metric Streams, CUR 2.0, zero-ETL,

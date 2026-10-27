@@ -122,7 +122,10 @@ export const TEMPLATES: Record<string, (tenantId: string, days: number, ctx: Tem
   // requestMetadata) could only land in 'untagged', so this view reported ~99.97% untagged against
   // 20 attributed projects in Fast (qa F-1101). The two tiers still absent are the ones with no
   // raw-log signal at all: the admin identity hint and the one-time historical treatment.
-  byProject: (tenantId, days, ctx) => {
+  // All-time on purpose: the By project page compares these rows with its all-time rollup tiles. The
+  // trailing data_through column tells the page how fresh the curated data is (the ETL writes it once
+  // a day), so it can say "through <day>" instead of claiming to be live.
+  byProject: (tenantId, _days, ctx) => {
     const s = src();
     return `
     SELECT
@@ -134,12 +137,12 @@ export const TEMPLATES: Record<string, (tenantId: string, days: number, ctx: Tem
         + COALESCE(SUM(${s.outputTokens('l')}), 0) * (${rateCase('outPerToken', ctx.modelExpr)})
         + COALESCE(SUM(${s.cacheReadTokens('l')}), 0) * (${rateCase('cacheReadPerToken', ctx.modelExpr)})
         + COALESCE(SUM(${s.cacheWriteTokens('l')}), 0) * (${rateCase('cacheWrite5mPerToken', ctx.modelExpr)}))
-        * (${routeCaseSql(ctx.modelExpr)}) AS est_usd
+        * (${routeCaseSql(ctx.modelExpr)}) AS est_usd,
+      MAX(MAX(${s.day('l')})) OVER () AS data_through
     FROM ${s.table} l
     LEFT JOIN project_mapping m
       ON ${s.meta('l', 'project_id')} = m.project_id
     WHERE ${tenantFilter(tenantId)}
-      ${s.recentDays('l', days)}
     GROUP BY 1, 2, ${ctx.modelExpr}
     ORDER BY tokens DESC
     LIMIT 500`;

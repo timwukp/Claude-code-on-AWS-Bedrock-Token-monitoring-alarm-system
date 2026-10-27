@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** c087abbecc4261f6a6e55f2ed3325585352ae2f8
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #76 (lakehouse P0), rebound on 2026-10-24 when #76 merged ahead of this
 chain. Nothing else is in flight.

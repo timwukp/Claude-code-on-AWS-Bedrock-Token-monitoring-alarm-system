@@ -6,6 +6,14 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Fixed — the Full view says how fresh it is, and is all-time again (full-view-freshness-copy)
+- After lakehouse P0 the By project Full view reads curated Parquet refreshed once a day, yet its caption still said it
+  read raw logs live and ran ahead of the 15-minute rollups. Copy, cost-tile footer, help `project.source` and the
+  "served from" chip now say "curated Parquet through <day>" and explain the gap as the two unresolvable tiers plus
+  traffic since the last ETL run.
+- P0 had also given the `byProject` template a 90-day `dt` filter while the page compares it with all-time rollups; it is
+  all-time again and returns a trailing `data_through` column. (PR TBD)
+
 ### Added — cache churn per project, one bill panel, honest drift checks for the new rows (feature-42)
 - **Cache churn** — cache writes as a share of all cache traffic, per project, on By project and on Overview's "What
   changed" (`cacheWriteShare` on `/v1/projects?source=fast` rows and on `/v1/overview.movers`). Writes cost 1.25× input and
