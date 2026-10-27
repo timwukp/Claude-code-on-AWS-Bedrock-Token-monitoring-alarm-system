@@ -1,6 +1,6 @@
 # Feature 45 — Lakehouse P1: bronze layer (S3 Tables + Firehose + Metric Streams + CUR + OTel ingress)
 
-- **Chain:** `intent/lakehouse-p1-bronze/` · **Branch:** `feat/lakehouse-p1-bronze` off `main@acf8dc7` (#77) · **PR:** TBD
+- **Chain:** `intent/lakehouse-p1-bronze/` · **Branch:** `feat/lakehouse-p1-bronze` off `main@acf8dc7` (#77) · **PR:** #79
 - **Date:** 2026-10-27 · **Verdict:** PASS on gates; deploy + smoke test pending the owner's authorisation (Data, Lakehouse, Logging, Etl).
 
 ## What this report has to say plainly

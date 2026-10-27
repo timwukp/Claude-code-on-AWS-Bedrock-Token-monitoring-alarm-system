@@ -21,7 +21,7 @@ are grouped by development milestone rather than strict semver releases.
   refuses to publish a bundle whose Cognito pool is missing or differs from the Auth stack (2026-10-26 incident);
   `scripts/lakehouse-smoke.ts` pushes seven vendor body shapes + one metric datapoint end to end and expects zero errors.
 - `docs/LAKEHOUSE.md` (tables, queries, governance, runbooks, costs, limits); roadmap Tier 5 (lakehouse P0–P3) and
-  `ProjectDirectoryProvider` deferred to issue #78. (PR TBD)
+  `ProjectDirectoryProvider` deferred to issue #78. (PR #79)
 
 ### Fixed — the Full view says how fresh it is, and is all-time again (full-view-freshness-copy)
 - After lakehouse P0 the By project Full view reads curated Parquet refreshed once a day, yet its caption still said it
