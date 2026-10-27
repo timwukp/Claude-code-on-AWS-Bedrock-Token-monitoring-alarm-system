@@ -61,6 +61,12 @@ difference **not logged**. So the monthly comparison above is now two numbers: t
 `loggedEstimateUsd`, and `totalUnloggedUsd` is the Mantle share — explained by its CloudWatch inferences, never priced
 from its tokens (no cache split there). A rising unlogged share is not a pricing defect; a non-zero `overEstimated` flag is.
 
+- **Mantle counts are stored per model per day by the collector (`MANTLE#DAILY`, feature-46).** CloudWatch's
+  `ListMetrics` forgets a model two weeks after its last datapoint, so the collector asks `GetMetricData` by name for
+  every model it lists now, every model stored before and every model the bill names. If a row shows "unresolved", the
+  per-model series and the fleet series disagree for that window — re-run the collector for those days
+  (`{start, end}` event) rather than trusting the "—".
+
 ## Known residuals (expected, disclosed on the pages)
 
 - **Route tiers are priced (feature-38).** The card holds the global tier; `routeMultiplier()` applies the standard tier

@@ -87,7 +87,7 @@ export function buildBill(
   for (const l of inWindow) {
     const r = row(billModelKey(l.model));
     r.billedUsd += l.usd;
-    const k = l.kind === 'cacheWrite5m' || l.kind === 'cacheWrite1h' ? 'cacheWrite' : (l.kind as keyof BillModelRow['byKind']);
+    const k = l.kind.startsWith('cacheWrite') ? 'cacheWrite' : (l.kind as keyof BillModelRow['byKind']);
     r.byKind[k in r.byKind ? k : 'other'] += l.usd;
   }
   // The logged side only for the days the bill covers — the two sides must describe the same days.

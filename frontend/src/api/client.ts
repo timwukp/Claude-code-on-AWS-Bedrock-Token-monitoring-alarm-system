@@ -229,6 +229,8 @@ export interface BillBlock {
   billedZeroEstimateUsd?: number;
   scope?: 'account'; tenantLoggedEstimateUsd?: number | null;
   dollarsSource: 'cost-explorer'; tokensSource: 'cloudwatch'; note: string; mantleInconsistent?: boolean;
+  /** Last UTC day with Mantle counts stored by the collector; later days are read live (feature-46). Absent on older API builds. */
+  mantleStoredThrough?: string | null;
 }
 export interface GovernanceBudget {
   name?: string; limitUsd: number; actualUsd: number; forecastedUsd: number; timeUnit?: string;

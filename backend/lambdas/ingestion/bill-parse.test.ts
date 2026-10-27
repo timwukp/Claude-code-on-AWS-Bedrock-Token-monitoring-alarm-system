@@ -6,6 +6,9 @@ describe('parseUsageType', () => {
     ['USE1-anthropic.claude-fable-5-mantle-cache-write-tokens-standard', 'USE1', 'anthropic.claude-fable-5', 'cacheWrite5m', 'standard'],
     ['USE1-anthropic.claude-opus-5-5-mantle-cache-write-tokens-1h-standard', 'USE1', 'anthropic.claude-opus-5-5', 'cacheWrite1h', 'standard'],
     ['USE1-anthropic.claude-opus-5-5-mantle-cache-write-tokens-1h-global-standard', 'USE1', 'anthropic.claude-opus-5-5', 'cacheWrite1h', 'global'],
+    // OpenAI's single 30-minute TTL (seen on the bill 2026-10-16; read as kind other until feature-46, which also made it a bogus Mantle model name)
+    ['APS1-openai.gpt-6-luna-mantle-cache-write-tokens-30m-global-standard', 'APS1', 'openai.gpt-6-luna', 'cacheWrite30m', 'global'],
+    ['USE1-openai.gpt-6-luna-mantle-cache-write-tokens-30m-standard', 'USE1', 'openai.gpt-6-luna', 'cacheWrite30m', 'standard'],
     ['USE1-anthropic.claude-opus-4-8-mantle-input-tokens-global-standard', 'USE1', 'anthropic.claude-opus-4-8', 'input', 'global'],
     ['USE1-anthropic.claude-fable-5-1-mantle-cache-read-tokens-standard', 'USE1', 'anthropic.claude-fable-5-1', 'cacheRead', 'standard'],
     ['USE1-anthropic.claude-opus-5-mantle-output-tokens-standard', 'USE1', 'anthropic.claude-opus-5', 'output', 'standard'],
