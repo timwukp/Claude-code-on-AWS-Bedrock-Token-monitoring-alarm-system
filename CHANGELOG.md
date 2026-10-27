@@ -6,6 +6,23 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Added — lakehouse bronze: every source record lands verbatim in S3 Tables, governed (lakehouse P1)
+- **`LakehouseStack`**: Amazon S3 Tables bucket `tums-lakehouse-<env>` with `bronze`/`silver`/`gold` namespaces; bronze
+  tables `bedrock_invocations`, `cw_metrics`, `otel_spans` declared once in `spec/lakehouse/*.schema.json` and generated
+  into the CDK column lists and Lambda row types (a test fails when either is stale); Firehose streams with a transform
+  Lambda routing records to Iceberg; CloudWatch Metric Streams for `AWS/Bedrock` + `AWS/BedrockMantle`; X-Ray Transaction
+  Search spans (`aws/spans`) captured as OpenTelemetry bronze; CUR 2.0 Data Export + Glue table `cur_raw`; Lake
+  Formation grants (bronze = pipeline roles + owner only); DataZone/SMUS data-source registration; errors bucket + alarms.
+- **Bedrock logging gains a CloudWatch Logs destination** with request/response bodies > 100 KB written to a separate
+  bucket — the root cause of the 2026-10-23 Athena failure cannot recur on this path. The S3 destination stays for the
+  aggregator and the ETL.
+- `scripts/create-project-aip.sh` creates tagged application inference profiles per project and prints the repo's
+  `.claude/settings.json` snippet (owner decision 2026-10-27: one AIP per repo for attribution); `scripts/deploy-frontend.sh`
+  refuses to publish a bundle whose Cognito pool is missing or differs from the Auth stack (2026-10-26 incident);
+  `scripts/lakehouse-smoke.ts` pushes seven vendor body shapes + one metric datapoint end to end and expects zero errors.
+- `docs/LAKEHOUSE.md` (tables, queries, governance, runbooks, costs, limits); roadmap Tier 5 (lakehouse P0–P3) and
+  `ProjectDirectoryProvider` deferred to issue #78. (PR TBD)
+
 ### Fixed — the Full view says how fresh it is, and is all-time again (full-view-freshness-copy)
 - After lakehouse P0 the By project Full view reads curated Parquet refreshed once a day, yet its caption still said it
   read raw logs live and ran ahead of the 15-minute rollups. Copy, cost-tile footer, help `project.source` and the

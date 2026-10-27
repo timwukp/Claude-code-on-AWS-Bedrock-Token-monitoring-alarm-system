@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tums.local/lakehouse/bronze.bedrock_invocations.schema.json",
+  "title": "bronze.bedrock_invocations",
+  "description": "One row per Bedrock model-invocation log record, verbatim in `raw` (inline bodies <= 100 KB included), delivered by Firehose from the CloudWatch Logs destination of Bedrock invocation logging.",
+  "type": "object",
+  "properties": {
+    "event_ts": {
+      "description": "record `timestamp`",
+      "type": "string",
+      "format": "date-time"
+    },
+    "event_day": {
+      "description": "UTC day YYYY-MM-DD derived from event_ts (partition)",
+      "type": "string"
+    },
+    "request_id": {
+      "description": "record `requestId`",
+      "type": "string"
+    },
+    "account_id": {
+      "description": "record `accountId`",
+      "type": "string"
+    },
+    "region": {
+      "description": "record `region`",
+      "type": "string"
+    },
+    "operation": {
+      "description": "record `operation`",
+      "type": "string"
+    },
+    "model_id": {
+      "description": "record `modelId` exactly as logged (profile ARN or model id)",
+      "type": "string"
+    },
+    "identity_arn": {
+      "description": "record `identity.arn`",
+      "type": "string"
+    },
+    "schema_version": {
+      "description": "record `schemaVersion`",
+      "type": "string"
+    },
+    "input_body_s3_path": {
+      "description": "record `input.inputBodyS3Path` when the body was too large to inline",
+      "type": "string"
+    },
+    "source": {
+      "description": "`cwlogs`",
+      "type": "string"
+    },
+    "ingest_ts": {
+      "description": "when the transform Lambda emitted the row",
+      "type": "string",
+      "format": "date-time"
+    },
+    "raw": {
+      "description": "the full record as JSON text",
+      "type": "string"
+    }
+  },
+  "required": [
+    "event_ts",
+    "event_day",
+    "request_id",
+    "source",
+    "ingest_ts",
+    "raw"
+  ],
+  "additionalProperties": false,
+  "x-lakehouse": {
+    "layer": "bronze",
+    "table": "bedrock_invocations",
+    "storage": "s3tables",
+    "partition": [
+      "event_day"
+    ],
+    "retention": "forever",
+    "pii": true,
+    "firehoseRoute": {
+      "stream": "fh-bedrock",
+      "match": "schemaType == ModelInvocationLog"
+    }
+  }
+}

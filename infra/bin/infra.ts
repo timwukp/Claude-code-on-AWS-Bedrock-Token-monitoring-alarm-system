@@ -12,6 +12,7 @@ import { EtlStack } from '../lib/stacks/etl-stack';
 import { DoraStack } from '../lib/stacks/dora-stack';
 import { ProjectsStack } from '../lib/stacks/projects-stack';
 import { FrontendStack } from '../lib/stacks/frontend-stack';
+import { LakehouseStack } from '../lib/stacks/lakehouse-stack';
 
 const app = new cdk.App();
 
@@ -23,7 +24,17 @@ const prefix = `Tums-${cfg.env}`; // Token Usage Monitoring System
 // Independently deployable stacks → small blast radius (Operational Excellence pillar).
 const network = new NetworkStack(app, `${prefix}-Network`, { env, cfg });
 const data = new DataStack(app, `${prefix}-Data`, { env, cfg });
-const logging = new LoggingStack(app, `${prefix}-Logging`, { env, cfg, rawLogBucket: data.rawLogBucket });
+const automation = new AutomationStack(app, `${prefix}-Automation`, { env, cfg, tables: data.tables });
+
+// Lakehouse (bronze/silver/gold on S3 Tables) — created before Logging because Bedrock's CloudWatch
+// Logs destination and the large-body bucket live here.
+const lakehouse = new LakehouseStack(app, `${prefix}-Lakehouse`, {
+  env, cfg, dataKey: data.dataKey, tables: data.tables, alertTopic: automation.alertTopic, curatedBucket: data.curatedBucket,
+});
+const logging = new LoggingStack(app, `${prefix}-Logging`, {
+  env, cfg, rawLogBucket: data.rawLogBucket,
+  bedrockLogGroup: lakehouse.bedrockLogGroup, bedrockLogsRole: lakehouse.bedrockLogsRole, bodiesBucket: lakehouse.bodiesBucket,
+});
 const auth = new AuthStack(app, `${prefix}-Auth`, { env, cfg });
 
 // Project cost attribution: tagged application inference profiles + opt-in enforcement (#13).
@@ -37,8 +48,6 @@ const api = new ApiStack(app, `${prefix}-Api`, {
   rawLogBucket: data.rawLogBucket, curatedBucket: data.curatedBucket, dataKey: data.dataKey,
   dora: { collectorFn: dora.collectorFn, githubSecret: dora.githubSecret },
 });
-
-const automation = new AutomationStack(app, `${prefix}-Automation`, { env, cfg, tables: data.tables });
 
 new EtlStack(app, `${prefix}-Etl`, {
   env, cfg, vpc: network.vpc, rawLogBucket: data.rawLogBucket,

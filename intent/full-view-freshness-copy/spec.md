@@ -3,7 +3,7 @@
 - **Intent:** ./intent.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Status:** signed-off
+- **Status:** shipped
 
 1. `invocation-source.ts`: `day(alias)` — curated `l.dt`, raw `substr(l."timestamp", 1, 10)`.
 2. `queries.ts byProject`: no `recentDays`; adds `MAX(MAX(<day>)) OVER () AS data_through` as the **last** select item so

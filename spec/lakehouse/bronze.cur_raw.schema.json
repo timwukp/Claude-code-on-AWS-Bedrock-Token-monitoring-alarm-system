@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tums.local/lakehouse/bronze.cur_raw.schema.json",
+  "title": "bronze.cur_raw",
+  "description": "AWS Data Exports CUR 2.0 lines (daily, resource-level) for this account, as delivered in Parquet. External Glue table over the export bucket; columns are the subset the export query selects.",
+  "type": "object",
+  "properties": {
+    "bill_billing_period_start_date": {
+      "description": "billing period start",
+      "type": "string",
+      "format": "date-time"
+    },
+    "line_item_usage_start_date": {
+      "description": "usage hour/day start",
+      "type": "string",
+      "format": "date-time"
+    },
+    "line_item_usage_end_date": {
+      "description": "usage end",
+      "type": "string",
+      "format": "date-time"
+    },
+    "line_item_line_item_type": {
+      "description": "Usage | Tax | Credit | ...",
+      "type": "string"
+    },
+    "product_servicecode": {
+      "description": "e.g. AmazonBedrock",
+      "type": "string"
+    },
+    "product_region_code": {
+      "description": "region",
+      "type": "string"
+    },
+    "line_item_operation": {
+      "description": "operation",
+      "type": "string"
+    },
+    "line_item_usage_type": {
+      "description": "usage type (model / kind / route encoded)",
+      "type": "string"
+    },
+    "line_item_resource_id": {
+      "description": "resource id when present",
+      "type": "string"
+    },
+    "line_item_usage_amount": {
+      "description": "units",
+      "type": "number"
+    },
+    "line_item_unblended_cost": {
+      "description": "USD",
+      "type": "number"
+    },
+    "line_item_usage_account_id": {
+      "description": "account",
+      "type": "string"
+    },
+    "billing_period": {
+      "description": "partition YYYY-MM (from the export path)",
+      "type": "string"
+    }
+  },
+  "required": [
+    "line_item_usage_start_date",
+    "line_item_usage_type",
+    "line_item_unblended_cost",
+    "billing_period"
+  ],
+  "additionalProperties": false,
+  "x-lakehouse": {
+    "layer": "bronze",
+    "table": "cur_raw",
+    "storage": "glue-external",
+    "partition": [
+      "billing_period"
+    ],
+    "retention": "forever",
+    "pii": false
+  }
+}

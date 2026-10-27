@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tums.local/lakehouse/bronze.cw_metrics.schema.json",
+  "title": "bronze.cw_metrics",
+  "description": "One row per CloudWatch Metric Streams datapoint for AWS/Bedrock and AWS/BedrockMantle (JSON output format), verbatim in `raw`.",
+  "type": "object",
+  "properties": {
+    "metric_ts": {
+      "description": "datapoint `timestamp` (ms epoch converted)",
+      "type": "string",
+      "format": "date-time"
+    },
+    "metric_day": {
+      "description": "UTC day (partition)",
+      "type": "string"
+    },
+    "namespace": {
+      "description": "`namespace`",
+      "type": "string"
+    },
+    "metric_name": {
+      "description": "`metric_name`",
+      "type": "string"
+    },
+    "dimensions": {
+      "description": "`dimensions` as JSON text (e.g. {\"ModelId\":...} or {\"Model\":..., \"Project\":...})",
+      "type": "string"
+    },
+    "unit": {
+      "description": "`unit`",
+      "type": "string"
+    },
+    "sum": {
+      "description": "`value.sum`",
+      "type": "number"
+    },
+    "count": {
+      "description": "`value.count`",
+      "type": "number"
+    },
+    "min": {
+      "description": "`value.min`",
+      "type": "number"
+    },
+    "max": {
+      "description": "`value.max`",
+      "type": "number"
+    },
+    "source": {
+      "description": "`metric-stream`",
+      "type": "string"
+    },
+    "ingest_ts": {
+      "description": "emit time",
+      "type": "string",
+      "format": "date-time"
+    },
+    "raw": {
+      "description": "datapoint JSON text",
+      "type": "string"
+    }
+  },
+  "required": [
+    "metric_ts",
+    "metric_day",
+    "namespace",
+    "metric_name",
+    "source",
+    "ingest_ts",
+    "raw"
+  ],
+  "additionalProperties": false,
+  "x-lakehouse": {
+    "layer": "bronze",
+    "table": "cw_metrics",
+    "storage": "s3tables",
+    "partition": [
+      "metric_day"
+    ],
+    "retention": "forever",
+    "pii": false,
+    "firehoseRoute": {
+      "stream": "fh-metrics",
+      "match": "namespace in (AWS/Bedrock, AWS/BedrockMantle)"
+    }
+  }
+}

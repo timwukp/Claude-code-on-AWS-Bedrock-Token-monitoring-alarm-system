@@ -52,6 +52,7 @@ results. One report per feature (mapped to a GitHub issue / PR).
 | Cache churn per project; one bill panel; unpriced badges; drift script covers Astra/Nova/gpt-oss + allow-list; 404 page; copy fixes | — | [#75](https://github.com/timwukp/Claude-code-on-AWS-Bedrock-Token-monitoring-alarm-system/pull/75) | [feature-42](./feature-42-unpriced-visibility-and-churn.md) | PASS (gates) |
 | Lakehouse P0: Full view reads curated Parquet (CDK table, source adapter); ETL image platform + failure alarm + incremental watermark; infra jest harness | — | [#76](https://github.com/timwukp/Claude-code-on-AWS-Bedrock-Token-monitoring-alarm-system/pull/76) | [feature-43](./feature-43-lakehouse-p0-stabilise.md) | PASS (gates) |
 | Full view freshness copy: curated Parquet "through <day>", lags rollups; byProject all-time again + data_through column | — | [#77](https://github.com/timwukp/Claude-code-on-AWS-Bedrock-Token-monitoring-alarm-system/pull/77) | [feature-44](./feature-44-full-view-freshness-copy.md) | PASS (gates) |
+| Lakehouse P1 bronze: S3 Tables bronze tables from spec; Firehose from the CloudWatch Logs destination (+ aws/spans); Metric Streams; CUR 2.0; zero-ETL; Lake Formation; AIP script; deploy pre-flight | — | TBD | [feature-45](./feature-45-lakehouse-p1-bronze.md) | PASS (gates) |
 Each report records: scope, unit-test results, build/synth gates, real-AWS validation evidence,
 any defect found+fixed during validation, and a verdict. Reports are written before opening the
 PR; a feature is only PR-ready when all gates are green.

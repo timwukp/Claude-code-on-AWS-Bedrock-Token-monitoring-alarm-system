@@ -2,22 +2,20 @@
   "env": "ci",
   "account": "123456789012",
   "region": "us-east-1",
-
   "logBucketName": "token-monitoring-raw-logs-ci",
   "curatedBucketName": "token-monitoring-curated-ci",
   "rawLogRetentionDays": 365,
-
   "frontend": {
     "domainName": null,
     "certificateArn": null
   },
-
   "governance": {
     "monthlyBudgetUsd": 1000,
     "anomalyImpactUsd": 10,
-    "alertEmails": ["finops@example.com"]
+    "alertEmails": [
+      "finops@example.com"
+    ]
   },
-
   "enableAutoContainment": false,
   "dora": {
     "seedRepos": [
@@ -32,13 +30,27 @@
     "backfillDays": 180
   },
   "projects": {
-    "seedProjects": [{
-      "id": "token-monitoring",
-      "name": "Token Usage Monitoring",
-      "costCenter": "CC-ENG-DEMO",
-      "repos": ["timwukp/claude-code-on-aws-bedrock-token-monitoring-alarm-system"],
-      "models": ["us.anthropic.claude-fable-5-1", "us.anthropic.claude-sonnet-4-6", "us.anthropic.claude-haiku-4-5-20251001-v1:0"]
-    }],
+    "seedProjects": [
+      {
+        "id": "token-monitoring",
+        "name": "Token Usage Monitoring",
+        "costCenter": "CC-ENG-DEMO",
+        "repos": [
+          "timwukp/claude-code-on-aws-bedrock-token-monitoring-alarm-system"
+        ],
+        "models": [
+          "us.anthropic.claude-fable-5-1",
+          "us.anthropic.claude-sonnet-4-6",
+          "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+        ]
+      }
+    ],
     "enforcementPolicy": false
+  },
+  "lakehouse": {
+    "smusDomainId": "dzd-ci000000000000",
+    "smusProjectId": "ciproject000000",
+    "ownerPrincipalArn": "arn:aws:iam::123456789012:user/ci",
+    "enableTransactionSearch": false
   }
 }

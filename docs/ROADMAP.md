@@ -61,6 +61,16 @@ Ordered by impact on a cost-governance rollout.
 
 | 13 | **End-to-end latency observability** | 🟡 | Model-hop latency at two scopes. **Fleet:** `/latency` + `GET /v1/latency` read CloudWatch `AWS/Bedrock` `InvocationLatency` / `TimeToFirstToken` with native p50/p95/p99, fleet and per model (no tenant dimension exists, so no table access for that section). **Per project (feature-28):** the aggregator lifts `amazon-bedrock-invocationMetrics` out of each logged call's response body — and discards the body — into count + sum + fixed-edge buckets on every rollup, so the page shows per-project mean/p50/p95 for e2e and first-byte, labelled as bucket **estimates** with a stated coverage share; a guarded backfill supplies history. The page draws the full chain (IDE/CLI → gateway → Bedrock TTFB → Bedrock streaming → Guardrails) but **only measured hops carry a number**; the three dark hops name the customer-side telemetry needed. Still 🟡 for one reason: **Athena/Full-view parity** — the Glue table has no `outputBodyJson` column, the body is an array for streaming calls and an object otherwise (so it would have to be declared `string` and `json_extract`ed), and the table is created out-of-band, not by CDK. No productivity claim is made: the research found no surviving evidence linking per-request latency to developer output. See [`research-latency-measurement`](./research-latency-measurement.md), [`test-reports/feature-18`](./test-reports/feature-18-latency-observability.md) and [`test-reports/feature-28`](./test-reports/feature-28-latency-per-project.md). |
 
+### Tier 5 — lakehouse programme (medallion on SageMaker Unified Studio)
+
+| # | Item | Status | Notes |
+|---|---|---|---|
+| 14 | **P0 — stabilise** (Full view on curated Parquet, ETL platform + alarm + incremental) | ✅ | #76 / #77; `docs/incidents/2026-10-athena-body-collision.md` |
+| 15 | **P1 — bronze** (S3 Tables, Firehose from the CloudWatch Logs destination, Metric Streams, OTel spans via Transaction Search, CUR 2.0, Lake Formation, SMUS data source) | ✅ | `intent/lakehouse-p1-bronze`; `docs/LAKEHOUSE.md` |
+| 16 | **P2 — silver** (OTel GenAI-semconv canonical `silver.invocations`, per-vendor adapters, attribution recompute, tenant normalisation, `dim_model`, OTel de-dup, Data Quality) | ⏳ | next chain |
+| 17 | **P3 — gold** (cost by project×model, bill-vs-logged incl. Mantle, latency by route, cache churn, DORA×cost, unattributed callers; Full view + `/v1/queries` on silver/gold; QuickSight) | ⏳ | after P2 |
+| 18 | **ProjectDirectoryProvider** (optional Jira etc. as the source of project keys/owners; issue-key parser on DORA PRs) | 🔲 | [issue #78](https://github.com/timwukp/Claude-code-on-AWS-Bedrock-Token-monitoring-alarm-system/issues/78) — deferred until the lakehouse ships |
+
 ## Planned validation (by design — not defects)
 
 Two items are **implemented, unit-tested, and deploy-validated**, but their final *live exercise*

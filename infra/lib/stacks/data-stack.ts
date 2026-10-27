@@ -74,7 +74,9 @@ export class DataStack extends cdk.Stack {
     // Glue database for the Bedrock invocation-log tables.
     const glueDb = new glue.CfnDatabase(this, 'GlueDb', {
       catalogId: cfg.account,
-      databaseInput: { name: `token_monitoring_${cfg.env}` },
+      // locationUri: Glue zero-ETL integrations (LakehouseStack) target this database and write
+      // their Iceberg tables under the database location.
+      databaseInput: { name: `token_monitoring_${cfg.env}`, locationUri: `s3://${this.curatedBucket.bucketName}/zero-etl/` },
     });
 
     // The table the API queries: flat Parquet the ETL writes under usage/dt=YYYY-MM-DD/ (columns =
