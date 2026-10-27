@@ -111,4 +111,22 @@ export interface EnvConfig {
      */
     readonly runawayRequestUsd?: number;
   };
+
+  /**
+   * Lakehouse (bronze/silver/gold on S3 Tables). `smusDomainId` / `smusProjectId` identify the
+   * SageMaker Unified Studio project the silver/gold assets are registered into; `ownerPrincipalArn`
+   * is the only human principal Lake Formation lets read bronze (it holds prompt bodies).
+   * `enableTransactionSearch` creates the X-Ray Transaction Search config (default false — the dev
+   * account already has it enabled outside CDK; turning it on twice is harmless but noisy).
+   */
+  readonly lakehouse?: {
+    readonly smusDomainId: string;
+    readonly smusProjectId: string;
+    readonly ownerPrincipalArn: string;
+    readonly enableTransactionSearch?: boolean;
+  };
+  readonly logging?: {
+    /** Create the CloudTrail trail + bucket (default true). Set false in accounts that already run an organisation trail. */
+    readonly createTrail?: boolean;
+  };
 }

@@ -1,0 +1,19 @@
+{
+  "name": "tums-scripts",
+  "private": true,
+  "description": "Operator scripts that need AWS SDK clients the Lambdas do not (run: cd scripts && npm install && npx ts-node lakehouse-smoke.ts)",
+  "scripts": {
+    "smoke": "ts-node lakehouse-smoke.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-athena": "^3.600.0",
+    "@aws-sdk/client-firehose": "^3.600.0",
+    "@aws-sdk/client-s3": "^3.600.0",
+    "@aws-sdk/client-sts": "^3.600.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.0"
+  }
+}

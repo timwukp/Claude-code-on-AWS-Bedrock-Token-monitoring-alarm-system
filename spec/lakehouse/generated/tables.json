@@ -1,0 +1,387 @@
+{
+  "generatedBy": "backend/scripts/gen-lakehouse-ddl.ts",
+  "tables": [
+    {
+      "layer": "bronze",
+      "table": "bedrock_invocations",
+      "storage": "s3tables",
+      "partition": [
+        "event_day"
+      ],
+      "retention": "forever",
+      "pii": true,
+      "firehoseRoute": {
+        "stream": "fh-bedrock",
+        "match": "schemaType == ModelInvocationLog"
+      },
+      "description": "One row per Bedrock model-invocation log record, verbatim in `raw` (inline bodies <= 100 KB included), delivered by Firehose from the CloudWatch Logs destination of Bedrock invocation logging.",
+      "columns": [
+        {
+          "name": "event_ts",
+          "icebergType": "timestamp",
+          "required": true,
+          "description": "record `timestamp`"
+        },
+        {
+          "name": "event_day",
+          "icebergType": "string",
+          "required": true,
+          "description": "UTC day YYYY-MM-DD derived from event_ts (partition)"
+        },
+        {
+          "name": "request_id",
+          "icebergType": "string",
+          "required": true,
+          "description": "record `requestId`"
+        },
+        {
+          "name": "account_id",
+          "icebergType": "string",
+          "required": false,
+          "description": "record `accountId`"
+        },
+        {
+          "name": "region",
+          "icebergType": "string",
+          "required": false,
+          "description": "record `region`"
+        },
+        {
+          "name": "operation",
+          "icebergType": "string",
+          "required": false,
+          "description": "record `operation`"
+        },
+        {
+          "name": "model_id",
+          "icebergType": "string",
+          "required": false,
+          "description": "record `modelId` exactly as logged (profile ARN or model id)"
+        },
+        {
+          "name": "identity_arn",
+          "icebergType": "string",
+          "required": false,
+          "description": "record `identity.arn`"
+        },
+        {
+          "name": "schema_version",
+          "icebergType": "string",
+          "required": false,
+          "description": "record `schemaVersion`"
+        },
+        {
+          "name": "input_body_s3_path",
+          "icebergType": "string",
+          "required": false,
+          "description": "record `input.inputBodyS3Path` when the body was too large to inline"
+        },
+        {
+          "name": "source",
+          "icebergType": "string",
+          "required": true,
+          "description": "`cwlogs`"
+        },
+        {
+          "name": "ingest_ts",
+          "icebergType": "timestamp",
+          "required": true,
+          "description": "when the transform Lambda emitted the row"
+        },
+        {
+          "name": "raw",
+          "icebergType": "string",
+          "required": true,
+          "description": "the full record as JSON text"
+        }
+      ]
+    },
+    {
+      "layer": "bronze",
+      "table": "cur_raw",
+      "storage": "glue-external",
+      "partition": [
+        "billing_period"
+      ],
+      "retention": "forever",
+      "pii": false,
+      "description": "AWS Data Exports CUR 2.0 lines (daily, resource-level) for this account, as delivered in Parquet. External Glue table over the export bucket; columns are the subset the export query selects.",
+      "columns": [
+        {
+          "name": "bill_billing_period_start_date",
+          "icebergType": "timestamp",
+          "required": false,
+          "description": "billing period start"
+        },
+        {
+          "name": "line_item_usage_start_date",
+          "icebergType": "timestamp",
+          "required": true,
+          "description": "usage hour/day start"
+        },
+        {
+          "name": "line_item_usage_end_date",
+          "icebergType": "timestamp",
+          "required": false,
+          "description": "usage end"
+        },
+        {
+          "name": "line_item_line_item_type",
+          "icebergType": "string",
+          "required": false,
+          "description": "Usage | Tax | Credit | ..."
+        },
+        {
+          "name": "product_servicecode",
+          "icebergType": "string",
+          "required": false,
+          "description": "e.g. AmazonBedrock"
+        },
+        {
+          "name": "product_region_code",
+          "icebergType": "string",
+          "required": false,
+          "description": "region"
+        },
+        {
+          "name": "line_item_operation",
+          "icebergType": "string",
+          "required": false,
+          "description": "operation"
+        },
+        {
+          "name": "line_item_usage_type",
+          "icebergType": "string",
+          "required": true,
+          "description": "usage type (model / kind / route encoded)"
+        },
+        {
+          "name": "line_item_resource_id",
+          "icebergType": "string",
+          "required": false,
+          "description": "resource id when present"
+        },
+        {
+          "name": "line_item_usage_amount",
+          "icebergType": "double",
+          "required": false,
+          "description": "units"
+        },
+        {
+          "name": "line_item_unblended_cost",
+          "icebergType": "double",
+          "required": true,
+          "description": "USD"
+        },
+        {
+          "name": "line_item_usage_account_id",
+          "icebergType": "string",
+          "required": false,
+          "description": "account"
+        },
+        {
+          "name": "billing_period",
+          "icebergType": "string",
+          "required": true,
+          "description": "partition YYYY-MM (from the export path)"
+        }
+      ]
+    },
+    {
+      "layer": "bronze",
+      "table": "cw_metrics",
+      "storage": "s3tables",
+      "partition": [
+        "metric_day"
+      ],
+      "retention": "forever",
+      "pii": false,
+      "firehoseRoute": {
+        "stream": "fh-metrics",
+        "match": "namespace in (AWS/Bedrock, AWS/BedrockMantle)"
+      },
+      "description": "One row per CloudWatch Metric Streams datapoint for AWS/Bedrock and AWS/BedrockMantle (JSON output format), verbatim in `raw`.",
+      "columns": [
+        {
+          "name": "metric_ts",
+          "icebergType": "timestamp",
+          "required": true,
+          "description": "datapoint `timestamp` (ms epoch converted)"
+        },
+        {
+          "name": "metric_day",
+          "icebergType": "string",
+          "required": true,
+          "description": "UTC day (partition)"
+        },
+        {
+          "name": "namespace",
+          "icebergType": "string",
+          "required": true,
+          "description": "`namespace`"
+        },
+        {
+          "name": "metric_name",
+          "icebergType": "string",
+          "required": true,
+          "description": "`metric_name`"
+        },
+        {
+          "name": "dimensions",
+          "icebergType": "string",
+          "required": false,
+          "description": "`dimensions` as JSON text (e.g. {\"ModelId\":...} or {\"Model\":..., \"Project\":...})"
+        },
+        {
+          "name": "unit",
+          "icebergType": "string",
+          "required": false,
+          "description": "`unit`"
+        },
+        {
+          "name": "sum",
+          "icebergType": "double",
+          "required": false,
+          "description": "`value.sum`"
+        },
+        {
+          "name": "count",
+          "icebergType": "double",
+          "required": false,
+          "description": "`value.count`"
+        },
+        {
+          "name": "min",
+          "icebergType": "double",
+          "required": false,
+          "description": "`value.min`"
+        },
+        {
+          "name": "max",
+          "icebergType": "double",
+          "required": false,
+          "description": "`value.max`"
+        },
+        {
+          "name": "source",
+          "icebergType": "string",
+          "required": true,
+          "description": "`metric-stream`"
+        },
+        {
+          "name": "ingest_ts",
+          "icebergType": "timestamp",
+          "required": true,
+          "description": "emit time"
+        },
+        {
+          "name": "raw",
+          "icebergType": "string",
+          "required": true,
+          "description": "datapoint JSON text"
+        }
+      ]
+    },
+    {
+      "layer": "bronze",
+      "table": "otel_spans",
+      "storage": "s3tables",
+      "partition": [
+        "span_day"
+      ],
+      "retention": "forever",
+      "pii": true,
+      "firehoseRoute": {
+        "stream": "fh-bedrock",
+        "match": "log group aws/spans"
+      },
+      "description": "One row per OpenTelemetry span exported through X-Ray Transaction Search into the CloudWatch Logs group `aws/spans`, verbatim in `raw`. GenAI semconv attributes are parsed in silver, not here.",
+      "columns": [
+        {
+          "name": "span_ts",
+          "icebergType": "timestamp",
+          "required": true,
+          "description": "span start time"
+        },
+        {
+          "name": "span_day",
+          "icebergType": "string",
+          "required": true,
+          "description": "UTC day (partition)"
+        },
+        {
+          "name": "trace_id",
+          "icebergType": "string",
+          "required": true,
+          "description": "trace id"
+        },
+        {
+          "name": "span_id",
+          "icebergType": "string",
+          "required": true,
+          "description": "span id"
+        },
+        {
+          "name": "parent_span_id",
+          "icebergType": "string",
+          "required": false,
+          "description": "parent span id"
+        },
+        {
+          "name": "name",
+          "icebergType": "string",
+          "required": false,
+          "description": "span name"
+        },
+        {
+          "name": "service_name",
+          "icebergType": "string",
+          "required": false,
+          "description": "resource attribute service.name"
+        },
+        {
+          "name": "kind",
+          "icebergType": "string",
+          "required": false,
+          "description": "span kind"
+        },
+        {
+          "name": "duration_ms",
+          "icebergType": "double",
+          "required": false,
+          "description": "end - start in ms"
+        },
+        {
+          "name": "status_code",
+          "icebergType": "string",
+          "required": false,
+          "description": "status code"
+        },
+        {
+          "name": "attributes",
+          "icebergType": "string",
+          "required": false,
+          "description": "span attributes as JSON text (gen_ai.*, aws.*, ...)"
+        },
+        {
+          "name": "source",
+          "icebergType": "string",
+          "required": true,
+          "description": "`xray-transaction-search`"
+        },
+        {
+          "name": "ingest_ts",
+          "icebergType": "timestamp",
+          "required": true,
+          "description": "emit time"
+        },
+        {
+          "name": "raw",
+          "icebergType": "string",
+          "required": true,
+          "description": "span JSON text"
+        }
+      ]
+    }
+  ]
+}

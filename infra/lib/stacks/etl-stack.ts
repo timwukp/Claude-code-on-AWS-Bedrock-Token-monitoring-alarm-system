@@ -117,6 +117,7 @@ export class EtlStack extends cdk.Stack {
       environment: {
         RAW_LOG_BUCKET: rawLogBucket.bucketName,
         CURATED_BUCKET: curatedBucket.bucketName,
+        PYTHONUNBUFFERED: '1', // otherwise the container's log appears only at exit
       },
     });
 

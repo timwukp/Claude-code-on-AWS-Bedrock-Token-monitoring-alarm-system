@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tums.local/lakehouse/bronze.otel_spans.schema.json",
+  "title": "bronze.otel_spans",
+  "description": "One row per OpenTelemetry span exported through X-Ray Transaction Search into the CloudWatch Logs group `aws/spans`, verbatim in `raw`. GenAI semconv attributes are parsed in silver, not here.",
+  "type": "object",
+  "properties": {
+    "span_ts": {
+      "description": "span start time",
+      "type": "string",
+      "format": "date-time"
+    },
+    "span_day": {
+      "description": "UTC day (partition)",
+      "type": "string"
+    },
+    "trace_id": {
+      "description": "trace id",
+      "type": "string"
+    },
+    "span_id": {
+      "description": "span id",
+      "type": "string"
+    },
+    "parent_span_id": {
+      "description": "parent span id",
+      "type": "string"
+    },
+    "name": {
+      "description": "span name",
+      "type": "string"
+    },
+    "service_name": {
+      "description": "resource attribute service.name",
+      "type": "string"
+    },
+    "kind": {
+      "description": "span kind",
+      "type": "string"
+    },
+    "duration_ms": {
+      "description": "end - start in ms",
+      "type": "number"
+    },
+    "status_code": {
+      "description": "status code",
+      "type": "string"
+    },
+    "attributes": {
+      "description": "span attributes as JSON text (gen_ai.*, aws.*, ...)",
+      "type": "string"
+    },
+    "source": {
+      "description": "`xray-transaction-search`",
+      "type": "string"
+    },
+    "ingest_ts": {
+      "description": "emit time",
+      "type": "string",
+      "format": "date-time"
+    },
+    "raw": {
+      "description": "span JSON text",
+      "type": "string"
+    }
+  },
+  "required": [
+    "span_ts",
+    "span_day",
+    "trace_id",
+    "span_id",
+    "source",
+    "ingest_ts",
+    "raw"
+  ],
+  "additionalProperties": false,
+  "x-lakehouse": {
+    "layer": "bronze",
+    "table": "otel_spans",
+    "storage": "s3tables",
+    "partition": [
+      "span_day"
+    ],
+    "retention": "forever",
+    "pii": true,
+    "firehoseRoute": {
+      "stream": "fh-bedrock",
+      "match": "log group aws/spans"
+    }
+  }
+}

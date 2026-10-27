@@ -107,6 +107,11 @@ STORED AS INPUTFORMAT  'org.apache.hadoop.mapred.TextInputFormat'
 LOCATION 's3://<bucket>/model-logs/AWSLogs/<account-id>/BedrockModelInvocationLogs/<region>/';
 ```
 
+> **Since lakehouse P1 the logging configuration also delivers to CloudWatch Logs** (`/tums/<env>/bedrock-invocations`),
+> with request/response bodies over 100 KB written to the separate bodies bucket instead of the `data/` folder of the S3
+> destination. A subscription filter streams the records through Firehose into the S3 Tables bronze layer
+> (`docs/LAKEHOUSE.md`). The S3 destination stays for the DynamoDB aggregator and the ETL.
+
 > **The dashboard does not query this table.** Its LOCATION is Bedrock's delivery prefix, which also receives every
 > request/response body over 100 KB under `…/HH/data/`; a body whose top-level keys overlap the record schema (an OpenAI
 > Responses request's `input` array, 2026-10-23) fails every query over it, and the bodies are 96 % of the bytes scanned.

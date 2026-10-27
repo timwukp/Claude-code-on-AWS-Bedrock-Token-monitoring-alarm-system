@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** c0361f2727d825be723c95758136e9513e8665a5
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PRs #75 and #76. Nothing else is in flight; lakehouse P1 starts after this.
 

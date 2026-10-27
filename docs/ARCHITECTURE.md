@@ -161,6 +161,18 @@ IAM/Athena workgroup boundaries. See `docs/MULTI_TENANCY.md` (skeleton) for the 
   layer (produced by the Fargate ETL) reduces scan cost.
 - **Retention** is governed by S3 lifecycle + optional Object Lock per the customer's audit policy.
 
+### 3.5a Lakehouse (bronze)
+
+The medallion lakehouse (see `docs/LAKEHOUSE.md`) is the long-term replacement for querying the raw
+delivery prefix. P1 builds the **bronze** layer: Bedrock invocation logging gains a CloudWatch Logs
+destination (bodies > 100 KB go to a separate bucket, never under a table), a subscription filter
+streams records through Firehose and a transform Lambda into **Amazon S3 Tables** (Iceberg) as
+`bronze.bedrock_invocations`; CloudWatch Metric Streams land in `bronze.cw_metrics`; X-Ray Transaction
+Search spans (OpenTelemetry) land in `bronze.otel_spans`; AWS Data Exports (CUR 2.0) land as the Glue
+table `cur_raw`. Every table is declared once in `spec/lakehouse/*.schema.json`. Lake Formation limits
+bronze to the pipeline roles and the owner. Silver (P2) and gold (P3) follow; until then the dashboard
+keeps reading the DynamoDB rollups and the curated Parquet.
+
 ### 3.6 Latency read (CloudWatch metrics, no data plane of its own)
 
 `GET /v1/latency` is the only read path in the system that touches **no** table. It queries
@@ -213,6 +225,7 @@ so blast radius is small and environments are reproducible:
 | `EtlStack` | Step Functions, ECS Fargate task definition, scheduled aggregator Lambda |
 | `DoraStack` | GitHub-token secret (Secrets Manager), scheduled DORA collector Lambda; no VPC/Docker so it deploys independently of `EtlStack` |
 | `ProjectsStack` | Tagged application inference profiles per project×model (cost attribution); opt-in "profiles-only" managed policy + pilot test role |
+| `LakehouseStack` | S3 Tables bucket + `bronze`/`silver`/`gold` namespaces, Firehose streams (Lambda transform → Iceberg), CloudWatch log groups + subscription filters, Metric Stream, CUR 2.0 Data Export + `cur_raw` Glue table, Lake Formation grants, DataZone (SMUS) data source, error bucket + alarms |
 | `FrontendStack` | S3 site bucket, CloudFront + OAC, WAF, (optional) custom domain via ACM |
 
 Config is environment-driven (`infra/lib/config`) so the same code deploys `dev` / `staging` /
