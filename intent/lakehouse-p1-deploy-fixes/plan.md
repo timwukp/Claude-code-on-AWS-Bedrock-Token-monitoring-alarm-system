@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** 88f077dc056dd08c9045ed72050e93e29f2cb2c5
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #80 (mantle-counts-persisted). Nothing else is in flight.
 

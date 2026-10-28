@@ -6,6 +6,10 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Changed — zero-ETL mirrors behind a flag (lakehouse-p1-zero-etl-flag)
+- `lakehouse.enableZeroEtl` (default off): the Glue zero-ETL integrations for the DORA and registry tables are created only
+  when set. Glue rejected the DynamoDB-source resource property on the fourth dev deploy; the bronze core ships first. (PR TBD)
+
 ### Fixed — the first Lakehouse deploy (lakehouse-p1-deploy-fixes)
 - CUR export bucket: SSE-S3, both Data Exports principals with their own `aws:SourceArn` shapes, and the export waits for
   the bucket policy — `AWS::BCMDataExports::Export` no longer fails "S3 bucket permission validation". Runbook for the

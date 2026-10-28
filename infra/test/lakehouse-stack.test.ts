@@ -168,12 +168,6 @@ describe('LakehouseStack (bronze)', () => {
     }
   });
 
-  it('attempts the zero-ETL integrations for the DORA and registry tables', () => {
-    // If CfnIntegration cannot be expressed, the stack leaves a TODO and this count is 0 — see lakehouse-stack.ts.
-    const n = Object.keys(template.findResources('AWS::Glue::Integration')).length;
-    expect([0, 2]).toContain(n);
-  });
-
   it('lets both Data Exports principals write the CUR bucket and creates the export after the policy (deploy 2026-10-27)', () => {
     template.hasResourceProperties('AWS::S3::BucketPolicy', {
       PolicyDocument: Match.objectLike({
@@ -191,5 +185,12 @@ describe('LakehouseStack (bronze)', () => {
       BucketName: Match.stringLikeRegexp('^tums-lakehouse-cur-'),
       BucketEncryption: { ServerSideEncryptionConfiguration: [{ ServerSideEncryptionByDefault: { SSEAlgorithm: 'AES256' } }] },
     }));
+  });
+
+  it('creates the Glue zero-ETL mirrors only when lakehouse.enableZeroEtl is true (default off after the 2026-10-28 deploy)', () => {
+    template.resourceCountIs('AWS::Glue::Integration', 0);
+    template.resourceCountIs('AWS::Glue::IntegrationResourceProperty', 0);
+    const { lakehouse: withZeroEtl } = synthApp({ ...cfg, lakehouse: { ...cfg.lakehouse!, enableZeroEtl: true } });
+    Template.fromStack(withZeroEtl).resourceCountIs('AWS::Glue::Integration', 2);
   });
 });

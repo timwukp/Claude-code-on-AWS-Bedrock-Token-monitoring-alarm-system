@@ -24,7 +24,7 @@ CloudWatch Metric Streams (AWS/Bedrock, AWS/BedrockMantle, JSON) ─► Firehose
                                                                           └─► S3 Tables bronze.cw_metrics
 AWS Data Exports (CUR 2.0, daily, resource-level, Parquet) ─► s3://tums-lakehouse-cur-<env>-<acct>/cur2/
                                                                           └─► Glue external table token_monitoring_<env>.cur_raw
-Glue zero-ETL DynamoDB → S3 Tables (tums-dora, tums-tenants)   TODO(P1-zero-etl): planned — flip when the infra lands it
+Glue zero-ETL DynamoDB → S3 Tables (tums-dora, tums-tenants)   FLAGGED(`lakehouse.enableZeroEtl`, default off): Glue rejected the DynamoDB-source `IntegrationResourceProperty` on 2026-10-28; mirrors return when the resource shape is proven (P2 may use a Lambda export instead) — flip when the infra lands it
 
 Failed Firehose records → s3://tums-lakehouse-errors-<env>-<acct>/errors/ (+ CloudWatch alarm)
 ```

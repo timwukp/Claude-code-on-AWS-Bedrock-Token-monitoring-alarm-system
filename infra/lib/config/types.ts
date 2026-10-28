@@ -124,6 +124,8 @@ export interface EnvConfig {
     readonly smusProjectId: string;
     readonly ownerPrincipalArn: string;
     readonly enableTransactionSearch?: boolean;
+    /** Glue zero-ETL mirrors of the DORA and registry tables (default off; see LakehouseStack). */
+    readonly enableZeroEtl?: boolean;
   };
   readonly logging?: {
     /** Create the CloudTrail trail + bucket (default true). Set false in accounts that already run an organisation trail. */
