@@ -71,7 +71,16 @@ export class LakehouseStack extends cdk.Stack {
       });
     this.bodiesBucket = secureBucket('BodiesBucket', `tums-lakehouse-bodies-${cfg.env}-${cfg.account}`);
     const errorsBucket = secureBucket('ErrorsBucket', `tums-lakehouse-errors-${cfg.env}-${cfg.account}`, 90);
-    const curBucket = secureBucket('CurBucket', `tums-lakehouse-cur-${cfg.env}-${cfg.account}`);
+    // SSE-S3, not KMS: Data Exports validates that its service principals can write to the bucket at
+    // export-creation time and does not use a customer key; billing lines carry no prompt text.
+    const curBucket = new s3.Bucket(this, 'CurBucket', {
+      bucketName: `tums-lakehouse-cur-${cfg.env}-${cfg.account}`,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      versioned: true,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
 
     // Bedrock writes the > 100 KB request/response bodies here (same policy shape as the raw-log bucket).
     this.bodiesBucket.addToResourcePolicy(new iam.PolicyStatement({
@@ -85,14 +94,19 @@ export class LakehouseStack extends cdk.Stack {
       },
     }));
     // AWS Data Exports delivers CUR 2.0 here.
-    for (const svc of ['billingreports.amazonaws.com', 'bcm-data-exports.amazonaws.com']) {
-      curBucket.addToResourcePolicy(new iam.PolicyStatement({
-        principals: [new iam.ServicePrincipal(svc)],
-        actions: ['s3:PutObject', 's3:GetBucketPolicy'],
-        resources: [curBucket.bucketArn, curBucket.arnForObjects('*')],
-        conditions: { StringEquals: { 'aws:SourceAccount': cfg.account }, StringLike: { 'aws:SourceArn': `arn:aws:bcm-data-exports:us-east-1:${cfg.account}:export/*` } },
-      }));
-    }
+    // Both service principals must be allowed, and each validates with its own SourceArn shape
+    // (cur:…:definition/* for billingreports, bcm-data-exports:…:export/*). Deploy 2026-10-27 failed
+    // with "S3 bucket permission validation failed" when only the latter was listed.
+    curBucket.addToResourcePolicy(new iam.PolicyStatement({
+      sid: 'AllowDataExportsWrite',
+      principals: [new iam.ServicePrincipal('billingreports.amazonaws.com'), new iam.ServicePrincipal('bcm-data-exports.amazonaws.com')],
+      actions: ['s3:PutObject', 's3:GetBucketPolicy'],
+      resources: [curBucket.bucketArn, curBucket.arnForObjects('*')],
+      conditions: {
+        StringEquals: { 'aws:SourceAccount': cfg.account },
+        StringLike: { 'aws:SourceArn': [`arn:aws:cur:us-east-1:${cfg.account}:definition/*`, `arn:aws:bcm-data-exports:us-east-1:${cfg.account}:export/*`] },
+      },
+    }));
 
     // --- S3 Tables: table bucket, namespaces, bronze tables from the spec ----------------------
     const tableBucket = new s3tables.CfnTableBucket(this, 'TableBucket', {
@@ -331,7 +345,7 @@ export class LakehouseStack extends cdk.Stack {
     const curSpec = specs.find((s) => s.lakehouse.table === 'cur_raw')!;
     const curCols = Object.entries(curSpec.properties).filter(([c]) => c !== 'billing_period');
     const exportName = `tums-cur2-${cfg.env}`;
-    new bcm.CfnExport(this, 'CurExport', {
+    const curExport = new bcm.CfnExport(this, 'CurExport', {
       export: {
         name: exportName,
         description: 'TUMS lakehouse: CUR 2.0, daily, resource-level — the billing truth the gold layer reconciles against.',
@@ -355,6 +369,8 @@ export class LakehouseStack extends cdk.Stack {
         refreshCadence: { frequency: 'SYNCHRONOUS' },
       },
     });
+    // The export API checks the bucket policy synchronously — the policy must exist first.
+    curExport.node.addDependency(curBucket.policy!);
     const curLocation = `s3://${curBucket.bucketName}/cur2/${exportName}/data/`;
     new glue.CfnTable(this, 'CurRawTable', {
       catalogId: cfg.account,

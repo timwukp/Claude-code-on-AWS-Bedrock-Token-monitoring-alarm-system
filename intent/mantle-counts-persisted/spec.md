@@ -3,7 +3,7 @@
 - **Intent:** ./intent.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Status:** signed-off
+- **Status:** shipped
 
 ## Behaviour
 1. `backend/lambdas/shared/mantle-metrics.ts` (new) — `listRecentMantleModels()`; pure `mantleModelsToQuery(listed, stored,

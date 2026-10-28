@@ -6,6 +6,12 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Fixed — the first Lakehouse deploy (lakehouse-p1-deploy-fixes)
+- CUR export bucket: SSE-S3, both Data Exports principals with their own `aws:SourceArn` shapes, and the export waits for
+  the bucket policy — `AWS::BCMDataExports::Export` no longer fails "S3 bucket permission validation". Runbook for the
+  Lake Formation admin bootstrap of the CDK execution role, the S3 Tables name cooldown and RETAIN orphans
+  (`docs/LAKEHOUSE.md`). (PR #81)
+
 ### Fixed — Mantle counts that vanished two weeks after the traffic stopped (feature-46)
 - CloudWatch `ListMetrics` lists only metrics with datapoints in the past ~2 weeks, so feature-40's per-model Mantle
   discovery forgot opus-5-5 once its Mantle traffic stopped (10-11): the Cost page read "$1,115.68 not logged · Mantle —"

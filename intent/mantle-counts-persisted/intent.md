@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Date:** 2026-10-27
 - **Accepted-by:** Tim WU
-- **Status:** accepted
+- **Status:** shipped
 
 ## Problem
 qa on PR #77 (live dev, 2026-10-27): the Cost page's bill panel showed opus-5-5 with **$1,115.68 "not logged"** — 99.9% of

@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** 065c44e80795ea7c46bb60a03d23034f29caa0bb
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #79 (lakehouse-p1-bronze, feature-45) — the chain this one follows (owner,
 2026-10-27: "2. A, can do"); the only chain in flight.
