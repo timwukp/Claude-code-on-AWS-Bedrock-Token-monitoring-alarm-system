@@ -149,7 +149,50 @@ def extract_diff(text: str) -> str | None:
     return None
 
 
-def apply_patch(diff: str, repo_root: str) -> bool:
+# Paths the bot must never write, whatever a plan says: the pipeline's own trust anchors.
+PROTECTED_PREFIXES = (".github/", ".sdlc/", "ci-agent/", "infra/", "intent/", "spec/", "scripts/", ".claude/")
+
+
+def diff_paths(diff: str) -> set[str]:
+    """Every file a unified diff would touch (both `--- a/` and `+++ b/` sides, `/dev/null` ignored)."""
+    out: set[str] = set()
+    for line in diff.splitlines():
+        m = re.match(r"^(?:---|\+\+\+) (?:[ab]/)?(\S+)", line)
+        if m and m.group(1) != "/dev/null":
+            out.add(m.group(1))
+    return out
+
+
+def diff_is_confined(diff: str, rel: str) -> tuple[bool, str]:
+    """A diff may touch exactly the file the agent was asked about, and that file may not be a
+    pipeline trust anchor. `git apply` applies EVERY file in a diff, so without this an agent (or
+    whatever steered it from page text) could rewrite .github/scripts/redact.js while the allow-list
+    only ever looked at `rel` (feature-47, audit #4)."""
+    rel = rel.replace("\\", "/")
+    if rel.startswith(PROTECTED_PREFIXES) or "/../" in f"/{rel}/":
+        return False, f"{rel} is a protected path"
+    paths = diff_paths(diff)
+    if not paths:
+        return False, "diff names no file"
+    extra = sorted(p for p in paths if p != rel)
+    if extra:
+        return False, f"diff also touches {', '.join(extra)}"
+    return True, ""
+
+
+def _dirty_paths(repo_root: str) -> list[str]:
+    proc = subprocess.run(["git", "status", "--porcelain", "--untracked-files=all"], cwd=repo_root,
+                          capture_output=True, text=True)
+    return [ln[3:].strip() for ln in proc.stdout.splitlines() if ln.strip()]
+
+
+def apply_patch(diff: str, repo_root: str, rel: str | None = None) -> bool:
+    if rel is not None:
+        ok, why = diff_is_confined(diff, rel)
+        if not ok:
+            print(f"   refused diff: {why}", file=sys.stderr)
+            return False
+    before = set(_dirty_paths(repo_root))
     proc = subprocess.run(["git", "apply", "--recount", "-p1", "-"],
                           input=diff, text=True, cwd=repo_root,
                           capture_output=True)
@@ -160,6 +203,15 @@ def apply_patch(diff: str, repo_root: str) -> bool:
     if proc.returncode != 0:
         print(f"   git apply failed: {proc.stderr.strip()}", file=sys.stderr)
         return False
+    if rel is not None:
+        # Belt and braces: whatever git actually changed must be exactly `rel`.
+        changed = set(_dirty_paths(repo_root)) - before
+        if changed != {rel}:
+            print(f"   reverting: apply changed {sorted(changed)} instead of only {rel}", file=sys.stderr)
+            for p in changed:
+                subprocess.run(["git", "checkout", "--", p], cwd=repo_root, capture_output=True)
+                subprocess.run(["git", "clean", "-f", "--", p], cwd=repo_root, capture_output=True)
+            return False
     return True
 
 
@@ -243,7 +295,7 @@ line and output NO diff instead of guessing."""
             print(f"⚠️  invoke failed for {finding.get('id')}: {e}", file=sys.stderr)
             continue
         diff = extract_diff(text)
-        if diff and apply_patch(diff, args.repo_root):
+        if diff and apply_patch(diff, args.repo_root, rel):
             applied += 1
             patched.append(rel)
             summaries.append(f"- **{finding.get('id')}** ({finding.get('severity')}) → patched `{rel}`\n\n"

@@ -6,6 +6,26 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Security — hardening 1: the pipeline cannot be wedged or poisoned; CI runs no PR code with credentials (feature-47)
+- **Aggregator is idempotent per S3 object** (`SYSTEM#PROCESSED` markers, watermark per object, 1-minute re-list overlap);
+  the tenant index is one `SYSTEM#TENANT` item per tenant (the single-item list had reached ~341 KB of DynamoDB's 400 KB
+  ceiling); the per-project `userSet` stops at 500 ids (`userSetOverflow`, shown as `N+`); token counts are sanitised at
+  parse time (`safeCount`) and the Python ETL catches `OverflowError`. `scripts/seed-tenant-index.ts --apply` migrates.
+- **`GET /v1/queries/{id}` is bound to the tenant that started the execution** (`QUERY#<tenant>/<id>`, 24 h TTL) — 404
+  otherwise; template names resolve by own property only; `days` must be finite.
+- **CI trust boundary:** `ui-qa-agent.yml` builds the PR with no permissions, then deploys and runs the agents from the
+  base branch; the QA verdict is derived from findings (an agent-declared `PASS` with findings is FAIL; `BLOCKING` reddens);
+  the bug-fix diff is confined to one non-protected file; `deploy.yml` validates its input, requires the `production`
+  environment and `main`; all actions SHA-pinned; dependabot; ETL base image digest-pinned.
+- **Browser and auth:** CloudFront response-headers policy (HSTS, nosniff, DENY, referrer, Permissions-Policy, CSP report-only
+  until `frontend.cspEnforce`); Cognito client 1 h id/access and 1 d refresh tokens, no user-existence errors, no OAuth;
+  pool threat protection (Plus) + deletion protection + TOTP offered; SPA tokens in `sessionStorage`; `api.allowedOrigins`
+  required outside dev/ci; hidden source maps not uploaded.
+- Platform: Node.js 22 runtimes; aws-cdk-lib 2.275; DynamoDB TTL attribute + deletion protection; `infra/test/security.test.ts`
+  asserts the invariants. Docs: `docs/MULTI_TENANCY.md` (single-organisation deployment, cooperative attribution),
+  `SECURITY.md` (trust boundaries, owner-maintained repository/account settings).
+
+
 ### Changed — zero-ETL mirrors behind a flag (lakehouse-p1-zero-etl-flag)
 - `lakehouse.enableZeroEtl` (default off): the Glue zero-ETL integrations for the DORA and registry tables are created only
   when set. Glue rejected the DynamoDB-source resource property on the fourth dev deploy; the bronze core ships first. (PR TBD)

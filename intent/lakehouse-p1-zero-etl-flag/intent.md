@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Date:** 2026-10-28
 - **Accepted-by:** Tim WU
-- **Status:** accepted
+- **Status:** shipped
 
 ## Problem
 The fourth Lakehouse deploy reached 34/61 resources and failed on the Glue zero-ETL `IntegrationResourceProperty` for the

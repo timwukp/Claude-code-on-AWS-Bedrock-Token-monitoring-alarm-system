@@ -1,4 +1,4 @@
-import { parseLogFile, aggregate, tenantOf, hourBucketOf, aggregateByProject, projectOf } from './parse';
+import { safeCount, sanitizeCounts, parseLogFile, aggregate, tenantOf, hourBucketOf, aggregateByProject, projectOf } from './parse';
 
 /**
  * Fixtures mirror the REAL delivered log schema verified in docs/VERIFICATION.md
@@ -108,5 +108,28 @@ describe('aggregateByProject', () => {
   it('rolls untagged records under "untagged"', () => {
     const m = aggregateByProject([{ requestId: 'r9', timestamp: '2026-06-05T06:00:00Z', modelId: 'm1' }] as any);
     expect([...m.values()][0].projectId).toBe('untagged');
+  });
+});
+
+
+describe('safeCount / sanitizeCounts — hostile or corrupt counts read as 0 (feature-47)', () => {
+  it('accepts non-negative safe integers only', () => {
+    expect(safeCount(0)).toBe(0); expect(safeCount(123)).toBe(123);
+    expect(safeCount(-1)).toBe(0); expect(safeCount(1.5)).toBe(0);
+    expect(safeCount(Infinity)).toBe(0); expect(safeCount(NaN)).toBe(0);
+    expect(safeCount(2 ** 53)).toBe(0); expect(safeCount('5')).toBe(0); expect(safeCount(undefined)).toBe(0);
+  });
+  it('parseLogFile normalises the four billed counters so a 1e309 token count cannot reach the marshaller', () => {
+    const line = JSON.stringify({ requestId: 'r1', timestamp: '2026-10-28T00:00:00Z', modelId: 'm',
+      input: { inputTokenCount: 1e309, cacheReadInputTokenCount: -7, cacheWriteInputTokenCount: 10 }, output: { outputTokenCount: '9' } });
+    const [r] = parseLogFile(line);
+    expect(r.input!.inputTokenCount).toBe(0); expect(r.input!.cacheReadInputTokenCount).toBe(0);
+    expect(r.input!.cacheWriteInputTokenCount).toBe(10); expect(r.output!.outputTokenCount).toBe(0);
+    const agg = [...aggregate([r]).values()][0];
+    expect(Number.isFinite(agg.inputTokens)).toBe(true); expect(agg.cacheWriteTokens).toBe(10);
+  });
+  it('sanitizeCounts tolerates records without input or output blocks', () => {
+    const r = { requestId: 'r', timestamp: 't', modelId: 'm' } as any; // eslint-disable-line @typescript-eslint/no-explicit-any -- minimal record on purpose
+    expect(() => sanitizeCounts(r)).not.toThrow();
   });
 });

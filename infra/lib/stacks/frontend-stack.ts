@@ -59,12 +59,41 @@ export class FrontendStack extends cdk.Stack {
         }
       : {};
 
+    // Security headers (feature-47, audit #7). The SPA has no inline scripts and loads nothing from third
+    // parties, so a strict CSP fits: scripts/styles/images from this origin, XHR only to the API and Cognito.
+    // React's style={{}} needs 'unsafe-inline' for styles only. Report-only until cfg.frontend.cspEnforce.
+    const apiOrigin = `https://${props.api.restApiId}.execute-api.${this.region}.amazonaws.com`;
+    const csp = [
+      "default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline'", "img-src 'self' data:",
+      "font-src 'self'", `connect-src 'self' ${apiOrigin} https://cognito-idp.${this.region}.amazonaws.com`,
+      "frame-ancestors 'none'", "base-uri 'self'", "form-action 'self'", "object-src 'none'",
+    ].join('; ');
+    const enforce = cfg.frontend.cspEnforce === true;
+    const headersPolicy = new cloudfront.ResponseHeadersPolicy(this, 'SecurityHeaders', {
+      comment: `TUMS security headers (${cfg.env})`,
+      securityHeadersBehavior: {
+        ...(enforce ? { contentSecurityPolicy: { contentSecurityPolicy: csp, override: true } } : {}),
+        strictTransportSecurity: { accessControlMaxAge: cdk.Duration.days(365), includeSubdomains: true, preload: false, override: true },
+        contentTypeOptions: { override: true },
+        frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true },
+        referrerPolicy: { referrerPolicy: cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN, override: true },
+        xssProtection: { protection: true, modeBlock: true, override: true },
+      },
+      customHeadersBehavior: {
+        customHeaders: [
+          { header: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()', override: true },
+          ...(enforce ? [] : [{ header: 'Content-Security-Policy-Report-Only', value: csp, override: true }]),
+        ],
+      },
+    });
+
     const distribution = new cloudfront.Distribution(this, 'Distribution', {
       defaultRootObject: 'index.html',
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(siteBucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        responseHeadersPolicy: headersPolicy,
       },
       webAclId: webAcl.attrArn,
       errorResponses: [

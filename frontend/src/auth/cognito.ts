@@ -1,5 +1,14 @@
 import { Amplify } from 'aws-amplify';
 import { fetchAuthSession, signIn, signOut, getCurrentUser } from '@aws-amplify/auth';
+import { cognitoUserPoolsTokenProvider } from '@aws-amplify/auth/cognito';
+
+/** sessionStorage-backed key-value store for Amplify: tokens live for the tab, not for 30 days on disk. */
+const sessionStore = {
+  async setItem(key: string, value: string) { sessionStorage.setItem(key, value); },
+  async getItem(key: string) { return sessionStorage.getItem(key); },
+  async removeItem(key: string) { sessionStorage.removeItem(key); },
+  async clear() { sessionStorage.clear(); },
+};
 
 /** Configure Amplify Auth from build-time env (populated from CDK outputs). */
 export function configureAuth(): void {
@@ -11,6 +20,10 @@ export function configureAuth(): void {
       },
     },
   });
+  // Amplify's default stores id/access/REFRESH tokens in localStorage, where any script on the origin
+  // (or a browser extension) can read them and they survive for the refresh token's lifetime. Session
+  // storage scopes them to the tab and clears on close (feature-47, audit #7).
+  cognitoUserPoolsTokenProvider.setKeyValueStorage(sessionStore);
 }
 
 /** Returns the current JWT for Authorization headers, or null if not signed in. */

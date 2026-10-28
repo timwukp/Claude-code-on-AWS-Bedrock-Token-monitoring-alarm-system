@@ -18,6 +18,7 @@ function mergeProjectRows(rows: any[]): any[] {
     e.tokens += r.tokens ?? 0;
     e.estimatedUsd = Math.round((e.estimatedUsd + (r.estimatedUsd ?? 0)) * 1e6) / 1e6;
     e.users = Math.max(e.users, r.users ?? 0);
+    e.usersCapped = e.usersCapped || r.usersCapped === true;
     m.set(key, e);
   }
   return [...m.values()].sort((a, b) => b.tokens - a.tokens);
@@ -268,7 +269,7 @@ export function ProjectsPage() {
                 <tr key={i}>
                   <td><strong>{r.projectName ?? r.projectId}</strong></td>
                   <td className="muted">{r.costCenter ?? '—'}</td>
-                  <td className="num">{r.users ?? '—'}</td>
+                  <td className="num">{r.users == null ? '—' : r.usersCapped ? <span title="Distinct user ids are recorded up to 500 per project and model; more were seen">{r.users}+</span> : r.users}</td>
                   <td className="num">{fmtTokens(Number(r.tokens ?? 0))}</td>
                   <td className="num"><strong>{fmtUsd(Number(r.estimatedUsd ?? 0))}</strong></td>
                   <td className={`num ${r.cacheWriteShare != null && r.cacheWriteShare >= 0.5 ? 'delta-up' : 'muted'}`}>{r.cacheWriteShare == null ? <span aria-label={source === 'full' ? 'not available in the Athena view' : 'no cache traffic'}>—</span> : `${Math.round(Number(r.cacheWriteShare) * 100)}%`}</td>

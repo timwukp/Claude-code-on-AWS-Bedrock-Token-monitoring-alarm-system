@@ -58,7 +58,7 @@ export class AutomationStack extends cdk.Stack {
       : undefined;
 
     const responseFn = new NodejsFunction(this, 'AnomalyResponseFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       entry: lambdaEntry('anomaly-response', 'index.ts'),
       projectRoot: BACKEND_ROOT,
       depsLockFilePath: BACKEND_LOCK,

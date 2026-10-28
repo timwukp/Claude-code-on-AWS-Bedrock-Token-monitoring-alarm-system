@@ -25,6 +25,12 @@ export interface EnvConfig {
     readonly domainName?: string;
     /** ACM certificate ARN (us-east-1) for the custom domain, if any. */
     readonly certificateArn?: string;
+    /**
+     * Enforce the Content-Security-Policy (true) or send it as Content-Security-Policy-Report-Only (false,
+     * default) so a missing origin shows up in the browser console instead of a blank page. Flip to true
+     * after one clean round on the environment (feature-47).
+     */
+    readonly cspEnforce?: boolean;
   };
 
   /** API options. */

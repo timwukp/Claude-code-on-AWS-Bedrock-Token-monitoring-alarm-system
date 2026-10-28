@@ -1,7 +1,7 @@
 import { S3Client, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3';
 import { BedrockClient, GetInferenceProfileCommand, ListTagsForResourceCommand } from '@aws-sdk/client-bedrock';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, UpdateCommand, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, UpdateCommand, GetCommand, PutCommand, BatchGetCommand, BatchGetCommandInput, BatchGetCommandOutput } from '@aws-sdk/lib-dynamodb';
 import { gunzipSync } from 'zlib';
 import {
   parseLogFile, aggregate, aggregateByProject, aggregateByProjectDay, detectRunaways,
@@ -26,70 +26,97 @@ const PREFIX = process.env.LOG_PREFIX ?? 'model-logs/AWSLogs/';
 /**
  * Scheduled aggregator: read recent Bedrock invocation-log files from S3, fold them into
  * per-(tenant, model, hour) usage, and upsert atomically into DynamoDB so dashboard reads are
- * fast and cheap. Idempotent: DynamoDB items track which requestIds were counted, and a
- * watermark skips already-processed objects (Reliability pillar).
+ * fast and cheap.
+ *
+ * Idempotency (feature-47): the `ADD` upserts are not reversible, so a run that throws after some of
+ * them and before its watermark moved used to re-add the same objects on the next run — forever, if
+ * the cause was persistent (the 400 KB `SYSTEM#TENANTS` item was ~85% full when this was written).
+ * Now every object is processed on its own: aggregate → upsert → `SYSTEM#PROCESSED/<key>` marker →
+ * watermark. The marker (TTL 30 days) is what makes a retry skip the object; the watermark only
+ * narrows the S3 listing and is re-read with a one-minute overlap so same-second objects are not lost.
  */
-export const handler = async (): Promise<{ filesProcessed: number; aggregatesWritten: number }> => {
+export const handler = async (): Promise<{ filesProcessed: number; aggregatesWritten: number; skipped: number }> => {
   const watermark = await getWatermark();
-  const objects = await listNewLogObjects(watermark);
+  const listed = await listNewLogObjects(watermark - LIST_OVERLAP_MS);
+  const processed = await processedKeys(listed.map((o) => o.key));
+  const objects = planObjects(listed, processed);
 
   // Project attribution maps (#13): AIP-ARN → project/model + identity hints. Loaded once per
   // run; extended below when unseen application-inference-profile ARNs appear in the logs.
   const maps = await loadAttributionMapsSafe();
-
-  const allAggregates = new Map<string, UsageAggregate>();
-  const allProjects = new Map<string, ProjectAggregate>();
-  const allProjectDays = new Map<string, ProjectDayAggregate>();
-
-  let maxKeyTime = watermark;
-  const batches: InvocationRecord[][] = [];
-  for (const obj of objects) {
-    // Skip the split-out large bodies and the permission-check markers; only main records carry tokens.
-    if (obj.key.includes('/data/') || obj.key.includes('permission-check')) continue;
-    const body = await getDecompressed(obj.key);
-    batches.push(parseLogFile(body));
-    if (obj.lastModified > maxKeyTime) maxKeyTime = obj.lastModified;
-  }
-
-  // Resolve application-inference-profile ARNs we haven't cached yet, BEFORE aggregating,
-  // so this run's records are attributed correctly instead of waiting for the next run.
-  if (maps) await resolveUnseenProfiles(batches, maps);
-
-  const runaways: RunawayHit[] = [];
-  for (const records of batches) {
-    mergeInto(allAggregates, aggregate(records, maps ?? undefined));
-    mergeProjects(allProjects, aggregateByProject(records, maps ?? undefined));
-    mergeProjectDays(allProjectDays, aggregateByProjectDay(records, maps ?? undefined));
-    // Runaway-spend guard (#14): flag single requests above the absolute threshold.
-    runaways.push(...detectRunaways(records, maps ?? undefined, RUNAWAY_THRESHOLD_USD, priceRecordUsd));
-  }
-  await writeRunawayAnomalies(runaways);
+  const tenantsSeen = new Set<string>();
 
   let written = 0;
-  for (const agg of allAggregates.values()) {
-    await upsertUsage(agg);
-    await upsertModelRollup(agg);
-    written++;
-  }
-  for (const p of allProjects.values()) {
-    await upsertProjectRollup(p);
-    written++;
-  }
-  for (const d of allProjectDays.values()) {
-    await upsertProjectDayRollup(d);
-    written++;
-  }
+  let maxKeyTime = watermark;
+  for (const obj of objects) {
+    const records = parseLogFile(await getDecompressed(obj.key));
+    // Resolve application-inference-profile ARNs we haven't cached yet, BEFORE aggregating,
+    // so this object's records are attributed correctly instead of waiting for the next run.
+    if (maps) await resolveUnseenProfiles([records], maps);
 
-  // Tenant index (feature-40): the bill is account-wide, so the "billed vs logged" readers need every
-  // tenant's PROJDAY rows without scanning the table. Merged, never replaced.
-  await recordTenants(new Set([...allAggregates.values()].map((a) => a.tenant)));
+    const aggregates = aggregate(records, maps ?? undefined);
+    const projects = aggregateByProject(records, maps ?? undefined);
+    const projectDays = aggregateByProjectDay(records, maps ?? undefined);
+    // Runaway-spend guard (#14): flag single requests above the absolute threshold.
+    await writeRunawayAnomalies(detectRunaways(records, maps ?? undefined, RUNAWAY_THRESHOLD_USD, priceRecordUsd));
+
+    for (const agg of aggregates.values()) { await upsertUsage(agg); await upsertModelRollup(agg); written++; }
+    for (const p of projects.values()) { await upsertProjectRollup(p); written++; }
+    for (const d of projectDays.values()) { await upsertProjectDayRollup(d); written++; }
+
+    // Tenant index (feature-40): one item per tenant (feature-47 — the single-item form hit DynamoDB's
+    // 400 KB ceiling at ~3,000 session ARNs), written once per run per tenant.
+    await recordTenants([...aggregates.values()].map((a) => a.tenant).filter((t) => !tenantsSeen.has(t)));
+    for (const a of aggregates.values()) tenantsSeen.add(a.tenant);
+
+    await markProcessed(obj.key, obj.lastModified);
+    if (obj.lastModified > maxKeyTime) { maxKeyTime = obj.lastModified; await setWatermark(maxKeyTime); }
+  }
 
   // `lastRunAt` moves on EVERY run, including one that found nothing new, so readers can tell "the
   // aggregator is healthy and the logs are quiet" from "the aggregator has stopped" (feature-36).
   await setWatermark(maxKeyTime);
-  console.log(`Processed ${objects.length} objects, wrote ${written} aggregates.`);
-  return { filesProcessed: objects.length, aggregatesWritten: written };
+  const skipped = listed.length - objects.length;
+  console.log(`Processed ${objects.length} objects (${skipped} skipped: bodies, markers or already processed), wrote ${written} aggregates.`);
+  return { filesProcessed: objects.length, aggregatesWritten: written, skipped };
 };
+
+/** Re-list this far behind the watermark: objects written in the same second as the last one processed. */
+export const LIST_OVERLAP_MS = 60_000;
+const PROCESSED_PK = 'SYSTEM#PROCESSED';
+const PROCESSED_TTL_DAYS = 30;
+
+/**
+ * The objects a run must process, oldest first: main log records only (not the split-out large
+ * bodies or the permission-check markers) and not already marked processed. Oldest-first matters
+ * because the watermark advances per object — a newer object processed before an older one would
+ * move the listing past the older one.
+ */
+export function planObjects<T extends { key: string; lastModified: number }>(listed: T[], processed: Set<string>): T[] {
+  return listed
+    .filter((o) => !o.key.includes('/data/') && !o.key.includes('permission-check') && !processed.has(o.key))
+    .sort((a, b) => a.lastModified - b.lastModified || a.key.localeCompare(b.key));
+}
+
+async function processedKeys(keys: string[]): Promise<Set<string>> {
+  const out = new Set<string>();
+  for (let i = 0; i < keys.length; i += 100) {
+    let req: BatchGetCommandInput['RequestItems'] = { [TABLE]: { Keys: keys.slice(i, i + 100).map((k) => ({ pk: PROCESSED_PK, sk: k })) } };
+    while (req && Object.keys(req).length) {
+      const res: BatchGetCommandOutput = await ddb.send(new BatchGetCommand({ RequestItems: req }));
+      for (const it of (res.Responses?.[TABLE] ?? []) as Record<string, unknown>[]) out.add(String(it.sk));
+      req = res.UnprocessedKeys && Object.keys(res.UnprocessedKeys).length ? res.UnprocessedKeys : undefined;
+    }
+  }
+  return out;
+}
+
+async function markProcessed(key: string, lastModified: number): Promise<void> {
+  await ddb.send(new PutCommand({
+    TableName: TABLE,
+    Item: { pk: PROCESSED_PK, sk: key, lastModified, processedAt: new Date().toISOString(), expiresAt: Math.floor(Date.now() / 1000) + PROCESSED_TTL_DAYS * 86_400 },
+  }));
+}
 
 const bedrock = new BedrockClient({});
 const AIP_ARN_RE = /^arn:[^:]+:bedrock:[^:]*:[^:]*:application-inference-profile\//;
@@ -194,20 +221,6 @@ async function getDecompressed(key: string): Promise<string> {
   }
 }
 
-function mergeInto(target: Map<string, UsageAggregate>, src: Map<string, UsageAggregate>) {
-  for (const [k, v] of src) {
-    const e = target.get(k);
-    if (!e) { target.set(k, v); continue; }
-    for (const id of v.requestIds) {
-      if (e.requestIds.has(id)) continue;
-      e.requestIds.add(id);
-    }
-    e.inputTokens += v.inputTokens; e.outputTokens += v.outputTokens;
-    e.cacheReadTokens += v.cacheReadTokens; e.invocations += v.invocations;
-    mergeCacheWrite(e, v);
-    mergeLatency(e.latency, v.latency);
-  }
-}
 
 /**
  * The cache-write counters every rollup ADDs (feature-36). Before this, only the USAGE item stored
@@ -250,58 +263,48 @@ async function upsertModelRollup(a: UsageAggregate) {
 }
 
 /** Merge per-project aggregates across files; de-dup by requestId, union the user sets. */
-function mergeProjects(target: Map<string, ProjectAggregate>, src: Map<string, ProjectAggregate>) {
-  for (const [k, v] of src) {
-    const e = target.get(k);
-    if (!e) { target.set(k, v); continue; }
-    for (const id of v.requestIds) {
-      if (e.requestIds.has(id)) continue;
-      e.requestIds.add(id);
-    }
-    for (const u of v.users) e.users.add(u);
-    e.inputTokens += v.inputTokens; e.outputTokens += v.outputTokens;
-    e.cacheReadTokens += v.cacheReadTokens; e.invocations += v.invocations;
-    mergeCacheWrite(e, v);
-    mergeLatency(e.latency, v.latency);
-  }
-}
 
 /**
  * Per-project rollup: pk=TENANT#<tenant>#PROJECT, sk=<projectId>#<modelId> (read fast by
  * GET /v1/projects without an Athena scan). `users` is stored as a string set of distinct ids.
  */
+/**
+ * `userSet` is a DynamoDB string set that grows with every distinct `requestMetadata.user_id` a caller
+ * sends; the item's 400 KB ceiling is ~10k short ids, after which every upsert for that (tenant,
+ * project, model) fails. Past this many we stop adding and flag the row; the page shows "500+".
+ */
+export const USER_SET_CAP = 500;
+export function usersToAdd(incoming: Iterable<string>, currentSize: number, cap = USER_SET_CAP): { add: string[]; overflow: boolean } {
+  const add = [...new Set(incoming)];
+  if (currentSize >= cap) return { add: [], overflow: add.length > 0 };
+  const room = cap - currentSize;
+  return add.length > room ? { add: add.slice(0, room), overflow: true } : { add, overflow: false };
+}
+
 async function upsertProjectRollup(p: ProjectAggregate) {
-  const users = [...p.users];
   const lat = latencyAddClause(p.latency);
+  let users = { add: [] as string[], overflow: false };
+  if (p.users.size) {
+    const cur = await ddb.send(new GetCommand({ TableName: TABLE, Key: { pk: `TENANT#${p.tenant}#PROJECT`, sk: `${p.projectId}#${p.modelId}` }, ProjectionExpression: 'userSet, userSetOverflow' }));
+    const have = cur.Item?.userSet as Set<string> | undefined;
+    users = usersToAdd(p.users, have?.size ?? 0);
+  }
   await ddb.send(new UpdateCommand({
     TableName: TABLE,
     Key: { pk: `TENANT#${p.tenant}#PROJECT`, sk: `${p.projectId}#${p.modelId}` },
     UpdateExpression:
-      'SET projectId = :p, modelId = :m ADD inputTokens :i, outputTokens :o, cacheReadTokens :cr, invocations :n'
-      + CW_CLAUSE + lat.clause + (users.length ? ', userSet :u' : ''),
+      'SET projectId = :p, modelId = :m' + (users.overflow ? ', userSetOverflow = :ov' : '')
+      + ' ADD inputTokens :i, outputTokens :o, cacheReadTokens :cr, invocations :n'
+      + CW_CLAUSE + lat.clause + (users.add.length ? ', userSet :u' : ''),
     ExpressionAttributeValues: {
       ':p': p.projectId, ':m': p.modelId,
       ':i': p.inputTokens, ':o': p.outputTokens, ':cr': p.cacheReadTokens, ':n': p.invocations,
-      ...cacheWriteValues(p), ...lat.values, ...(users.length ? { ':u': new Set(users) } : {}),
+      ...cacheWriteValues(p), ...lat.values, ...(users.add.length ? { ':u': new Set(users.add) } : {}), ...(users.overflow ? { ':ov': true } : {}),
     },
   }));
 }
 
 /** Merge per-(tenant,day,project,model) aggregates across files; de-dup by requestId. */
-function mergeProjectDays(target: Map<string, ProjectDayAggregate>, src: Map<string, ProjectDayAggregate>) {
-  for (const [k, v] of src) {
-    const e = target.get(k);
-    if (!e) { target.set(k, v); continue; }
-    for (const id of v.requestIds) {
-      if (e.requestIds.has(id)) continue;
-      e.requestIds.add(id);
-    }
-    e.inputTokens += v.inputTokens; e.outputTokens += v.outputTokens;
-    e.cacheReadTokens += v.cacheReadTokens; e.invocations += v.invocations;
-    mergeCacheWrite(e, v);
-    mergeLatency(e.latency, v.latency);
-  }
-}
 
 /**
  * Daily project rollup (#13): pk=TENANT#<tenant>#PROJDAY, sk=<day>#<projectId>#<modelId> —
@@ -367,13 +370,13 @@ async function writeRunawayAnomalies(hits: RunawayHit[]): Promise<void> {
   console.log(`aggregator: flagged ${hits.length} runaway request(s) above $${RUNAWAY_THRESHOLD_USD}`);
 }
 
-async function recordTenants(seen: Set<string>): Promise<void> {
-  if (seen.size === 0) return;
-  const cur = await ddb.send(new GetCommand({ TableName: TABLE, Key: { pk: 'SYSTEM#TENANTS', sk: 'all' } }));
-  const have: string[] = Array.isArray(cur.Item?.tenants) ? cur.Item!.tenants : [];
-  const merged = [...new Set([...have, ...seen])].sort();
-  if (merged.length === have.length) return;
-  await ddb.send(new PutCommand({ TableName: TABLE, Item: { pk: 'SYSTEM#TENANTS', sk: 'all', tenants: merged, updatedAt: new Date().toISOString() } }));
+export const TENANT_INDEX_PK = 'SYSTEM#TENANT';
+
+/** One item per tenant (`SYSTEM#TENANT / <tenant>`); PutItem is idempotent, so re-recording is harmless. */
+async function recordTenants(tenants: string[]): Promise<void> {
+  for (const t of new Set(tenants)) {
+    await ddb.send(new PutCommand({ TableName: TABLE, Item: { pk: TENANT_INDEX_PK, sk: t, tenant: t, lastSeenAt: new Date().toISOString() } }));
+  }
 }
 
 async function getWatermark(): Promise<number> {

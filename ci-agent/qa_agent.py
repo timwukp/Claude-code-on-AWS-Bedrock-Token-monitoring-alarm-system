@@ -232,8 +232,11 @@ def normalize_report(report: dict) -> dict:
     # The workflow reddens on UNKNOWN precisely so that silence is never read as success.
     if report.get("overall") == "UNKNOWN":
         return report
-    if report.get("overall") not in ("PASS", "FAIL"):
-        report["overall"] = "FAIL" if norm else "PASS"
+    # The verdict is DERIVED from the findings, never taken from the agent's own `overall`: page text
+    # the agent reads is written by whoever calls Bedrock in the monitored account (requestMetadata
+    # project/user ids render on the Projects page), so "overall: PASS" is an attacker-writable string.
+    # A report with findings is FAIL; a report without findings is PASS (feature-47, audit #4).
+    report["overall"] = "FAIL" if norm else "PASS"
     return report
 
 

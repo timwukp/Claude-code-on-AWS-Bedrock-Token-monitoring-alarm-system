@@ -4,8 +4,8 @@
 - **Origin:** qa on PR #77 (live dev, 2026-10-27): opus-5-5 "$1,115.68 not logged · Mantle —" on the Cost page; qa F-PR77-006
   (loading state rendered as an error).
 - **Date:** 2026-10-27
-- **Verdict:** PASS on gates and on a read-only dry run against live CloudWatch; live confirmation after the owner's Etl + Api
-  deploy and one collector backfill (table below, to be filled).
+- **Verdict:** PASS on gates, on the read-only dry run and live after the owner's Etl + Api deploys (2026-10-27): the opus-5-5
+  row that read "Mantle —" carries 5,816 inferences again and the fleet check is clean.
 
 ## What this report has to say plainly
 - **The number was never gone — the discovery was.** CloudWatch `ListMetrics` lists only metrics with datapoints in the past
@@ -42,9 +42,10 @@
 | Check | Result |
 |---|---|
 | Etl `cdk diff` | adds `cloudwatch:GetMetricData` + `ListMetrics` on `BillCollectorFn` (IAM) |
-| Collector backfill `{start: 2026-10-01, end: <today>}` | TBD |
-| `/v1/overview?window=mtd` opus-5-5 row | TBD — expect `mantle.inferences` 5,816, no `mantleInconsistent`, `mantleStoredThrough` = yesterday |
-| `/v1/latency?window=30` Mantle block | TBD — expect opus-5-5 listed again |
+| Collector backfill `{start: 2026-10-01, end: 2026-10-28}` under its own role (after the Etl deploy) | 515 bill lines / 26 days, **12 Mantle day-model rows over 9 days (10-06 → 10-21)**, 27 s; `MANTLE#DAILY` opus-5-5 5,816 · gpt-6-luna 231 · gpt-5.6-luna 208 · gpt-6-sol 1; `MANTLE#FLEET` 6,256 == per-model sum |
+| `/v1/overview?window=mtd` opus-5-5 row (deployed Api) | billed 10-01 → 10-26 · unlogged $1,104.31 · **`mantle.inferences` 5,816**, 1.57 B input / 8.1 M output tokens · `mantleInconsistent` absent · `mantleStoredThrough` 2026-10-21 (the last day with any Mantle traffic — later days have none, so nothing to store) |
+| `/v1/latency?window=30` Mantle block | 6,256 inferences: opus-5-5 5,816 · gpt-6-luna 231 · gpt-5.6-luna 208 · gpt-6-sol 1 · `inconsistent: false` (deployed code before: opus absent, inconsistent) |
+| Served bundle | contains "unresolved", "stored daily by the collector", "All-time total loading" |
 
 ## qa rounds on the PR
 | Round / finding | Verdict | Action |

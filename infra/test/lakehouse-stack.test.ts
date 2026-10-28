@@ -79,7 +79,7 @@ describe('LakehouseStack (bronze)', () => {
   it('one transform Lambda per stream, each knowing its stream, the table names and the log groups it routes', () => {
     for (const stream of ['bedrock', 'metrics']) {
       template.hasResourceProperties('AWS::Lambda::Function', {
-        Runtime: 'nodejs20.x',
+        Runtime: 'nodejs22.x',
         Environment: {
           Variables: Match.objectLike({
             BRONZE_DATABASE: 'bronze', TABLE_INVOCATIONS: 'bedrock_invocations', TABLE_SPANS: 'otel_spans',

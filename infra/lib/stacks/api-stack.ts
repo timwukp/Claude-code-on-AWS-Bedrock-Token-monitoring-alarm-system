@@ -36,8 +36,12 @@ export class ApiStack extends cdk.Stack {
     super(scope, id, props);
     const { cfg, userPool, tables, athena, rawLogBucket, curatedBucket, dataKey, dora } = props;
 
-    // CORS: restrict to configured origins in production; fall back to "*" for demo.
+    // CORS: restrict to the configured origins. "*" is a dev-only convenience (feature-47): any other
+    // environment must name its frontend origin(s) or synth refuses.
     const allowedOrigins = cfg.api?.allowedOrigins?.length ? cfg.api.allowedOrigins : undefined;
+    if (!allowedOrigins && cfg.env !== 'dev' && cfg.env !== 'ci') {
+      throw new Error(`config ${cfg.env}: api.allowedOrigins is required outside dev/ci (the CloudFront domain, e.g. https://dxxxx.cloudfront.net)`);
+    }
 
     const commonEnv = {
       AGGREGATES_TABLE: tables.aggregates.tableName,
@@ -56,7 +60,7 @@ export class ApiStack extends cdk.Stack {
 
     const fn = (name: string, entryFile: string) =>
       new NodejsFunction(this, name, {
-        runtime: lambda.Runtime.NODEJS_20_X,
+        runtime: lambda.Runtime.NODEJS_22_X,
         entry: lambdaEntry('api', entryFile),
         projectRoot: BACKEND_ROOT,
         depsLockFilePath: BACKEND_LOCK,
@@ -76,7 +80,7 @@ export class ApiStack extends cdk.Stack {
     // query synchronously for up to ~22s; a 15s Lambda timeout killed the invocation mid-poll
     // and the browser surfaced status 0 / "Failed to fetch" (QA finding F-002).
     const projectsFn = new NodejsFunction(this, 'ProjectsFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       entry: lambdaEntry('api', 'projects.ts'),
       projectRoot: BACKEND_ROOT,
       depsLockFilePath: BACKEND_LOCK,
@@ -91,7 +95,7 @@ export class ApiStack extends cdk.Stack {
 
     // Governance read-only view: budget status + enforcement posture for the dashboard.
     const governanceFn = new NodejsFunction(this, 'GovernanceFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       entry: lambdaEntry('api', 'governance.ts'),
       projectRoot: BACKEND_ROOT,
       depsLockFilePath: BACKEND_LOCK,
@@ -118,7 +122,7 @@ export class ApiStack extends cdk.Stack {
     // table, permission to kick the collector asynchronously, and the GitHub token (to validate
     // a repo exists when an admin adds it).
     const doraFn = new NodejsFunction(this, 'DoraFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       entry: lambdaEntry('api', 'dora.ts'),
       projectRoot: BACKEND_ROOT,
       depsLockFilePath: BACKEND_LOCK,
@@ -143,7 +147,7 @@ export class ApiStack extends cdk.Stack {
 
     // Project registry (#13): admin-managed project → repos / cost-center / identity hints.
     const projectRegistryFn = new NodejsFunction(this, 'ProjectRegistryFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       entry: lambdaEntry('api', 'project-registry.ts'),
       projectRoot: BACKEND_ROOT,
       depsLockFilePath: BACKEND_LOCK,
@@ -161,7 +165,7 @@ export class ApiStack extends cdk.Stack {
 
     // AI-coding ROI (#14): read-only joins over registry + PROJDAY + DORA — least privilege.
     const roiFn = new NodejsFunction(this, 'RoiFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       entry: lambdaEntry('api', 'roi.ts'),
       projectRoot: BACKEND_ROOT,
       depsLockFilePath: BACKEND_LOCK,
@@ -179,7 +183,7 @@ export class ApiStack extends cdk.Stack {
     // Model-hop latency: reads CloudWatch AWS/Bedrock only — no table grants, since the metrics
     // carry no tenant dimension and the endpoint returns nothing tenant-specific.
     const latencyFn = new NodejsFunction(this, 'LatencyFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       entry: lambdaEntry('api', 'latency.ts'),
       projectRoot: BACKEND_ROOT,
       depsLockFilePath: BACKEND_LOCK,
@@ -211,7 +215,7 @@ export class ApiStack extends cdk.Stack {
 
     // feature-23: Overview — spend vs prior period, daily series, movers; reads PROJDAY + registry.
     const overviewFn = new NodejsFunction(this, 'OverviewFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       entry: lambdaEntry('api', 'overview.ts'),
       projectRoot: BACKEND_ROOT,
       depsLockFilePath: BACKEND_LOCK,
@@ -265,6 +269,9 @@ export class ApiStack extends cdk.Stack {
     curatedBucket.grantRead(projectsFn); // project_mapping CSV lives in the curated bucket
     curatedBucket.grantRead(queriesFn); // byProject template joins the same mapping CSV (F-002)
     tables.tenants.grantReadData(queriesFn); // byProject resolves AIP ARNs via the registry profile cache (F-501)
+    // Each started execution is bound to the tenant that started it (QUERY#<tenant>/<id>, TTL 24 h) so GET /v1/queries/{id}
+    // never returns another tenant's rows (feature-47).
+    tables.aggregates.grant(queriesFn, 'dynamodb:PutItem', 'dynamodb:GetItem');
     tables.aggregates.grantReadData(projectsFn); // #7 fast path reads PROJECT rollups from DynamoDB
     tables.tenants.grantReadData(projectsFn); // #13 registry names/cost centers for fast-path rows
 

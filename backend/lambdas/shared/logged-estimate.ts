@@ -17,10 +17,25 @@ export const LOGGED_PK = 'LOGGED#DAILY';
 
 export interface LoggedDay { day: string; model: string; usd: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; invocations: number }
 
-/** Every tenant the aggregator has written rollups for (SYSTEM#TENANTS, maintained per run, seeded once). */
+/**
+ * Every tenant the aggregator has written rollups for: one `SYSTEM#TENANT / <tenant>` item each
+ * (feature-47 — the single-item `SYSTEM#TENANTS/all` list reached ~341 KB of DynamoDB's 400 KB ceiling).
+ * Falls back to the legacy item until `scripts/seed-tenant-index.ts --apply` has migrated it.
+ */
 export async function listTenants(): Promise<string[]> {
-  const res = await ddb.send(new GetCommand({ TableName: TABLE(), Key: { pk: 'SYSTEM#TENANTS', sk: 'all' } }));
-  const t = res.Item?.tenants;
+  const out: string[] = [];
+  let start: Record<string, unknown> | undefined;
+  do {
+    const res = await ddb.send(new QueryCommand({
+      TableName: TABLE(), KeyConditionExpression: 'pk = :pk', ExpressionAttributeValues: { ':pk': 'SYSTEM#TENANT' },
+      ProjectionExpression: 'sk', ExclusiveStartKey: start,
+    }));
+    for (const it of (res.Items ?? []) as Record<string, unknown>[]) out.push(String(it.sk));
+    start = res.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (start);
+  if (out.length) return out;
+  const legacy = await ddb.send(new GetCommand({ TableName: TABLE(), Key: { pk: 'SYSTEM#TENANTS', sk: 'all' } }));
+  const t = legacy.Item?.tenants;
   return Array.isArray(t) ? t.map(String) : [];
 }
 
