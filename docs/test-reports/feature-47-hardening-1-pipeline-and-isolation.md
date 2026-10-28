@@ -1,6 +1,6 @@
 # Feature 47 — Hardening 1: the pipeline cannot be wedged or poisoned; CI runs no PR code with credentials
 
-- **Chain:** `intent/hardening-1-pipeline-and-isolation/` · **Branch:** `feat/hardening-1-pipeline-and-isolation` off `main@b2851fe` (post-#82) · **PR:** TBD
+- **Chain:** `intent/hardening-1-pipeline-and-isolation/` · **Branch:** `feat/hardening-1-pipeline-and-isolation` off `main@b2851fe` (post-#82) · **PR:** #84
 - **Origin:** security audit 2026-10-28 (five parallel reviewers + live checks; owner approved a two-chain hardening programme the
   same day). This chain closes the audit's two Critical and five of its six High items; chain 2 (`hardening-2-limits-and-visibility`)
   takes limits, retention, alarms and the containment rewrite.
