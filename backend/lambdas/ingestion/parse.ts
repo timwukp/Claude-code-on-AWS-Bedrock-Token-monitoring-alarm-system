@@ -125,9 +125,12 @@ export function latencyOf(r: InvocationRecord): LatencySample | null {
   if (!m || typeof m !== 'object') return null;
   const e2e = (m as Record<string, unknown>).invocationLatency;
   const ttfb = (m as Record<string, unknown>).firstByteLatency;
-  if (typeof e2e !== 'number' || !Number.isFinite(e2e) || e2e < 0) return null;
+  // Bounded at ~11.5 days: a latency beyond that is corrupt, and summing it would push a rollup toward the
+  // DynamoDB number limit (1e126) and wedge that item's upserts (feature-47 review).
+  const sane = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1e9;
+  if (!sane(e2e)) return null;
   const out: LatencySample = { e2eMs: e2e };
-  if (typeof ttfb === 'number' && Number.isFinite(ttfb) && ttfb >= 0) out.ttfbMs = ttfb;
+  if (sane(ttfb)) out.ttfbMs = ttfb;
   return out;
 }
 

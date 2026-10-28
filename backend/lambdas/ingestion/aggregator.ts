@@ -36,8 +36,11 @@ const PREFIX = process.env.LOG_PREFIX ?? 'model-logs/AWSLogs/';
  * narrows the S3 listing and is re-read with a one-minute overlap so same-second objects are not lost.
  */
 export const handler = async (): Promise<{ filesProcessed: number; aggregatesWritten: number; skipped: number }> => {
-  const watermark = await getWatermark();
-  const listed = await listNewLogObjects(watermark - LIST_OVERLAP_MS);
+  const { lastModified: watermark, markersSince } = await getWatermarkState();
+  // The overlap is only safe once processed-markers exist to de-duplicate it. On the first run after the
+  // switch (no marker ever written) the old strict `> watermark` listing is kept, so objects the previous
+  // code already counted are not re-added once.
+  const listed = await listNewLogObjects(markersSince ? watermark - LIST_OVERLAP_MS : watermark);
   const processed = await processedKeys(listed.map((o) => o.key));
   const objects = planObjects(listed, processed);
 
@@ -48,38 +51,64 @@ export const handler = async (): Promise<{ filesProcessed: number; aggregatesWri
 
   let written = 0;
   let maxKeyTime = watermark;
+  const markersFrom = markersSince ?? new Date().toISOString(); // persisted once the first marker is written
   for (const obj of objects) {
-    const records = parseLogFile(await getDecompressed(obj.key));
-    // Resolve application-inference-profile ARNs we haven't cached yet, BEFORE aggregating,
-    // so this object's records are attributed correctly instead of waiting for the next run.
-    if (maps) await resolveUnseenProfiles([records], maps);
-
-    const aggregates = aggregate(records, maps ?? undefined);
-    const projects = aggregateByProject(records, maps ?? undefined);
-    const projectDays = aggregateByProjectDay(records, maps ?? undefined);
-    // Runaway-spend guard (#14): flag single requests above the absolute threshold.
-    await writeRunawayAnomalies(detectRunaways(records, maps ?? undefined, RUNAWAY_THRESHOLD_USD, priceRecordUsd));
-
-    for (const agg of aggregates.values()) { await upsertUsage(agg); await upsertModelRollup(agg); written++; }
-    for (const p of projects.values()) { await upsertProjectRollup(p); written++; }
-    for (const d of projectDays.values()) { await upsertProjectDayRollup(d); written++; }
-
-    // Tenant index (feature-40): one item per tenant (feature-47 — the single-item form hit DynamoDB's
-    // 400 KB ceiling at ~3,000 session ARNs), written once per run per tenant.
-    await recordTenants([...aggregates.values()].map((a) => a.tenant).filter((t) => !tenantsSeen.has(t)));
-    for (const a of aggregates.values()) tenantsSeen.add(a.tenant);
-
-    await markProcessed(obj.key, obj.lastModified);
-    if (obj.lastModified > maxKeyTime) { maxKeyTime = obj.lastModified; await setWatermark(maxKeyTime); }
+    try {
+      written += await processObject(obj, maps, tenantsSeen);
+    } catch (err) {
+      // A failure inside an object (throttle, marshaller error, timeout-adjacent) leaves its earlier upserts
+      // in place; the retry re-adds them. Bound that: after MAX_OBJECT_ATTEMPTS the object is marked as
+      // failed-and-skipped so one poisoned file cannot pin the watermark and inflate counters forever.
+      const attempts = await recordFailure(obj.key, (err as Error).message);
+      if (attempts >= MAX_OBJECT_ATTEMPTS) {
+        console.error(`aggregator: giving up on ${obj.key} after ${attempts} attempt(s): ${(err as Error).message}`);
+        await markProcessed(obj.key, obj.lastModified, { failed: true, attempts });
+      } else {
+        console.warn(`aggregator: ${obj.key} failed (attempt ${attempts}/${MAX_OBJECT_ATTEMPTS}); stopping this run so it is retried next run: ${(err as Error).message}`);
+        break; // do not advance past it
+      }
+    }
+    if (obj.lastModified > maxKeyTime) maxKeyTime = obj.lastModified;
+    await setWatermark(maxKeyTime, markersFrom);
   }
 
   // `lastRunAt` moves on EVERY run, including one that found nothing new, so readers can tell "the
   // aggregator is healthy and the logs are quiet" from "the aggregator has stopped" (feature-36).
-  await setWatermark(maxKeyTime);
+  await setWatermark(maxKeyTime, markersSince || objects.length ? markersFrom : undefined);
   const skipped = listed.length - objects.length;
   console.log(`Processed ${objects.length} objects (${skipped} skipped: bodies, markers or already processed), wrote ${written} aggregates.`);
   return { filesProcessed: objects.length, aggregatesWritten: written, skipped };
 };
+
+/** How many runs may fail on the same object before it is skipped for good (each failure can re-add its earlier rollups once). */
+export const MAX_OBJECT_ATTEMPTS = 3;
+
+/** Aggregate and persist ONE log object; returns the number of rollups written. Throws on any persistence error. */
+async function processObject(obj: { key: string; lastModified: number }, maps: AttributionMaps | null, tenantsSeen: Set<string>): Promise<number> {
+  let written = 0;
+  const records = parseLogFile(await getDecompressed(obj.key));
+  // Resolve application-inference-profile ARNs we haven't cached yet, BEFORE aggregating,
+  // so this object's records are attributed correctly instead of waiting for the next run.
+  if (maps) await resolveUnseenProfiles([records], maps);
+
+  const aggregates = aggregate(records, maps ?? undefined);
+  const projects = aggregateByProject(records, maps ?? undefined);
+  const projectDays = aggregateByProjectDay(records, maps ?? undefined);
+  // Runaway-spend guard (#14): flag single requests above the absolute threshold.
+  await writeRunawayAnomalies(detectRunaways(records, maps ?? undefined, RUNAWAY_THRESHOLD_USD, priceRecordUsd));
+
+  for (const agg of aggregates.values()) { await upsertUsage(agg); await upsertModelRollup(agg); written++; }
+  for (const p of projects.values()) { await upsertProjectRollup(p); written++; }
+  for (const d of projectDays.values()) { await upsertProjectDayRollup(d); written++; }
+
+  // Tenant index (feature-40): one item per tenant (feature-47 — the single-item form hit DynamoDB's
+  // 400 KB ceiling at ~3,000 session ARNs), written once per run per tenant.
+  await recordTenants([...aggregates.values()].map((a) => a.tenant).filter((t) => !tenantsSeen.has(t)));
+  for (const a of aggregates.values()) tenantsSeen.add(a.tenant);
+
+  await markProcessed(obj.key, obj.lastModified);
+  return written;
+}
 
 /** Re-list this far behind the watermark: objects written in the same second as the last one processed. */
 export const LIST_OVERLAP_MS = 60_000;
@@ -111,11 +140,24 @@ async function processedKeys(keys: string[]): Promise<Set<string>> {
   return out;
 }
 
-async function markProcessed(key: string, lastModified: number): Promise<void> {
+async function markProcessed(key: string, lastModified: number, extra: Record<string, unknown> = {}): Promise<void> {
   await ddb.send(new PutCommand({
     TableName: TABLE,
-    Item: { pk: PROCESSED_PK, sk: key, lastModified, processedAt: new Date().toISOString(), expiresAt: Math.floor(Date.now() / 1000) + PROCESSED_TTL_DAYS * 86_400 },
+    Item: { pk: PROCESSED_PK, sk: key, lastModified, processedAt: new Date().toISOString(), expiresAt: Math.floor(Date.now() / 1000) + PROCESSED_TTL_DAYS * 86_400, ...extra },
   }));
+}
+
+const FAILED_PK = 'SYSTEM#FAILED';
+
+/** Count a failed attempt on an object (kept 30 days); returns the attempt number. */
+async function recordFailure(key: string, message: string): Promise<number> {
+  const res = await ddb.send(new UpdateCommand({
+    TableName: TABLE, Key: { pk: FAILED_PK, sk: key },
+    UpdateExpression: 'SET lastError = :e, lastAt = :t, expiresAt = :x ADD attempts :one',
+    ExpressionAttributeValues: { ':e': message.slice(0, 500), ':t': new Date().toISOString(), ':x': Math.floor(Date.now() / 1000) + PROCESSED_TTL_DAYS * 86_400, ':one': 1 },
+    ReturnValues: 'ALL_NEW',
+  }));
+  return Number(res.Attributes?.attempts ?? 1);
 }
 
 const bedrock = new BedrockClient({});
@@ -274,9 +316,12 @@ async function upsertModelRollup(a: UsageAggregate) {
  * project, model) fails. Past this many we stop adding and flag the row; the page shows "500+".
  */
 export const USER_SET_CAP = 500;
-export function usersToAdd(incoming: Iterable<string>, currentSize: number, cap = USER_SET_CAP): { add: string[]; overflow: boolean } {
-  const add = [...new Set(incoming)];
-  if (currentSize >= cap) return { add: [], overflow: add.length > 0 };
+export function usersToAdd(incoming: Iterable<string>, have: ReadonlySet<string> | number, cap = USER_SET_CAP): { add: string[]; overflow: boolean } {
+  const present = typeof have === 'number' ? null : have;
+  const currentSize = typeof have === 'number' ? have : have.size;
+  const add = [...new Set(incoming)].filter((u) => !present?.has(u)); // ids already in the set need no room
+  if (add.length === 0) return { add: [], overflow: false };
+  if (currentSize >= cap) return { add: [], overflow: true };
   const room = cap - currentSize;
   return add.length > room ? { add: add.slice(0, room), overflow: true } : { add, overflow: false };
 }
@@ -287,7 +332,7 @@ async function upsertProjectRollup(p: ProjectAggregate) {
   if (p.users.size) {
     const cur = await ddb.send(new GetCommand({ TableName: TABLE, Key: { pk: `TENANT#${p.tenant}#PROJECT`, sk: `${p.projectId}#${p.modelId}` }, ProjectionExpression: 'userSet, userSetOverflow' }));
     const have = cur.Item?.userSet as Set<string> | undefined;
-    users = usersToAdd(p.users, have?.size ?? 0);
+    users = usersToAdd(p.users, have ?? new Set<string>());
   }
   await ddb.send(new UpdateCommand({
     TableName: TABLE,
@@ -379,14 +424,15 @@ async function recordTenants(tenants: string[]): Promise<void> {
   }
 }
 
-async function getWatermark(): Promise<number> {
+/** Watermark plus `markersSince`: when processed-markers started being written (absent = never — first run after the switch). */
+async function getWatermarkState(): Promise<{ lastModified: number; markersSince?: string }> {
   const res = await ddb.send(new GetCommand({ TableName: TABLE, Key: { pk: 'SYSTEM#WATERMARK', sk: 'aggregator' } }));
-  return (res.Item?.lastModified as number) ?? 0;
+  return { lastModified: Number(res.Item?.lastModified ?? 0), markersSince: typeof res.Item?.markersSince === 'string' ? res.Item.markersSince : undefined };
 }
 
-async function setWatermark(ts: number): Promise<void> {
+async function setWatermark(ts: number, markersSince?: string): Promise<void> {
   await ddb.send(new PutCommand({
     TableName: TABLE,
-    Item: { pk: 'SYSTEM#WATERMARK', sk: 'aggregator', lastModified: ts, lastRunAt: new Date().toISOString() },
+    Item: { pk: 'SYSTEM#WATERMARK', sk: 'aggregator', lastModified: ts, lastRunAt: new Date().toISOString(), ...(markersSince ? { markersSince } : {}) },
   }));
 }

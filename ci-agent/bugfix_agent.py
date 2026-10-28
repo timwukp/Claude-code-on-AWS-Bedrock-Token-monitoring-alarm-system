@@ -177,6 +177,11 @@ def diff_is_confined(diff: str, rel: str) -> tuple[bool, str]:
     extra = sorted(p for p in paths if p != rel)
     if extra:
         return False, f"diff also touches {', '.join(extra)}"
+    # Content edits only: no deletions, no mode changes, no symlinks, no new files, no binary — a typechange to
+    # a symlink pointing outside the tree would pass the path check and be committed (feature-47 review).
+    for line in diff.splitlines():
+        if re.match(r"^(deleted file mode|new file mode|old mode|new mode|similarity index|rename (from|to)|GIT binary patch|\+\+\+ /dev/null|--- /dev/null)", line):
+            return False, f"diff is not a plain content edit ({line[:40]})"
     return True, ""
 
 
@@ -221,6 +226,9 @@ def main() -> int:
     ap.add_argument("--harness-arn", default=DEFAULT_HARNESS)
     ap.add_argument("--region", default="us-east-1")
     ap.add_argument("--repo-root", default=".")
+    ap.add_argument("--plan-root", default=None,
+                    help="Where to read .sdlc/active and intent/*/plan.md from (default: --repo-root). The workflow "
+                         "passes the BASE checkout so a PR cannot widen its own allow-list.")
     ap.add_argument("--out", default="bugfix-summary.md")
     ap.add_argument("--patched-list", default="bugfix-patched.txt",
                     help="Where to write the paths actually patched, one per line, so the "
@@ -243,7 +251,7 @@ def main() -> int:
     # long-read config qa_agent.py already uses, and don't auto-retry a long invoke.
     cfg = BotoConfig(read_timeout=900, connect_timeout=30, retries={"max_attempts": 0})
     client = boto3.client("bedrock-agentcore", region_name=args.region, config=cfg)
-    plan_text, chain = active_plan(args.repo_root)
+    plan_text, chain = active_plan(args.plan_root or args.repo_root)
     if plan_text is None:
         print(f"⛔ no readable active plan ({chain}) — refusing to patch anything", file=sys.stderr)
     summaries, applied, patched = [], 0, []

@@ -47,6 +47,9 @@ export class EtlStack extends cdk.Stack {
       handler: 'handler',
       timeout: cdk.Duration.minutes(5),
       memorySize: 512,
+      // Exactly one run at a time: a timed-out run retried by Lambda while the next schedule fires would
+      // ADD the same unmarked objects twice (feature-47 review). Retries come from the schedule, not Lambda.
+      reservedConcurrentExecutions: 1,
       tracing: lambda.Tracing.ACTIVE,
       environment: {
         AGGREGATES_TABLE: tables.aggregates.tableName,
@@ -73,7 +76,7 @@ export class EtlStack extends cdk.Stack {
 
     new events.Rule(this, 'AggregatorSchedule', {
       schedule: events.Schedule.rate(cdk.Duration.minutes(15)),
-      targets: [new targets.LambdaFunction(aggregatorFn)],
+      targets: [new targets.LambdaFunction(aggregatorFn, { retryAttempts: 0 })],
     });
 
     // --- Daily bill collector (feature-40) ---

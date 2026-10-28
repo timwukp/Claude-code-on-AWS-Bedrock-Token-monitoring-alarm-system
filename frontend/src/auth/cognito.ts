@@ -24,6 +24,11 @@ export function configureAuth(): void {
   // (or a browser extension) can read them and they survive for the refresh token's lifetime. Session
   // storage scopes them to the tab and clears on close (feature-47, audit #7).
   cognitoUserPoolsTokenProvider.setKeyValueStorage(sessionStore);
+  // Tokens the previous build left in localStorage would otherwise stay readable (and the refresh token valid
+  // for its original 30 days) on every browser that visited before this change.
+  try {
+    for (const k of Object.keys(localStorage)) if (k.startsWith('CognitoIdentityServiceProvider.')) localStorage.removeItem(k);
+  } catch { /* storage disabled — nothing to purge */ }
 }
 
 /** Returns the current JWT for Authorization headers, or null if not signed in. */

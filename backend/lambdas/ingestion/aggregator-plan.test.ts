@@ -33,9 +33,16 @@ describe('usersToAdd — the PROJECT userSet stops growing at the cap', () => {
   it('fills the remaining room and flags overflow', () => {
     expect(usersToAdd(['a', 'b', 'c'], USER_SET_CAP - 2)).toEqual({ add: ['a', 'b'], overflow: true });
   });
-  it('adds nothing once full, but still flags when callers keep sending new ids', () => {
+  it('adds nothing once full, but still flags when callers keep sending NEW ids', () => {
     expect(usersToAdd(['x'], USER_SET_CAP)).toEqual({ add: [], overflow: true });
     expect(usersToAdd([], USER_SET_CAP)).toEqual({ add: [], overflow: false });
+  });
+  it('ids already in the set need no room and never flag overflow (review: a project with exactly 500 users must not read 500+)', () => {
+    const have = new Set(Array.from({ length: USER_SET_CAP }, (_, i) => `u${i}`));
+    expect(usersToAdd(['u1', 'u2'], have)).toEqual({ add: [], overflow: false });
+    expect(usersToAdd(['u1', 'new'], have)).toEqual({ add: [], overflow: true });
+    const almost = new Set(Array.from({ length: USER_SET_CAP - 1 }, (_, i) => `u${i}`));
+    expect(usersToAdd(['u0', 'u1', 'fresh', 'fresh2'], almost)).toEqual({ add: ['fresh'], overflow: true });
   });
   it('a hostile caller with 10,000 distinct user_ids cannot push the item past the cap', () => {
     const ids = Array.from({ length: 10_000 }, (_, i) => `user-${i}`);

@@ -45,11 +45,34 @@
 | `infra/test/synth.ts`, `infra/test/security.test.ts` | Auth/Dora/Api/Frontend in the harness; 14 invariants |
 | `docs/MULTI_TENANCY.md`, `SECURITY.md` | deployment assumption, cooperative attribution, trust boundaries, owner-maintained settings |
 
+## Independent adversarial review of the PR (same day) — what it found and what changed
+| Finding | Severity | Fix |
+|---|---|---|
+| Two aggregator runs could overlap (Lambda async retry after a timeout + the 15-minute schedule) and ADD the same unmarked objects twice | High | `reservedConcurrentExecutions: 1`; EventBridge target `retryAttempts: 0` |
+| Inside one object, N upserts precede the marker; a *persistent* failure re-adds that object's earlier rollups every run and pins the watermark — the "forever" case the PR claimed gone | High | per-object `try/catch`; `SYSTEM#FAILED/<key>` attempt counter; after 3 attempts the object is marked `failed: true` and skipped; the run stops at a failing object so the watermark never passes it |
+| Workflow-level `env` (account id, harness ARNs) was inherited by the `build` job that runs PR npm scripts | Medium | env moved to the `inputs` and `qa` jobs only |
+| First run after deploy: the 60 s overlap re-added the last minute's objects once | Medium | `markersSince` on the watermark item: strict listing until the first marker exists |
+| `normalize_report` dropped non-object findings → `{"overall":"FAIL","findings":["login broken"]}` became PASS | Medium | non-object findings are kept as MEDIUM findings |
+| `extract_json` took the *last* JSON object — a quoted `{"findings": []}` could win | Medium | prefer the object carrying `pages_tested` |
+| Tokens already in localStorage (30-day refresh) stayed valid after the switch | Medium | boot-time purge of `CognitoIdentityServiceProvider.*` keys; owner may also `admin-user-global-sign-out` |
+| `usersToAdd` compared the raw size — a project with exactly 500 users read `500+` forever | Low | compare against the ids present |
+| Diff "confinement" accepted deletions, mode changes and symlink typechanges of the allowed file | Low | refused |
+| Latency values only checked finite — `1e300` would sum toward DynamoDB's 1e126 limit | Low | bounded at 1e9 ms |
+| Security test scanned `AWS::IAM::Policy` only; allow-list too loose | Low | Role inline + managed policies scanned; list tightened |
+| `.map` files from earlier deploys remain in the bucket (`--exclude` also exempts from `--delete`) | Low | one-off `aws s3 rm … --include "*.map"` at the Frontend deploy (owner/me) |
+| **QA harness logs in as the pool's only `admin` user** (my own follow-up check) — a steered agent could mutate the registry via the UI | **High (operational)** | **owner: create a dedicated non-admin QA user with its own tenantId and point the login secret at it** (Phase 0, item 5) |
+| `environment: production` in `deploy.yml` is auto-created unprotected if absent | Info | owner: add required reviewers to the environment (Phase 0, item 6) |
+| Cognito Plus compromised-credential default action may block a QA login with a breached-corpus password | Needs verification | QA password is generated; observe the first QA run after the Auth deploy |
+
+Residual, stated: within one object the sequence is still at-least-once between the first upsert and the marker — bounded to
+≤ 3 re-adds of that object's earlier rollups, then skipped and logged; exactly-once would need a transactional write per
+object, deferred.
+
 ## Gates
 | Gate | Result |
 |---|---|
-| Backend `jest` / `tsc --noEmit` | PASS — 535/535 (+13) |
-| `python3 -m unittest test_etl` / `test_agents` | PASS — 25 / 10 |
+| Backend `jest` / `tsc --noEmit` | PASS — 536/536 (+14) |
+| `python3 -m unittest test_etl` / `test_agents` | PASS — 25 / 12 |
 | Frontend `tsc --noEmit` / `vite build` | PASS |
 | Infra `jest` (incl. `security.test.ts`) / `cdk synth -c env=ci` | PASS — 36/36 (+14) · 11 stacks |
 | `actionlint` on all four workflows | clean |

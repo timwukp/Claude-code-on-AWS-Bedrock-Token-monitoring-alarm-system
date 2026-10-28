@@ -197,6 +197,7 @@ export function daysFor(raw: unknown): number | null {
 async function startQuery(event: APIGatewayProxyEvent, tenantId: string) {
   let body: Record<string, unknown>;
   try { body = JSON.parse(event.body ?? '{}'); } catch { return badRequest('Body must be JSON'); }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return badRequest('Body must be a JSON object');
   const template = templateFor(body.template);
   if (!template) return badRequest(`Unknown template. Allowed: ${Object.keys(TEMPLATES).join(', ')}`);
   const days = daysFor(body.days);

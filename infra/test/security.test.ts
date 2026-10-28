@@ -105,11 +105,16 @@ describe('security invariants', () => {
   });
 
   describe('IAM wildcards are confined to actions that cannot be scoped', () => {
-    const SCOPELESS = /^(cloudwatch:(GetMetricData|ListMetrics|GetMetricStatistics|PutMetricData)|ce:GetCostAndUsage|servicequotas:ListServiceQuotas|bedrock:ListInferenceProfiles|xray:(Put.*|GetSamplingRules|GetSamplingTargets)|ecr:GetAuthorizationToken|lakeformation:GetDataAccess|ecs:(DescribeTasks|StopTask)|logs:(CreateLogGroup|CreateLogStream|PutLogEvents|DescribeLogGroups)|sts:GetCallerIdentity|pricing:GetProducts|glue:GetDatabases?|bedrock:(InvokeModel|GetInferenceProfile|ListTagsForResource|GetFoundationModel|ListFoundationModels))$/;
+    // Actions AWS documents as not resource-scopable, plus ecs:StopTask which CDK's EcsRunTask(.sync) integration emits on `*`. Anything else on `*` fails.
+    const SCOPELESS = /^(cloudwatch:(GetMetricData|ListMetrics|GetMetricStatistics)|ce:GetCostAndUsage|servicequotas:ListServiceQuotas|bedrock:(ListInferenceProfiles|ListFoundationModels)|xray:(Put.*|GetSamplingRules|GetSamplingTargets)|ecr:GetAuthorizationToken|lakeformation:GetDataAccess|ecs:(DescribeTasks|StopTask)|sts:GetCallerIdentity|pricing:GetProducts)$/;
     it.each(['api', 'etl', 'automation', 'dora'] as const)('%s: no write/admin action on Resource "*"', (s) => {
       const bad: string[] = [];
-      for (const [id, p] of Object.entries(t(s).findResources('AWS::IAM::Policy'))) {
-        for (const st of (p as any).Properties.PolicyDocument.Statement) { // eslint-disable-line @typescript-eslint/no-explicit-any -- CloudFormation JSON
+      const docs: Array<[string, any]> = []; // eslint-disable-line @typescript-eslint/no-explicit-any -- CloudFormation JSON
+      for (const [id, p] of Object.entries(t(s).findResources('AWS::IAM::Policy'))) docs.push([id, (p as any).Properties.PolicyDocument]);
+      for (const [id, p] of Object.entries(t(s).findResources('AWS::IAM::ManagedPolicy'))) docs.push([id, (p as any).Properties.PolicyDocument]);
+      for (const [id, r] of Object.entries(t(s).findResources('AWS::IAM::Role'))) for (const ip of (r as any).Properties.Policies ?? []) docs.push([`${id}/${ip.PolicyName}`, ip.PolicyDocument]);
+      for (const [id, doc] of docs) {
+        for (const st of doc.Statement) {
           const res = Array.isArray(st.Resource) ? st.Resource : [st.Resource];
           if (!res.includes('*')) continue;
           for (const a of Array.isArray(st.Action) ? st.Action : [st.Action]) if (!SCOPELESS.test(a)) bad.push(`${id}: ${a}`);

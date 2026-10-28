@@ -37,30 +37,8 @@ permissions:
 
 env:
   AWS_REGION: us-east-1
-  # Account ID comes from a repo secret (Settings → Secrets → Actions → AWS_ACCOUNT_ID),
-  # so no account number is committed to this public repo — which is true, and was not
-  # enough. Being a secret masks it in the job LOG; it does not mask it in anything this
-  # workflow POSTs to the GitHub API. The agents interpolate it into S3 URIs and then
-  # narrate those URIs in their own output, so every string they produce is scrubbed by
-  # .github/scripts/redact.js before it can reach a comment body. Read that file before
-  # adding any step that publishes agent text.
-  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-  # Harness names come from repo variables (Settings → Secrets and variables → Actions → Variables),
-  # so no environment-specific resource ids are committed to this public repo.
-  HARNESS_ARN: arn:aws:bedrock-agentcore:us-east-1:${{ secrets.AWS_ACCOUNT_ID }}:harness/${{ vars.UI_HARNESS }}
-  BUGFIX_ARN: arn:aws:bedrock-agentcore:us-east-1:${{ secrets.AWS_ACCOUNT_ID }}:harness/${{ vars.BUGFIX_HARNESS }}
-  TARGET_URL: ${{ vars.TARGET_URL }}
-  # Absolute fuse only — the loop's real exits are goal-driven: green when the QA report has
-  # no blocking findings, red early when two consecutive rounds make zero progress (nothing
-  # FIXED and the blocking set not shrinking — the signature of a bug this loop cannot fix).
-  MAX_FIX_ROUNDS: '15'
-  # What makes this check red once the loop has stopped advancing (owner decision 2026-09-21).
-  #   FAIL     = any finding at all reddens it — the report's own verdict, LOW nits included.
-  #   BLOCKING = only CRITICAL/HIGH/MEDIUM redden it; LOW findings annotate but pass.
-  # FAIL is the default because the failure it prevents was real and repeated: #51, #52 and #53
-  # each ended GREEN while their report said `overall: FAIL`, so six green checks invited a merge
-  # of a failing report. Switching to BLOCKING is a one-word change here, nothing else.
-  QA_RED_ON: FAIL
+  # Everything else (account id, harness ARNs, target URL, QA_RED_ON) is job-level on `inputs`
+  # and `qa` only: the `build` job runs the PR's npm scripts and must inherit no secret.
 
 jobs:
   # ── 1. Public build inputs (read with credentials, but they are public-by-design values) ──
@@ -70,6 +48,8 @@ jobs:
     permissions:
       id-token: write
       contents: read
+    env:
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
     outputs:
       api_url: ${{ steps.cfn.outputs.api_url }}
       user_pool_id: ${{ steps.cfn.outputs.user_pool_id }}
@@ -123,6 +103,31 @@ jobs:
       id-token: write        # OIDC → assume the AWS role
       contents: write        # the auto-fix commit onto the PR branch (main is ruleset-protected: PR + checks required)
       pull-requests: write   # post the results comment
+    env:
+      # Account ID comes from a repo secret (Settings → Secrets → Actions → AWS_ACCOUNT_ID),
+      # so no account number is committed to this public repo — which is true, and was not
+      # enough. Being a secret masks it in the job LOG; it does not mask it in anything this
+      # workflow POSTs to the GitHub API. The agents interpolate it into S3 URIs and then
+      # narrate those URIs in their own output, so every string they produce is scrubbed by
+      # .github/scripts/redact.js before it can reach a comment body. Read that file before
+      # adding any step that publishes agent text.
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+      # Harness names come from repo variables (Settings → Secrets and variables → Actions → Variables),
+      # so no environment-specific resource ids are committed to this public repo.
+      HARNESS_ARN: arn:aws:bedrock-agentcore:us-east-1:${{ secrets.AWS_ACCOUNT_ID }}:harness/${{ vars.UI_HARNESS }}
+      BUGFIX_ARN: arn:aws:bedrock-agentcore:us-east-1:${{ secrets.AWS_ACCOUNT_ID }}:harness/${{ vars.BUGFIX_HARNESS }}
+      TARGET_URL: ${{ vars.TARGET_URL }}
+      # Absolute fuse only — the loop's real exits are goal-driven: green when the QA report has
+      # no blocking findings, red early when two consecutive rounds make zero progress (nothing
+      # FIXED and the blocking set not shrinking — the signature of a bug this loop cannot fix).
+      MAX_FIX_ROUNDS: '15'
+      # What makes this check red once the loop has stopped advancing (owner decision 2026-09-21).
+      #   FAIL     = any finding at all reddens it — the report's own verdict, LOW nits included.
+      #   BLOCKING = only CRITICAL/HIGH/MEDIUM redden it; LOW findings annotate but pass.
+      # FAIL is the default because the failure it prevents was real and repeated: #51, #52 and #53
+      # each ended GREEN while their report said `overall: FAIL`, so six green checks invited a merge
+      # of a failing report. Switching to BLOCKING is a one-word change here, nothing else.
+      QA_RED_ON: FAIL
     steps:
       # Trusted tooling: ci-agent/, .github/scripts/, .sdlc/ from the BASE branch.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -237,6 +242,7 @@ jobs:
       - name: Run Bug-Fix Agent and push fix
         id: fix
         if: >-
+          github.event_name == 'pull_request' &&
           steps.qa.outputs.blocking == 'true' &&
           fromJSON(steps.rounds.outputs.count) < fromJSON(env.MAX_FIX_ROUNDS) &&
           fromJSON(steps.stall.outputs.stalls) < 2
@@ -252,6 +258,7 @@ jobs:
             --report qa-report.json \
             --harness-arn "$BUGFIX_ARN" \
             --repo-root pr \
+            --plan-root . \
             --out bugfix-summary.md \
             --patched-list bugfix-patched.txt
           cd pr

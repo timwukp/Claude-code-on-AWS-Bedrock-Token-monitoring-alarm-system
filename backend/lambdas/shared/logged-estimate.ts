@@ -33,10 +33,11 @@ export async function listTenants(): Promise<string[]> {
     for (const it of (res.Items ?? []) as Record<string, unknown>[]) out.push(String(it.sk));
     start = res.LastEvaluatedKey as Record<string, unknown> | undefined;
   } while (start);
-  if (out.length) return out;
+  // Union, not fallback: between the Etl deploy and `seed-tenant-index.ts --apply` the new aggregator writes a few
+  // per-tenant items while the legacy list still holds the rest; either alone would under-count the logged side.
   const legacy = await ddb.send(new GetCommand({ TableName: TABLE(), Key: { pk: 'SYSTEM#TENANTS', sk: 'all' } }));
   const t = legacy.Item?.tenants;
-  return Array.isArray(t) ? t.map(String) : [];
+  return [...new Set([...out, ...(Array.isArray(t) ? t.map(String) : [])])];
 }
 
 /** Sum and price every tenant's PROJDAY rows for [fromDay, toDay] into per-day, per-model-key totals. */

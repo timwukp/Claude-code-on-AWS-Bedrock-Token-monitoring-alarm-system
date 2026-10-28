@@ -27,6 +27,19 @@ owner on 2026-10-28 (plan-mode review of the two-chain hardening programme; this
    `intent/hardening-1-pipeline-and-isolation/plan.md`, `.sdlc/active`, `intent/lakehouse-p1-zero-etl-flag/intent.md`,
    `intent/lakehouse-p1-zero-etl-flag/spec.md`, `intent/lakehouse-p1-zero-etl-flag/plan.md` (→ shipped)
 
+## Review round (2026-10-28, independent adversarial review of the PR — folded in)
+- Aggregator: `reservedConcurrentExecutions: 1` + schedule `retryAttempts: 0` (two overlapping runs could ADD twice);
+  per-object `try/catch` with `SYSTEM#FAILED/<key>` attempt counter — after 3 failed runs the object is marked
+  `failed: true` and skipped, so a poisoned file cannot pin the watermark; `markersSince` keeps the strict listing on
+  the first run after the switch (no re-add of the last minute); `usersToAdd` ignores ids already present.
+- Workflow: account id / harness ARNs / target URL are job-level env on `inputs` and `qa` only (the `build` job inherited
+  them before); the fix step runs only on `pull_request`; `--plan-root .` reads the allow-list from the BASE checkout.
+- Agents: non-object findings are kept as MEDIUM findings (dropping them turned a FAIL report into PASS); `extract_json`
+  prefers the structured report (`pages_tested`); diffs that delete, change mode, create symlinks or new files are refused.
+- Frontend: tokens the previous build left in localStorage are purged on boot. Parser: latency bounded at 1e9 ms.
+- Security test: scans Role inline + managed policies too; wildcard allow-list tightened (no `bedrock:InvokeModel`, `logs:*`).
+- `/v1/queries` POST rejects a non-object body with 400.
+
 ## Order
 parse sanitisation → aggregator per-object loop + tenant items + userSet cap → listTenants / migration script → queries binding →
 CI agents + workflows → CDK (headers, auth, CORS, TTL, runtimes, bump) + infra tests → frontend token store / maps → docs →
