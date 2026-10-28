@@ -401,45 +401,49 @@ export class LakehouseStack extends cdk.Stack {
     });
 
     // --- Glue zero-ETL: DynamoDB (dora, registry) → Glue database ------------------------------
-    // The target of a Glue zero-ETL integration is the Glue *database* ARN; the data lands as Iceberg
-    // under the database's location. The integration roles are kept even if the L1 is removed later.
-    const zeroEtlSourceRole = new iam.Role(this, 'ZeroEtlSourceRole', { assumedBy: new iam.ServicePrincipal('glue.amazonaws.com') });
-    zeroEtlSourceRole.addToPolicy(new iam.PolicyStatement({
-      actions: ['dynamodb:DescribeTable', 'dynamodb:ExportTableToPointInTime', 'dynamodb:DescribeExport', 'dynamodb:DescribeContinuousBackups', 'dynamodb:DescribeStream', 'dynamodb:GetRecords', 'dynamodb:GetShardIterator', 'dynamodb:UpdateTable'],
-      resources: [tables.dora.tableArn, `${tables.dora.tableArn}/*`, tables.tenants.tableArn, `${tables.tenants.tableArn}/*`],
-    }));
-    const zeroEtlTargetRole = new iam.Role(this, 'ZeroEtlTargetRole', { assumedBy: new iam.ServicePrincipal('glue.amazonaws.com') });
-    zeroEtlTargetRole.addToPolicy(new iam.PolicyStatement({
-      actions: ['glue:*'],
-      resources: [
-        `arn:aws:glue:${cfg.region}:${cfg.account}:catalog`,
-        `arn:aws:glue:${cfg.region}:${cfg.account}:database/token_monitoring_${cfg.env}`,
-        `arn:aws:glue:${cfg.region}:${cfg.account}:table/token_monitoring_${cfg.env}/*`,
-      ],
-    }));
-    curatedBucket.grantReadWrite(zeroEtlTargetRole, 'zero-etl/*');
-    curatedBucket.grantRead(zeroEtlTargetRole);
-    dataKey.grantEncryptDecrypt(zeroEtlTargetRole);
-    zeroEtlTargetRole.addToPolicy(new iam.PolicyStatement({ actions: ['lakeformation:GetDataAccess'], resources: ['*'] }));
-    const glueDbArn = `arn:aws:glue:${cfg.region}:${cfg.account}:database/token_monitoring_${cfg.env}`;
-    const targetProps = new glue.CfnIntegrationResourceProperty(this, 'ZeroEtlTargetProps', {
-      resourceArn: glueDbArn,
-      targetProcessingProperties: { roleArn: zeroEtlTargetRole.roleArn, kmsArn: dataKey.keyArn },
-    });
-    for (const [name, table] of [['Dora', tables.dora], ['Registry', tables.tenants]] as const) {
-      const sourceProps = new glue.CfnIntegrationResourceProperty(this, `ZeroEtl${name}SourceProps`, {
-        resourceArn: table.tableArn,
-        sourceProcessingProperties: { roleArn: zeroEtlSourceRole.roleArn },
+    // Behind lakehouse.enableZeroEtl (default off). The first dev deploy (2026-10-28) was rejected by
+    // Glue: for a DynamoDB source the IntegrationResourceProperty must not carry the table ARN ("The
+    // glue connection ARN … is invalid"), and each failed first create costs a 15-minute S3 Tables
+    // name cooldown, so the bronze core ships first and this lands when the resource shape is proven.
+    if (cfg.lakehouse?.enableZeroEtl === true) {
+      const zeroEtlSourceRole = new iam.Role(this, 'ZeroEtlSourceRole', { assumedBy: new iam.ServicePrincipal('glue.amazonaws.com') });
+      zeroEtlSourceRole.addToPolicy(new iam.PolicyStatement({
+        actions: ['dynamodb:DescribeTable', 'dynamodb:ExportTableToPointInTime', 'dynamodb:DescribeExport', 'dynamodb:DescribeContinuousBackups', 'dynamodb:DescribeStream', 'dynamodb:GetRecords', 'dynamodb:GetShardIterator', 'dynamodb:UpdateTable'],
+        resources: [tables.dora.tableArn, `${tables.dora.tableArn}/*`, tables.tenants.tableArn, `${tables.tenants.tableArn}/*`],
+      }));
+      const zeroEtlTargetRole = new iam.Role(this, 'ZeroEtlTargetRole', { assumedBy: new iam.ServicePrincipal('glue.amazonaws.com') });
+      zeroEtlTargetRole.addToPolicy(new iam.PolicyStatement({
+        actions: ['glue:*'],
+        resources: [
+          `arn:aws:glue:${cfg.region}:${cfg.account}:catalog`,
+          `arn:aws:glue:${cfg.region}:${cfg.account}:database/token_monitoring_${cfg.env}`,
+          `arn:aws:glue:${cfg.region}:${cfg.account}:table/token_monitoring_${cfg.env}/*`,
+        ],
+      }));
+      curatedBucket.grantReadWrite(zeroEtlTargetRole, 'zero-etl/*');
+      curatedBucket.grantRead(zeroEtlTargetRole);
+      dataKey.grantEncryptDecrypt(zeroEtlTargetRole);
+      zeroEtlTargetRole.addToPolicy(new iam.PolicyStatement({ actions: ['lakeformation:GetDataAccess'], resources: ['*'] }));
+      const glueDbArn = `arn:aws:glue:${cfg.region}:${cfg.account}:database/token_monitoring_${cfg.env}`;
+      const targetProps = new glue.CfnIntegrationResourceProperty(this, 'ZeroEtlTargetProps', {
+        resourceArn: glueDbArn,
+        targetProcessingProperties: { roleArn: zeroEtlTargetRole.roleArn, kmsArn: dataKey.keyArn },
       });
-      const integration = new glue.CfnIntegration(this, `ZeroEtl${name}`, {
-        integrationName: `tums-${cfg.env}-${name.toLowerCase()}`,
-        sourceArn: table.tableArn,
-        targetArn: glueDbArn,
-        kmsKeyId: dataKey.keyArn,
-        description: `TUMS lakehouse bronze mirror of the ${name} DynamoDB table.`,
-      });
-      integration.addDependency(sourceProps);
-      integration.addDependency(targetProps);
+      for (const [name, table] of [['Dora', tables.dora], ['Registry', tables.tenants]] as const) {
+        const sourceProps = new glue.CfnIntegrationResourceProperty(this, `ZeroEtl${name}SourceProps`, {
+          resourceArn: table.tableArn,
+          sourceProcessingProperties: { roleArn: zeroEtlSourceRole.roleArn },
+        });
+        const integration = new glue.CfnIntegration(this, `ZeroEtl${name}`, {
+          integrationName: `tums-${cfg.env}-${name.toLowerCase()}`,
+          sourceArn: table.tableArn,
+          targetArn: glueDbArn,
+          kmsKeyId: dataKey.keyArn,
+          description: `TUMS lakehouse bronze mirror of the ${name} DynamoDB table.`,
+        });
+        integration.addDependency(sourceProps);
+        integration.addDependency(targetProps);
+      }
     }
 
     // --- Alarms → governance topic -------------------------------------------------------------

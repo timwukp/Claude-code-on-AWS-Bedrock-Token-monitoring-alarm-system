@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Date:** 2026-10-27
 - **Accepted-by:** Tim WU
-- **Status:** accepted
+- **Status:** shipped
 
 ## Problem
 Deploying `Tums-dev-Lakehouse` (#79) failed three times, each on a different wall: (1) the CUR bucket policy let only
