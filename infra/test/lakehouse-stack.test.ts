@@ -57,11 +57,9 @@ describe('LakehouseStack (bronze)', () => {
           Match.objectLike({ DestinationDatabaseName: 'bronze', DestinationTableName: 'bedrock_invocations' }),
           Match.objectLike({ DestinationDatabaseName: 'bronze', DestinationTableName: 'otel_spans' }),
         ]),
-        ProcessingConfiguration: { Enabled: true, Processors: [
-          Match.objectLike({ Type: 'Decompression', Parameters: [{ ParameterName: 'CompressionFormat', ParameterValue: 'GZIP' }] }),
-          Match.objectLike({ Type: 'CloudWatchLogProcessing', Parameters: [{ ParameterName: 'DataMessageExtraction', ParameterValue: 'true' }] }),
-          Match.objectLike({ Type: 'Lambda' }),
-        ] },
+        // Iceberg destinations accept the Lambda processor only (Decompression / CloudWatchLogProcessing are
+        // S3/Splunk/Snowflake-only — dev deploy 2026-10-28); the Lambda unpacks the CloudWatch Logs envelope.
+        ProcessingConfiguration: { Enabled: true, Processors: [Match.objectLike({ Type: 'Lambda' })] },
         s3BackupMode: 'FailedDataOnly', // CFN spells this one lowercase for the Iceberg destination
         BufferingHints: { IntervalInSeconds: 60, SizeInMBs: 5 },
         S3Configuration: Match.objectLike({ ErrorOutputPrefix: Match.stringLikeRegexp('^errors/') }),
@@ -192,5 +190,16 @@ describe('LakehouseStack (bronze)', () => {
     template.resourceCountIs('AWS::Glue::IntegrationResourceProperty', 0);
     const { lakehouse: withZeroEtl } = synthApp({ ...cfg, lakehouse: { ...cfg.lakehouse!, enableZeroEtl: true } });
     Template.fromStack(withZeroEtl).resourceCountIs('AWS::Glue::Integration', 2);
+  });
+
+  it('lets the Firehose role resolve the table through every level of the S3 Tables federated catalog', () => {
+    const policies = template.findResources('AWS::IAM::Policy');
+    const glueStmts = Object.values(policies).flatMap((p: any) => p.Properties.PolicyDocument.Statement)
+      .filter((st: any) => JSON.stringify(st.Action).includes('glue:GetTable'));
+    const res = JSON.stringify(glueStmts.map((st: any) => st.Resource));
+    expect(res).toContain(':catalog/s3tablescatalog"');
+    expect(res).toMatch(/catalog\/s3tablescatalog\/tums-lakehouse-ci/);
+    expect(res).toMatch(/table\/s3tablescatalog\/tums-lakehouse-ci\/\*\/\*/);
+    expect(JSON.stringify(glueStmts.map((st: any) => st.Action))).toContain('glue:GetCatalog');
   });
 });

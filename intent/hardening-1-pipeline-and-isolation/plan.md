@@ -3,7 +3,7 @@
 - **Spec:** ./spec.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Accepted-for:** b2851fe9a4bad0750906800b054b62ed96f9fa2e
+- **Accepted-for:** de51b8a9a9107a1494da52a3f453b771fcd1bac4
 - **Status:** accepted
 
 `Accepted-for` is the tip of `main` after PR #82 (lakehouse-p1-zero-etl-flag); the only chain in flight. Plan approved by the

@@ -212,13 +212,16 @@ export class LakehouseStack extends cdk.Stack {
     bedrockTransformFn.grantInvoke(firehoseRole);
     metricsTransformFn.grantInvoke(firehoseRole);
     firehoseRole.addToPolicy(new iam.PolicyStatement({
-      actions: ['glue:GetTable', 'glue:GetTables', 'glue:GetDatabase', 'glue:GetDatabases', 'glue:UpdateTable'],
+      actions: ['glue:GetTable', 'glue:GetTables', 'glue:GetDatabase', 'glue:GetDatabases', 'glue:UpdateTable', 'glue:GetCatalog', 'glue:GetCatalogs'],
+      // The S3 Tables federated catalog is addressed at three levels (root catalog, `s3tablescatalog`,
+      // `s3tablescatalog/<bucket>`); Firehose resolves the table through all of them.
       resources: [
         `arn:aws:glue:${cfg.region}:${cfg.account}:catalog`,
+        `arn:aws:glue:${cfg.region}:${cfg.account}:catalog/s3tablescatalog`,
         catalogArn,
         `${catalogArn}/*`,
-        `arn:aws:glue:${cfg.region}:${cfg.account}:database/s3tablescatalog/${tableBucketName}/bronze`,
-        `arn:aws:glue:${cfg.region}:${cfg.account}:table/s3tablescatalog/${tableBucketName}/bronze/*`,
+        `arn:aws:glue:${cfg.region}:${cfg.account}:database/s3tablescatalog/${tableBucketName}/*`,
+        `arn:aws:glue:${cfg.region}:${cfg.account}:table/s3tablescatalog/${tableBucketName}/*/*`,
       ],
     }));
     firehoseRole.addToPolicy(new iam.PolicyStatement({
@@ -255,25 +258,19 @@ export class LakehouseStack extends cdk.Stack {
     }
     if (lh.ownerPrincipalArn) grant('LfOwnerBronzeDb', lh.ownerPrincipalArn, null, ['DESCRIBE']);
 
-    // Firehose's Iceberg destination wants ONE JSON object per record. CloudWatch Logs delivers gzip'd
-    // envelopes holding many events, so the bedrock stream unpacks them before our Lambda runs;
-    // Metric Streams already deliver one datapoint per record.
-    const stream = (idName: string, name: string, destinations: string[], fn: lambda.IFunction, unpackCloudWatchLogs: boolean) => {
-      const lambdaProcessor = {
+    // Firehose's Iceberg destination wants ONE JSON object per record and accepts ONLY the Lambda
+    // processor ("DecompressionProcessor is currently only supported for destination type S3, Splunk
+    // and Snowflake" — dev deploy 2026-10-28). The transform Lambda therefore unpacks the gzip'd
+    // CloudWatch Logs envelope itself and re-ingests the overflow rows (see transform.ts).
+    const stream = (idName: string, name: string, destinations: string[], fn: lambda.IFunction) => {
+      const processors = [{
         type: 'Lambda',
         parameters: [
           { parameterName: 'LambdaArn', parameterValue: fn.functionArn },
           { parameterName: 'BufferIntervalInSeconds', parameterValue: '60' },
           { parameterName: 'BufferSizeInMBs', parameterValue: '1' },
         ],
-      };
-      const processors = unpackCloudWatchLogs
-        ? [
-          { type: 'Decompression', parameters: [{ parameterName: 'CompressionFormat', parameterValue: 'GZIP' }] },
-          { type: 'CloudWatchLogProcessing', parameters: [{ parameterName: 'DataMessageExtraction', parameterValue: 'true' }] },
-          lambdaProcessor,
-        ]
-        : [lambdaProcessor];
+      }];
       const s = new firehose.CfnDeliveryStream(this, idName, {
         deliveryStreamName: name,
         deliveryStreamType: 'DirectPut',
@@ -303,8 +300,8 @@ export class LakehouseStack extends cdk.Stack {
       s.node.addDependency(firehoseRole);
       return s;
     };
-    const bedrockStream = stream('BedrockStream', bedrockStreamName, ['bedrock_invocations', 'otel_spans'], bedrockTransformFn, true);
-    const metricsStream = stream('MetricsStream', metricsStreamName, ['cw_metrics'], metricsTransformFn, false);
+    const bedrockStream = stream('BedrockStream', bedrockStreamName, ['bedrock_invocations', 'otel_spans'], bedrockTransformFn);
+    const metricsStream = stream('MetricsStream', metricsStreamName, ['cw_metrics'], metricsTransformFn);
 
     // --- CloudWatch Logs → Firehose subscriptions -----------------------------------------------
     const cwlRole = new iam.Role(this, 'LogsToFirehoseRole', {

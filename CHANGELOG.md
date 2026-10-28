@@ -25,6 +25,9 @@ are grouped by development milestone rather than strict semver releases.
   asserts the invariants. Docs: `docs/MULTI_TENANCY.md` (single-organisation deployment, cooperative attribution),
   `SECURITY.md` (trust boundaries, owner-maintained repository/account settings).
 
+### Fixed — Firehose → Iceberg streams (lakehouse-p1-firehose-fixes)
+- Iceberg destinations accept only the Lambda processor; the transform Lambda unpacks CloudWatch Logs envelopes itself. The
+  Firehose role can now resolve destination tables through every level of the S3 Tables federated catalog. (PR TBD)
 
 ### Changed — zero-ETL mirrors behind a flag (lakehouse-p1-zero-etl-flag)
 - `lakehouse.enableZeroEtl` (default off): the Glue zero-ETL integrations for the DORA and registry tables are created only
