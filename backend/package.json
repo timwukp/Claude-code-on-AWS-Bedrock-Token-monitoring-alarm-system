@@ -21,7 +21,7 @@
     "@aws-sdk/client-secrets-manager": "^3.600.0",
     "@aws-sdk/client-service-quotas": "^3.600.0",
     "@aws-sdk/client-sns": "^3.600.0",
-    "@aws-sdk/lib-dynamodb": "^3.600.0"
+    "@aws-sdk/lib-dynamodb": "^3.1156.0"
   },
   "devDependencies": {
     "@aws-sdk/client-pricing": "^3.1146.0",
