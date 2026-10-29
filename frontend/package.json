@@ -14,7 +14,7 @@
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.24.0",
     "recharts": "^2.12.7",
-    "@aws-amplify/auth": "^6.3.0",
+    "@aws-amplify/auth": "^6.21.2",
     "aws-amplify": "^6.4.0"
   },
   "devDependencies": {
