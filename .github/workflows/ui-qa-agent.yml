@@ -254,11 +254,16 @@ jobs:
           # The agent (base-branch code) patches the PR checkout under pr/ — never this workspace,
           # which holds the trusted tooling. Its diff is confined to the one file it was asked about
           # (bugfix_agent.diff_is_confined) and protected paths are refused outright.
+          # The agent is the BASE branch's copy; a PR that adds an agent flag runs here before that flag exists,
+          # so only pass --plan-root when this copy understands it (after merge both come from the same tree).
+          PLAN_ROOT_ARG=""
+          if python ci-agent/bugfix_agent.py --help 2>/dev/null | grep -q -- '--plan-root'; then PLAN_ROOT_ARG="--plan-root ."; fi
+          # shellcheck disable=SC2086
           python ci-agent/bugfix_agent.py \
             --report qa-report.json \
             --harness-arn "$BUGFIX_ARN" \
             --repo-root pr \
-            --plan-root . \
+            $PLAN_ROOT_ARG \
             --out bugfix-summary.md \
             --patched-list bugfix-patched.txt
           cd pr
