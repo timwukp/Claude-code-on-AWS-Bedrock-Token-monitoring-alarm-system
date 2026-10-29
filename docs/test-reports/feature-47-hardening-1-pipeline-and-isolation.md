@@ -1,6 +1,6 @@
 # Feature 47 — Hardening 1: the pipeline cannot be wedged or poisoned; CI runs no PR code with credentials
 
-- **Chain:** `intent/hardening-1-pipeline-and-isolation/` · **Branch:** `feat/hardening-1-pipeline-and-isolation` off `main@de51b8a` (post-#83, rebased) · **PR:** #84
+- **Chain:** `intent/hardening-1-pipeline-and-isolation/` · **Branch:** `feat/hardening-1-pipeline-and-isolation` off `main@fbeec40` (post-#85, rebased twice) · **PR:** #84
 - **Origin:** security audit 2026-10-28 (five parallel reviewers + live checks; owner approved a two-chain hardening programme the
   same day). This chain closes the audit's two Critical and five of its six High items; chain 2 (`hardening-2-limits-and-visibility`)
   takes limits, retention, alarms and the containment rewrite.
@@ -83,7 +83,7 @@ The first run (64ecfa7) crashed before any verdict: my boto3 pin (1.40.49) preda
 | Frontend `tsc --noEmit` / `vite build` | PASS |
 | Infra `jest` (incl. `security.test.ts`) / `cdk synth -c env=ci` | PASS — 36/36 (+14) · 11 stacks |
 | `actionlint` on all four workflows | clean |
-| `sdlc_ci_gate.py --require-active` | PASS — bound to `de51b8a` |
+| `sdlc_ci_gate.py --require-active` | PASS — bound to `fbeec40` |
 | Leak scan | clean |
 
 ## Live — after the owner's deploys (to fill)

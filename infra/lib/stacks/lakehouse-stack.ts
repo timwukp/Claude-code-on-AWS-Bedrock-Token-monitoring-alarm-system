@@ -304,21 +304,28 @@ export class LakehouseStack extends cdk.Stack {
     const metricsStream = stream('MetricsStream', metricsStreamName, ['cw_metrics'], metricsTransformFn);
 
     // --- CloudWatch Logs → Firehose subscriptions -----------------------------------------------
+    // CloudWatch Logs test-delivers to the stream while creating the filter, so the role's permission
+    // must exist in the same resource as the role (inline) — a separate AWS::IAM::Policy raced the
+    // filter on the sixth dev deploy ("no identity-based policy allows firehose:PutRecord").
     const cwlRole = new iam.Role(this, 'LogsToFirehoseRole', {
       assumedBy: new iam.ServicePrincipal('logs.amazonaws.com', {
         conditions: { ArnLike: { 'aws:SourceArn': `arn:aws:logs:${cfg.region}:${cfg.account}:*` } },
       }),
+      inlinePolicies: {
+        PutToFirehose: new iam.PolicyDocument({ statements: [new iam.PolicyStatement({
+          actions: ['firehose:PutRecord', 'firehose:PutRecordBatch'], resources: [bedrockStream.attrArn],
+        })] }),
+      },
     });
-    cwlRole.addToPolicy(new iam.PolicyStatement({
-      actions: ['firehose:PutRecord', 'firehose:PutRecordBatch'], resources: [bedrockStream.attrArn],
-    }));
-    new logs.CfnSubscriptionFilter(this, 'BedrockLogsSubscription', {
+    const bedrockSubscription = new logs.CfnSubscriptionFilter(this, 'BedrockLogsSubscription', {
       logGroupName: this.bedrockLogGroup.logGroupName, destinationArn: bedrockStream.attrArn, roleArn: cwlRole.roleArn, filterPattern: '',
     });
     // X-Ray Transaction Search writes OTel spans to `aws/spans`; it exists because Transaction Search is on.
-    new logs.CfnSubscriptionFilter(this, 'SpansSubscription', {
+    const spansSubscription = new logs.CfnSubscriptionFilter(this, 'SpansSubscription', {
       logGroupName: 'aws/spans', destinationArn: bedrockStream.attrArn, roleArn: cwlRole.roleArn, filterPattern: '',
     });
+    bedrockSubscription.node.addDependency(cwlRole);
+    spansSubscription.node.addDependency(cwlRole);
     if (lh.enableTransactionSearch) {
       new xray.CfnTransactionSearchConfig(this, 'TransactionSearch', { indexingPercentage: 1 });
     }
@@ -326,10 +333,12 @@ export class LakehouseStack extends cdk.Stack {
     // --- CloudWatch Metric Streams → Firehose -------------------------------------------------
     const metricStreamRole = new iam.Role(this, 'MetricStreamRole', {
       assumedBy: new iam.ServicePrincipal('streams.metrics.cloudwatch.amazonaws.com'),
+      inlinePolicies: {
+        PutToFirehose: new iam.PolicyDocument({ statements: [new iam.PolicyStatement({
+          actions: ['firehose:PutRecord', 'firehose:PutRecordBatch'], resources: [metricsStream.attrArn],
+        })] }),
+      },
     });
-    metricStreamRole.addToPolicy(new iam.PolicyStatement({
-      actions: ['firehose:PutRecord', 'firehose:PutRecordBatch'], resources: [metricsStream.attrArn],
-    }));
     new cw.CfnMetricStream(this, 'BedrockMetricStream', {
       name: tableBucketName,
       outputFormat: 'json',

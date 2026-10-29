@@ -202,4 +202,13 @@ describe('LakehouseStack (bronze)', () => {
     expect(res).toMatch(/table\/s3tablescatalog\/tums-lakehouse-ci\/\*\/\*/);
     expect(JSON.stringify(glueStmts.map((st: any) => st.Action))).toContain('glue:GetCatalog');
   });
+
+  it('gives the Logs→Firehose and Metric Stream roles their PutRecord permission inline, so the filters cannot race the policy', () => {
+    const roles = template.findResources('AWS::IAM::Role');
+    const inline = Object.values(roles).filter((r: any) => JSON.stringify(r.Properties.Policies ?? []).includes('firehose:PutRecord'));
+    expect(inline.length).toBe(2);
+    const subs = template.findResources('AWS::Logs::SubscriptionFilter');
+    expect(Object.keys(subs)).toHaveLength(2);
+    for (const sub of Object.values(subs)) expect(((sub as any).DependsOn as string[]).some((d) => /LogsToFirehoseRole/.test(d))).toBe(true);
+  });
 });
