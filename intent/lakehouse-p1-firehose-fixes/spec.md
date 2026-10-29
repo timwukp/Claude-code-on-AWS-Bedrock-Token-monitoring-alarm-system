@@ -3,7 +3,7 @@
 - **Intent:** ./intent.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Status:** signed-off
+- **Status:** shipped
 
 1. Both streams: `processingConfiguration.processors = [Lambda]`.
 2. Firehose role: `glue:GetTable/GetTables/GetDatabase/GetDatabases/UpdateTable/GetCatalog/GetCatalogs` on `catalog`,

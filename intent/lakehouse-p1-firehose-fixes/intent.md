@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Date:** 2026-10-28
 - **Accepted-by:** Tim WU
-- **Status:** accepted
+- **Status:** shipped
 
 ## Problem
 Fifth dev deploy reached 44/52 (Lake Formation, CUR, tables, Lambdas, Metric Stream all created) and both Firehose

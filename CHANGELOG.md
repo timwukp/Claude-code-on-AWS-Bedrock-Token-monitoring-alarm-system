@@ -6,6 +6,9 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Fixed — CloudWatch Logs subscriptions no longer race the role policy (lakehouse-p1-subscription-race)
+- Logs→Firehose and Metric Stream roles carry `firehose:PutRecord` inline; the subscription filters depend on the role. (PR #85)
+
 ### Fixed — Firehose → Iceberg streams (lakehouse-p1-firehose-fixes)
 - Iceberg destinations accept only the Lambda processor; the transform Lambda unpacks CloudWatch Logs envelopes itself. The
   Firehose role can now resolve destination tables through every level of the S3 Tables federated catalog. (PR TBD)
