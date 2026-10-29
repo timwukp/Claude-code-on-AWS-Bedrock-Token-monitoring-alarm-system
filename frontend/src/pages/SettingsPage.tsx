@@ -97,14 +97,15 @@ export function SettingsPage() {
       <Panel title="Projects" helpId="project.tracked"
              desc="A project is the platform's join key: it names a cost bucket (cost center + inference-profile tag), links GitHub repositories (DORA metrics), and optionally claims caller identities (attribution fallback for single-project principals).">
         <div className="inline-form" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
-          <input value={form.id} onChange={(e) => setForm({ ...form, id: e.target.value })} placeholder="id (slug, e.g. token-monitoring)" style={{ minWidth: 200 }} disabled={projBusy} aria-label="Project id" />
-          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Display name" style={{ minWidth: 200 }} disabled={projBusy} aria-label="Project name" />
+          <input value={form.id} onChange={(e) => setForm({ ...form, id: e.target.value })} placeholder="id (slug, e.g. token-monitoring) — required" style={{ minWidth: 200 }} disabled={projBusy} aria-label="Project id" required aria-required="true" />
+          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Display name — required" style={{ minWidth: 200 }} disabled={projBusy} aria-label="Project name" required aria-required="true" />
           <input value={form.costCenter} onChange={(e) => setForm({ ...form, costCenter: e.target.value })} placeholder="Cost center (optional)" style={{ minWidth: 160 }} disabled={projBusy} aria-label="Cost center" />
         </div>
         <div className="inline-form" style={{ marginBottom: 12, flexWrap: 'wrap' }}>
           <input value={form.repos} onChange={(e) => setForm({ ...form, repos: e.target.value })} placeholder="Repos, comma-separated (owner/name, owner/name)" style={{ minWidth: 420 }} disabled={projBusy} aria-label="Repos" />
           <input value={form.identityArns} onChange={(e) => setForm({ ...form, identityArns: e.target.value })} placeholder="Identity ARNs (optional, comma-separated; an IAM role ARN covers every session that assumes it)" style={{ minWidth: 320 }} disabled={projBusy} aria-label="Identity ARNs" title="Caller ARNs attributed to this project when no inference profile or requestMetadata names one. arn:aws:iam::<account>:role/<role> matches every arn:aws:sts::<account>:assumed-role/<role>/<session>." />
-          <button className="btn-primary" onClick={saveProject} disabled={projBusy || !form.id.trim() || !form.name.trim()}>Save project</button>
+          <button className="btn-primary" onClick={saveProject} disabled={projBusy || !form.id.trim() || !form.name.trim()} title={!form.id.trim() || !form.name.trim() ? 'Project id and display name are required' : undefined}>Save project</button>
+          {!projMsg && (!form.id.trim() || !form.name.trim()) && <span className="muted" style={{ marginTop: 0, fontSize: 13 }} role="status">Project id and display name are required to save.</span>}
           {projMsg && <span className={projMsg.kind === 'err' ? 'error-text' : 'muted'} style={{ marginTop: 0, fontSize: 13 }} role="status">{projMsg.text}</span>}
         </div>
         {registry && registry.length > 0 ? (

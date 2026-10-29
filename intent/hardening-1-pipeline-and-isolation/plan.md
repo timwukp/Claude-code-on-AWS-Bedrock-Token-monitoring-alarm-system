@@ -20,7 +20,9 @@ owner on 2026-10-28 (plan-mode review of the two-chain hardening programme; this
    `infra/lib/stacks/data-stack.ts`, `infra/lib/stacks/automation-stack.ts`, `infra/lib/stacks/dora-stack.ts`, `infra/lib/stacks/etl-stack.ts`,
    `infra/lib/stacks/lakehouse-stack.ts`, `infra/package.json`, `infra/package-lock.json`, `infra/test/synth.ts`,
    `infra/test/security.test.ts` (new), `infra/test/lakehouse-stack.test.ts`
-5. Frontend/scripts: `frontend/src/auth/cognito.ts`, `frontend/vite.config.ts`, `frontend/src/pages/ProjectsPage.tsx`, `scripts/deploy-frontend.sh`
+5. Frontend/scripts: `frontend/src/auth/cognito.ts`, `frontend/vite.config.ts`, `frontend/src/pages/ProjectsPage.tsx`, `scripts/deploy-frontend.sh`,
+   `frontend/src/pages/RoiPage.tsx` and `frontend/src/pages/SettingsPage.tsx` (qa F-PR84-001/002 riders: numeric PRs/month input validated
+   client-side; Save project explains its required fields instead of a silent disabled button)
 6. Docs: `docs/MULTI_TENANCY.md`, `SECURITY.md`, `CHANGELOG.md`, `docs/test-reports/feature-47-hardening-1-pipeline-and-isolation.md` (new),
    `docs/test-reports/feature-46-mantle-counts-persisted.md` (Live table filled), `docs/test-reports/README.md`
 7. SDLC: `intent/hardening-1-pipeline-and-isolation/intent.md`, `intent/hardening-1-pipeline-and-isolation/spec.md`,

@@ -68,6 +68,13 @@ Residual, stated: within one object the sequence is still at-least-once between 
 ≤ 3 re-adds of that object's earlier rollups, then skipped and logged; exactly-once would need a transactional write per
 object, deferred.
 
+## qa on the PR — the new three-job workflow ran end to end (`inputs` → `build` → `qa`)
+| Finding | Verdict | Action |
+|---|---|---|
+| F-PR84-001 LOW — ROI "Expected PRs / month" is a free-text input; `abc` was sent as `NaN` and the raw 400 with the request URL shown | valid, pre-existing | rider: `type="number"`, `inputMode="numeric"`, `min 1`, client-side validation message before any request |
+| F-PR84-002 LOW — Settings "Save project" with empty fields "does nothing" (the button is disabled, but nothing says why; inputs not marked required) | valid, pre-existing | rider: `required`/`aria-required` on id and name, a visible "required to save" status while they are blank, and a title on the disabled button |
+The first run (64ecfa7) crashed before any verdict: my boto3 pin (1.40.49) predated `bedrock-agentcore.invoke_harness`; re-pinned to 1.43.120 after verifying the method in a clean venv (168ab47).
+
 ## Gates
 | Gate | Result |
 |---|---|
