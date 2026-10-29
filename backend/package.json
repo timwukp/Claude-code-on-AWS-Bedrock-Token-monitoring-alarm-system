@@ -12,7 +12,7 @@
     "@aws-sdk/client-bedrock": "^3.600.0",
     "@aws-sdk/client-budgets": "^3.600.0",
     "@aws-sdk/client-cloudwatch": "^3.600.0",
-    "@aws-sdk/client-cost-explorer": "^3.1152.0",
+    "@aws-sdk/client-cost-explorer": "^3.1156.0",
     "@aws-sdk/client-dynamodb": "^3.600.0",
     "@aws-sdk/client-firehose": "^3.1157.0",
     "@aws-sdk/client-iam": "^3.600.0",
