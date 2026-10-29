@@ -5,13 +5,18 @@ import {
   GetQueryExecutionCommand,
   GetQueryResultsCommand,
 } from '@aws-sdk/client-athena';
-import { ok, badRequest, serverError } from '../shared/response';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { ok, badRequest, notFound, serverError } from '../shared/response';
 import { RATE_CARD, cardByKeyLength, routeCaseSql } from './cost-calc';
 import { listProfiles, profileResolvesModel } from '../shared/project-registry';
 import { getTenantId } from '../shared/tenant';
 import { invocationSource } from './invocation-source';
 
 const athena = new AthenaClient({});
+const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const AGGREGATES_TABLE = process.env.AGGREGATES_TABLE;
+const QUERY_BINDING_TTL_S = 24 * 3600;
 const WORKGROUP = process.env.ATHENA_WORKGROUP!;
 const DATABASE = process.env.GLUE_DATABASE!;
 const src = () => invocationSource();
@@ -28,7 +33,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   try {
     const tenantId = getTenantId(event);
     if (event.httpMethod === 'POST') return startQuery(event, tenantId);
-    if (event.httpMethod === 'GET') return pollQuery(event);
+    if (event.httpMethod === 'GET') return pollQuery(event, tenantId);
     return badRequest('Unsupported method');
   } catch (err) {
     console.error(err);
@@ -177,11 +182,26 @@ export const TEMPLATES: Record<string, (tenantId: string, days: number, ctx: Tem
   },
 };
 
+/** Which templates a body may name — own properties only, so `constructor` / `__proto__` are not templates. */
+export function templateFor(name: unknown): ((tenantId: string, days: number, ctx: TemplateCtx) => string) | null {
+  return typeof name === 'string' && Object.hasOwn(TEMPLATES, name) ? TEMPLATES[name] : null;
+}
+
+/** 1–90 whole days; anything non-finite is rejected (NaN survives Math.min/max and would reach the SQL). */
+export function daysFor(raw: unknown): number | null {
+  const n = raw === undefined ? 7 : Number(raw);
+  if (!Number.isFinite(n)) return null;
+  return Math.min(Math.max(Math.floor(n), 1), 90);
+}
+
 async function startQuery(event: APIGatewayProxyEvent, tenantId: string) {
-  const body = JSON.parse(event.body ?? '{}');
-  const template = TEMPLATES[body.template];
+  let body: Record<string, unknown>;
+  try { body = JSON.parse(event.body ?? '{}'); } catch { return badRequest('Body must be JSON'); }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return badRequest('Body must be a JSON object');
+  const template = templateFor(body.template);
   if (!template) return badRequest(`Unknown template. Allowed: ${Object.keys(TEMPLATES).join(', ')}`);
-  const days = Math.min(Math.max(Number(body.days ?? 7), 1), 90);
+  const days = daysFor(body.days);
+  if (days === null) return badRequest('days must be a number');
 
   const [modelExpr, projectExpr] = await Promise.all([buildModelExpr(), buildProjectExpr()]);
   const ctx: TemplateCtx = { modelExpr, projectExpr };
@@ -192,12 +212,22 @@ async function startQuery(event: APIGatewayProxyEvent, tenantId: string) {
       QueryExecutionContext: { Database: DATABASE },
     }),
   );
+  // Bind the execution to its tenant: the poll below refuses ids this tenant did not start. Without this,
+  // any authenticated user holding another tenant's execution id could read that tenant's rows from the
+  // shared workgroup (feature-47).
+  if (AGGREGATES_TABLE && res.QueryExecutionId) {
+    await ddb.send(new PutCommand({ TableName: AGGREGATES_TABLE, Item: { pk: `QUERY#${tenantId}`, sk: res.QueryExecutionId, startedAt: new Date().toISOString(), expiresAt: Math.floor(Date.now() / 1000) + QUERY_BINDING_TTL_S } }));
+  }
   return ok({ id: res.QueryExecutionId });
 }
 
-async function pollQuery(event: APIGatewayProxyEvent) {
+async function pollQuery(event: APIGatewayProxyEvent, tenantId: string) {
   const id = event.pathParameters?.id;
   if (!id) return badRequest('Missing query id');
+  if (AGGREGATES_TABLE) {
+    const bound = await ddb.send(new GetCommand({ TableName: AGGREGATES_TABLE, Key: { pk: `QUERY#${tenantId}`, sk: id } }));
+    if (!bound.Item) return notFound('No such query for this tenant');
+  }
 
   const exec = await athena.send(new GetQueryExecutionCommand({ QueryExecutionId: id }));
   const state = exec.QueryExecution?.Status?.State;

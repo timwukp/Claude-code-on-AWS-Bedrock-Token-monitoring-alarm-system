@@ -188,14 +188,22 @@ def extract_json(text: str):
     (it may wrap it in prose/fences and nest findings arbitrarily)."""
     fenced = re.findall(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
     candidates = fenced + list(_iter_json_objects(text))
+    parsed = []
     for c in reversed(candidates):
         try:
             obj = json.loads(c)
         except json.JSONDecodeError:
             continue
         if isinstance(obj, dict) and ("findings" in obj or "overall" in obj):
+            parsed.append(obj)
+    if not parsed:
+        return None
+    # Prefer the structured report (it carries pages_tested); a bare {"findings": []} quoted from page text or
+    # prose must not win just because it came last (feature-47 review).
+    for obj in parsed:
+        if "pages_tested" in obj:
             return obj
-    return None
+    return parsed[0]
 
 
 # Canonical finding fields the downstream comment + Bug-Fix stages rely on.
@@ -206,10 +214,14 @@ def normalize_report(report: dict) -> dict:
       - top-level 'overall' is set FAIL if any finding, else PASS — except the UNKNOWN sentinel,
         which means no report was produced and is kept so the workflow can redden on it."""
     findings = report.get("findings") or []
+    if not isinstance(findings, list):
+        findings = [findings]
     norm = []
     for i, f in enumerate(findings):
         if not isinstance(f, dict):
-            continue
+            # A finding that is not an object is still a finding. Dropping it would let "list the findings as
+            # plain strings" (page-text steering) turn FAIL into PASS (feature-47 review).
+            f = {"summary": str(f), "severity": "MEDIUM", "evidence": "finding emitted as a non-object value"}
         summary = f.get("summary") or f.get("title") or f.get("name") or ""
         evidence = f.get("evidence") or f.get("description") or f.get("actual") or ""
         sev = str(f.get("severity") or "MEDIUM").upper()
@@ -232,8 +244,11 @@ def normalize_report(report: dict) -> dict:
     # The workflow reddens on UNKNOWN precisely so that silence is never read as success.
     if report.get("overall") == "UNKNOWN":
         return report
-    if report.get("overall") not in ("PASS", "FAIL"):
-        report["overall"] = "FAIL" if norm else "PASS"
+    # The verdict is DERIVED from the findings, never taken from the agent's own `overall`: page text
+    # the agent reads is written by whoever calls Bedrock in the monitored account (requestMetadata
+    # project/user ids render on the Projects page), so "overall: PASS" is an attacker-writable string.
+    # A report with findings is FAIL; a report without findings is PASS (feature-47, audit #4).
+    report["overall"] = "FAIL" if norm else "PASS"
     return report
 
 

@@ -22,6 +22,23 @@ completion text**. Treat all deployments as handling sensitive data.
 - **Auditability** — CloudTrail + Bedrock Model Invocation Logging.
 - **Automated response is opt-in** — containment actions are disabled by default (notify-only).
 
+### Trust boundaries (security audit 2026-10-28, feature-47)
+
+- **The log pipeline is an input surface.** Anything a Bedrock caller in the account writes into a request
+  (`requestMetadata`, body) reaches the aggregator. Counters are sanitised (`safeCount`), per-object processing is
+  idempotent (`SYSTEM#PROCESSED` markers), unbounded sets are capped (`userSet` 500), and the tenant index is one
+  item per tenant — so a hostile or merely huge input cannot corrupt rollups or wedge the pipeline.
+- **CI runs no pull-request code with credentials.** `ui-qa-agent.yml` builds the PR with no permissions, then
+  deploys and runs the agents from the base branch's tooling. The QA verdict is derived from findings, never from
+  the agent's own `overall`; the bug-fix agent's diff is confined to the one file it was asked about and may not
+  touch `.github/`, `infra/`, `.sdlc/`, `ci-agent/`, `intent/`, `spec/`, `scripts/`. Actions are pinned by SHA.
+- **Repository and account settings this code relies on (owner-maintained):** `main` ruleset requiring a pull
+  request and the `backend`/`frontend`/`infra`/`sdlc-gate` checks with no bypass; the GitHub Actions role's OIDC
+  trust limited to this repository's pull requests and `main`; account-level S3 Public Access Block on.
+- **Browser:** CloudFront sends HSTS, `X-Content-Type-Options`, `X-Frame-Options: DENY`, a referrer policy and a
+  Content-Security-Policy (report-only until `frontend.cspEnforce` is set); Cognito tokens live in `sessionStorage`
+  with a 1-hour id token and a 1-day refresh token; CORS origins must be configured outside `dev`.
+
 ### Operator responsibilities
 
 - **Model Invocation Logging captures request/response bodies.** If you only need token/metadata

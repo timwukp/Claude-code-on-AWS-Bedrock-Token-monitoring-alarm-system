@@ -45,7 +45,7 @@ export class DoraStack extends cdk.Stack {
     });
 
     this.collectorFn = new NodejsFunction(this, 'CollectorFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       entry: lambdaEntry('dora', 'collector.ts'),
       projectRoot: BACKEND_ROOT,
       depsLockFilePath: BACKEND_LOCK,

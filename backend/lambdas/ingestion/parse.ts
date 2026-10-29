@@ -125,9 +125,12 @@ export function latencyOf(r: InvocationRecord): LatencySample | null {
   if (!m || typeof m !== 'object') return null;
   const e2e = (m as Record<string, unknown>).invocationLatency;
   const ttfb = (m as Record<string, unknown>).firstByteLatency;
-  if (typeof e2e !== 'number' || !Number.isFinite(e2e) || e2e < 0) return null;
+  // Bounded at ~11.5 days: a latency beyond that is corrupt, and summing it would push a rollup toward the
+  // DynamoDB number limit (1e126) and wedge that item's upserts (feature-47 review).
+  const sane = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1e9;
+  if (!sane(e2e)) return null;
   const out: LatencySample = { e2eMs: e2e };
-  if (typeof ttfb === 'number' && Number.isFinite(ttfb) && ttfb >= 0) out.ttfbMs = ttfb;
+  if (sane(ttfb)) out.ttfbMs = ttfb;
   return out;
 }
 
@@ -266,6 +269,7 @@ export function parseLogFile(contents: string): InvocationRecord[] {
     try {
       const r = JSON.parse(t) as InvocationRecord;
       if (!(r.requestId && r.timestamp)) continue;
+      sanitizeCounts(r);
       // Extract-then-discard: keep the few numbers we need from the body, never the body itself.
       r.latency = latencyOf(r);
       r.cacheWriteTtl = cacheWriteTtlOf(r);
@@ -276,6 +280,27 @@ export function parseLogFile(contents: string): InvocationRecord[] {
     }
   }
   return out;
+}
+
+/**
+ * A token count the rollups may add: a non-negative safe integer, else 0. The logs are written by
+ * Bedrock, but the rollups are summed with plain `+` and stored through the DynamoDB marshaller —
+ * `1e309` (Infinity) or a string would throw at write time and, because the aggregator advances its
+ * watermark only after writing, turn one bad record into a run that re-adds every counter on every
+ * retry. Negative or fractional counts are not something a billing log produces; they read as 0.
+ */
+export function safeCount(v: unknown): number {
+  return typeof v === 'number' && Number.isSafeInteger(v) && v >= 0 ? v : 0;
+}
+
+/** Normalise the four billed counters in place so every aggregate function sees safe numbers. */
+export function sanitizeCounts(r: InvocationRecord): void {
+  if (r.input) {
+    r.input.inputTokenCount = safeCount(r.input.inputTokenCount);
+    r.input.cacheReadInputTokenCount = safeCount(r.input.cacheReadInputTokenCount);
+    r.input.cacheWriteInputTokenCount = safeCount(r.input.cacheWriteInputTokenCount);
+  }
+  if (r.output) r.output.outputTokenCount = safeCount(r.output.outputTokenCount);
 }
 
 /** Derive the tenant key: explicit metadata wins, then IAM ARN, then "unknown". */

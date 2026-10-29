@@ -150,6 +150,10 @@ export class DataStack extends cdk.Stack {
         encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
         encryptionKey: key,
         pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true }, // (Reliability pillar)
+        // Items that carry `expiresAt` (epoch seconds) age out: the aggregator's per-object processed
+        // markers and the API's query→tenant bindings (feature-47). Rollups never set it.
+        timeToLiveAttribute: 'expiresAt',
+        deletionProtection: true, // RETAIN stops CloudFormation, not a DeleteTable call
         removalPolicy: cdk.RemovalPolicy.RETAIN,
       });
 

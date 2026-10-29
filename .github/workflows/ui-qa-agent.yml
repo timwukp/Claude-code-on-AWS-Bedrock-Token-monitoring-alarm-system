@@ -28,68 +28,138 @@ concurrency:
   group: ui-qa-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
+# Trust boundary (feature-47, security audit #1): everything that runs with AWS credentials or a write
+# token below is checked out from the PR's BASE branch. The PR's own code is only ever (a) built in a
+# job with no permissions and no secrets, and (b) read as data by the agents. A PR can therefore not
+# change this workflow, the agents, or the redactor for its own run.
 permissions:
-  id-token: write        # OIDC → assume the AWS role
-  contents: write        # push the auto-fix commit onto the PR branch
-  pull-requests: write   # post the results comment
+  contents: read
 
 env:
   AWS_REGION: us-east-1
-  # Account ID comes from a repo secret (Settings → Secrets → Actions → AWS_ACCOUNT_ID),
-  # so no account number is committed to this public repo — which is true, and was not
-  # enough. Being a secret masks it in the job LOG; it does not mask it in anything this
-  # workflow POSTs to the GitHub API. The agents interpolate it into S3 URIs and then
-  # narrate those URIs in their own output, so every string they produce is scrubbed by
-  # .github/scripts/redact.js before it can reach a comment body. Read that file before
-  # adding any step that publishes agent text.
-  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-  # Harness names come from repo variables (Settings → Secrets and variables → Actions → Variables),
-  # so no environment-specific resource ids are committed to this public repo.
-  HARNESS_ARN: arn:aws:bedrock-agentcore:us-east-1:${{ secrets.AWS_ACCOUNT_ID }}:harness/${{ vars.UI_HARNESS }}
-  BUGFIX_ARN: arn:aws:bedrock-agentcore:us-east-1:${{ secrets.AWS_ACCOUNT_ID }}:harness/${{ vars.BUGFIX_HARNESS }}
-  TARGET_URL: ${{ vars.TARGET_URL }}
-  # Absolute fuse only — the loop's real exits are goal-driven: green when the QA report has
-  # no blocking findings, red early when two consecutive rounds make zero progress (nothing
-  # FIXED and the blocking set not shrinking — the signature of a bug this loop cannot fix).
-  MAX_FIX_ROUNDS: '15'
-  # What makes this check red once the loop has stopped advancing (owner decision 2026-09-21).
-  #   FAIL     = any finding at all reddens it — the report's own verdict, LOW nits included.
-  #   BLOCKING = only CRITICAL/HIGH/MEDIUM redden it; LOW findings annotate but pass.
-  # FAIL is the default because the failure it prevents was real and repeated: #51, #52 and #53
-  # each ended GREEN while their report said `overall: FAIL`, so six green checks invited a merge
-  # of a failing report. Switching to BLOCKING is a one-word change here, nothing else.
-  QA_RED_ON: FAIL
+  # Everything else (account id, harness ARNs, target URL, QA_RED_ON) is job-level on `inputs`
+  # and `qa` only: the `build` job runs the PR's npm scripts and must inherit no secret.
 
 jobs:
-  qa:
+  # ── 1. Public build inputs (read with credentials, but they are public-by-design values) ──
+  inputs:
     runs-on: ubuntu-latest
-    # Must cover: deploy (~3-8m) + QA invoke (harness allows 60m) + structured pass + bugfix
-    # (up to 30m). Sized for fable-5-class models that use their full thinking budget.
-    timeout-minutes: 120
+    timeout-minutes: 5
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+    outputs:
+      api_url: ${{ steps.cfn.outputs.api_url }}
+      user_pool_id: ${{ steps.cfn.outputs.user_pool_id }}
+      client_id: ${{ steps.cfn.outputs.client_id }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
-          fetch-depth: 0
-
-      - uses: actions/setup-python@v5
-        with: { python-version: '3.12' }
-
-      - run: pip install boto3
-        working-directory: ci-agent
-
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsUITestRole
           aws-region: ${{ env.AWS_REGION }}
+      - id: cfn
+        run: |
+          # Vite bakes these in at build time (frontend/.env.example); they are already in the public bundle.
+          echo "api_url=$(aws cloudformation describe-stacks --stack-name Tums-dev-Api --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text)" >> "$GITHUB_OUTPUT"
+          echo "user_pool_id=$(aws cloudformation describe-stacks --stack-name Tums-dev-Auth --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text)" >> "$GITHUB_OUTPUT"
+          echo "client_id=$(aws cloudformation describe-stacks --stack-name Tums-dev-Auth --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text)" >> "$GITHUB_OUTPUT"
+
+  # ── 2. Build the PR's frontend with NO permissions and NO secrets ─────────────────────────
+  build:
+    runs-on: ubuntu-latest
+    needs: inputs
+    timeout-minutes: 15
+    permissions: {}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: '20' }
+      - name: Build
+        env:
+          VITE_API_URL: ${{ needs.inputs.outputs.api_url }}
+          VITE_COGNITO_USER_POOL_ID: ${{ needs.inputs.outputs.user_pool_id }}
+          VITE_COGNITO_CLIENT_ID: ${{ needs.inputs.outputs.client_id }}
+          VITE_AWS_REGION: ${{ env.AWS_REGION }}
+        working-directory: frontend
+        run: npm ci && npm run build
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: frontend-dist-${{ github.run_id }}
+          path: frontend/dist/
+          retention-days: 1
+
+  # ── 3. Deploy the artifact, run the agents (base-branch code), post results ─────────────
+  qa:
+    runs-on: ubuntu-latest
+    needs: build
+    # Must cover: deploy (~3-8m) + QA invoke (harness allows 60m) + structured pass + bugfix
+    # (up to 30m). Sized for fable-5-class models that use their full thinking budget.
+    timeout-minutes: 120
+    permissions:
+      id-token: write        # OIDC → assume the AWS role
+      contents: write        # the auto-fix commit onto the PR branch (main is ruleset-protected: PR + checks required)
+      pull-requests: write   # post the results comment
+    env:
+      # Account ID comes from a repo secret (Settings → Secrets → Actions → AWS_ACCOUNT_ID),
+      # so no account number is committed to this public repo — which is true, and was not
+      # enough. Being a secret masks it in the job LOG; it does not mask it in anything this
+      # workflow POSTs to the GitHub API. The agents interpolate it into S3 URIs and then
+      # narrate those URIs in their own output, so every string they produce is scrubbed by
+      # .github/scripts/redact.js before it can reach a comment body. Read that file before
+      # adding any step that publishes agent text.
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+      # Harness names come from repo variables (Settings → Secrets and variables → Actions → Variables),
+      # so no environment-specific resource ids are committed to this public repo.
+      HARNESS_ARN: arn:aws:bedrock-agentcore:us-east-1:${{ secrets.AWS_ACCOUNT_ID }}:harness/${{ vars.UI_HARNESS }}
+      BUGFIX_ARN: arn:aws:bedrock-agentcore:us-east-1:${{ secrets.AWS_ACCOUNT_ID }}:harness/${{ vars.BUGFIX_HARNESS }}
+      TARGET_URL: ${{ vars.TARGET_URL }}
+      # Absolute fuse only — the loop's real exits are goal-driven: green when the QA report has
+      # no blocking findings, red early when two consecutive rounds make zero progress (nothing
+      # FIXED and the blocking set not shrinking — the signature of a bug this loop cannot fix).
+      MAX_FIX_ROUNDS: '15'
+      # What makes this check red once the loop has stopped advancing (owner decision 2026-09-21).
+      #   FAIL     = any finding at all reddens it — the report's own verdict, LOW nits included.
+      #   BLOCKING = only CRITICAL/HIGH/MEDIUM redden it; LOW findings annotate but pass.
+      # FAIL is the default because the failure it prevents was real and repeated: #51, #52 and #53
+      # each ended GREEN while their report said `overall: FAIL`, so six green checks invited a merge
+      # of a failing report. Switching to BLOCKING is a one-word change here, nothing else.
+      QA_RED_ON: FAIL
+    steps:
+      # Trusted tooling: ci-agent/, .github/scripts/, .sdlc/ from the BASE branch.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+      # The PR tree, as data for the bug-fix agent to patch and push. Never executed here.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          path: pr
+          fetch-depth: 0
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with: { python-version: '3.12' }
+
+      - run: pip install boto3==1.43.120  # pinned (feature-47); bedrock-agentcore invoke_harness needs a release after 1.40
+        working-directory: ci-agent
+
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsUITestRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: frontend-dist-${{ github.run_id }}
+          path: pr-dist
 
       # ── Deploy this branch's frontend to the dev site (closes the fix→re-test loop) ──
       # The Bug-Fix Agent patches SOURCE; the QA agent tests the LIVE site. Without this
       # step, a re-triggered run would re-test the old deployment and the loop could never
       # converge (same findings every round until MAX_FIX_ROUNDS burns out).
-      - uses: actions/setup-node@v4
-        with: { node-version: '20' }
-
       - name: Deploy frontend for this branch
         id: deploy
         run: |
@@ -98,17 +168,8 @@ jobs:
             --query "Stacks[0].Outputs[?OutputKey=='SiteBucketName'].OutputValue" --output text)
           DIST_ID=$(aws cloudformation describe-stacks --stack-name "$STACK" \
             --query "Stacks[0].Outputs[?OutputKey=='DistributionId'].OutputValue" --output text)
-          # Vite bakes these in at build time (frontend/.env.example) — without them the bundle
-          # ships userPoolId=undefined and login breaks for everyone, not just the QA agent.
-          export VITE_API_URL=$(aws cloudformation describe-stacks --stack-name "Tums-dev-Api" \
-            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text)
-          export VITE_COGNITO_USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name "Tums-dev-Auth" \
-            --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text)
-          export VITE_COGNITO_CLIENT_ID=$(aws cloudformation describe-stacks --stack-name "Tums-dev-Auth" \
-            --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text)
-          export VITE_AWS_REGION="$AWS_REGION"
-          ( cd frontend && npm ci && npm run build )
-          aws s3 sync frontend/dist "s3://$BUCKET" --delete
+          test -f pr-dist/index.html || { echo "::error::build artifact missing index.html"; exit 1; }
+          aws s3 sync pr-dist "s3://$BUCKET" --delete --exclude "*.map"
           INV_ID=$(aws cloudfront create-invalidation --distribution-id "$DIST_ID" \
             --paths "/*" --query 'Invalidation.Id' --output text)
           echo "Waiting for CloudFront invalidation $INV_ID…"
@@ -143,6 +204,7 @@ jobs:
         env:
           # base_ref is only set for pull_request events; empty on workflow_dispatch.
           BASE_REF: ${{ github.base_ref }}
+        working-directory: pr
         run: |
           # Count auto-fix commits since the base. On manual dispatch there is no base_ref,
           # so fall back to counting across the whole branch history. Always emit an integer
@@ -180,6 +242,7 @@ jobs:
       - name: Run Bug-Fix Agent and push fix
         id: fix
         if: >-
+          github.event_name == 'pull_request' &&
           steps.qa.outputs.blocking == 'true' &&
           fromJSON(steps.rounds.outputs.count) < fromJSON(env.MAX_FIX_ROUNDS) &&
           fromJSON(steps.stall.outputs.stalls) < 2
@@ -188,12 +251,22 @@ jobs:
           PRIOR_ROUNDS: ${{ steps.rounds.outputs.count }}
           HEAD_REF: ${{ github.head_ref }}
         run: |
+          # The agent (base-branch code) patches the PR checkout under pr/ — never this workspace,
+          # which holds the trusted tooling. Its diff is confined to the one file it was asked about
+          # (bugfix_agent.diff_is_confined) and protected paths are refused outright.
+          # The agent is the BASE branch's copy; a PR that adds an agent flag runs here before that flag exists,
+          # so only pass --plan-root when this copy understands it (after merge both come from the same tree).
+          PLAN_ROOT_ARG=""
+          if python ci-agent/bugfix_agent.py --help 2>/dev/null | grep -q -- '--plan-root'; then PLAN_ROOT_ARG="--plan-root ."; fi
+          # shellcheck disable=SC2086
           python ci-agent/bugfix_agent.py \
             --report qa-report.json \
             --harness-arn "$BUGFIX_ARN" \
-            --repo-root . \
+            --repo-root pr \
+            $PLAN_ROOT_ARG \
             --out bugfix-summary.md \
             --patched-list bugfix-patched.txt
+          cd pr
           # Stage exactly the files the agent patched — nothing else. A directory-scoped
           # `git add -- backend frontend infra` also swept in anything else dirty in the runner
           # tree, and the agent now refuses files the active plan doesn't name, so honouring that
@@ -201,15 +274,19 @@ jobs:
           # only authority here — no second hardcoded path allowlist, which could only disagree
           # with the plan. A listed path that does not exist is an agent bug and fails loudly:
           # swallowing it would make a broken patch read as "no applicable source patch".
-          if [ -s bugfix-patched.txt ]; then
+          if [ -s ../bugfix-patched.txt ]; then
             while IFS= read -r file; do
               [ -n "$file" ] || continue
+              case "$file" in
+                .github/*|.sdlc/*|ci-agent/*|infra/*|intent/*|spec/*|scripts/*|.claude/*)
+                  echo "::error::Bug-Fix Agent listed a protected path: $file"; exit 1;;
+              esac
               if [ ! -f "$file" ]; then
                 echo "::error::Bug-Fix Agent listed a path it did not leave on disk: $file"
                 exit 1
               fi
               git add -- "$file"
-            done < bugfix-patched.txt
+            done < ../bugfix-patched.txt
           fi
           if ! git diff --cached --quiet; then
             round=$(( PRIOR_ROUNDS + 1 ))
@@ -232,6 +309,7 @@ jobs:
       # withheld rather than uploaded (see .github/scripts/redact.js).
       - name: Redact QA diagnostics
         if: always()
+        # redact.js is the BASE branch's copy (this workspace is the base checkout); the PR tree lives under pr/.
         run: |
           mkdir -p qa-diag
           node - <<'JS'
@@ -252,7 +330,7 @@ jobs:
 
       - name: Upload QA diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ui-qa-${{ github.run_id }}
           path: qa-diag/
@@ -262,7 +340,7 @@ jobs:
       # ── Post results / loop status onto the PR ───────────────────────────────
       - name: Comment on PR
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         env:
           # Pass dynamic values through env (not inline ${{ }}) to avoid expression-injection
           # and unsupported operators in the script interpolation.
@@ -374,8 +452,8 @@ jobs:
             fi
             exit 0
           fi
-          if [ "$OVERALL" = "FAIL" ]; then
-            echo "::error::UI QA report says overall=FAIL with ${FINDINGS:-?} finding(s) and no fix was pushed - the loop has stopped. Read the PR comment for the findings."
+          if [ "$OVERALL" = "FAIL" ] || [ "$BLOCKING" = "true" ]; then
+            echo "::error::UI QA report says overall=$OVERALL blocking=$BLOCKING with ${FINDINGS:-?} finding(s) and no fix was pushed - the loop has stopped. Read the PR comment for the findings."
             exit 1
           fi
           echo "UI QA report is clean (overall=$OVERALL)."

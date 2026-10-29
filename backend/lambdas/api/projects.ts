@@ -261,10 +261,10 @@ async function fastProjects(tenantId: string): Promise<any[]> {
     profileModelMap(),
   ]);
   const names = new Map(registryProjects.map((p) => [p.projectId, { name: p.name, costCenter: p.costCenter ?? '—' }]));
-  const byProject = new Map<string, { tokens: number; estimatedUsd: number; users: Set<string>; cacheRead: number; cacheWrite: number }>();
+  const byProject = new Map<string, { tokens: number; estimatedUsd: number; users: Set<string>; usersCapped: boolean; cacheRead: number; cacheWrite: number }>();
   for (const it of res.Items ?? []) {
     const projectId = String(it.projectId ?? 'untagged');
-    const e = byProject.get(projectId) ?? { tokens: 0, estimatedUsd: 0, users: new Set<string>(), cacheRead: 0, cacheWrite: 0 };
+    const e = byProject.get(projectId) ?? { tokens: 0, estimatedUsd: 0, users: new Set<string>(), usersCapped: false, cacheRead: 0, cacheWrite: 0 };
     e.tokens += Number(it.inputTokens ?? 0) + Number(it.outputTokens ?? 0);
     e.cacheRead += Number(it.cacheReadTokens ?? 0); e.cacheWrite += cacheWriteOf(it).cacheWriteTokens ?? 0;
     // Per-model pricing (#13): the sk has always carried modelId — use the real rate card.
@@ -277,6 +277,7 @@ async function fastProjects(tenantId: string): Promise<any[]> {
     }).estimatedUsd;
     const us = it.userSet as Set<string> | string[] | undefined;
     if (us) for (const u of (us instanceof Set ? us : us)) e.users.add(u);
+    if (it.userSetOverflow === true) e.usersCapped = true; // the rollup stopped recording ids at USER_SET_CAP (feature-47)
     byProject.set(projectId, e);
   }
   return [...byProject.entries()]
@@ -284,7 +285,7 @@ async function fastProjects(tenantId: string): Promise<any[]> {
       projectId,
       projectName: names.get(projectId)?.name ?? projectId,
       costCenter: names.get(projectId)?.costCenter ?? '—',
-      users: v.users.size, tokens: v.tokens,
+      users: v.users.size, usersCapped: v.usersCapped || undefined, tokens: v.tokens,
       estimatedUsd: Math.round(v.estimatedUsd * 1e6) / 1e6,
       // Cache churn (feature-42): writes ÷ (reads + writes); null without cache traffic. A rising share means prefixes
       // are written and not re-read — a router switching models mid-conversation looks like this.

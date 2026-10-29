@@ -77,9 +77,12 @@ def _to_int(value: Any) -> int:
     if value is None:
         return 0
     try:
-        return int(value)
-    except (TypeError, ValueError):
+        n = int(value)
+    except (TypeError, ValueError, OverflowError):  # OverflowError: float('inf') from a 1e309 literal
         return 0
+    # A billing log never carries negative or absurd counts; treat them as absent rather than let one
+    # record skew a day (the TypeScript twin is `safeCount` in lambdas/ingestion/parse.ts).
+    return n if 0 <= n <= 2**53 else 0
 
 
 def flatten_record(record: Dict[str, Any]) -> Dict[str, Any]:

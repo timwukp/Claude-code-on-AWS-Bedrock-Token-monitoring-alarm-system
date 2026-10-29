@@ -121,8 +121,11 @@ export function RoiPage() {
   };
 
   const runEstimate = async () => {
+    const prs = Number(estPrs);
+    // Validate here, not by the API: a non-numeric value used to be sent as NaN and the raw 400 (with the request URL) shown (qa F-PR84-001).
+    if (!Number.isInteger(prs) || prs < 1) { setEstErr('Enter a whole number of expected PRs per month (1 or more).'); setEstOut(null); return; }
     setEstBusy(true); setEstErr(null); setEstOut(null);
-    try { setEstOut(await api.roiEstimate({ reference: estRef, prsPerMonth: Number(estPrs) })); }
+    try { setEstOut(await api.roiEstimate({ reference: estRef, prsPerMonth: prs })); }
     catch (e) { setEstErr(String(e).replace(/^Error: /, '')); }
     finally { setEstBusy(false); }
   };
@@ -362,7 +365,7 @@ export function RoiPage() {
                   style={{ padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 14 }}>
             {(rows ?? []).map((p) => <option key={p.projectId} value={p.projectId}>{p.name}</option>)}
           </select>
-          <input value={estPrs} onChange={(e) => setEstPrs(e.target.value)} style={{ minWidth: 140 }} placeholder="expected PRs / month" aria-label="Expected PRs per month" />
+          <input type="number" inputMode="numeric" min={1} step={1} value={estPrs} onChange={(e) => setEstPrs(e.target.value)} style={{ minWidth: 140 }} placeholder="expected PRs / month" aria-label="Expected PRs per month" required />
           <button className="btn-primary" style={{ width: 'auto', padding: '8px 16px' }} onClick={runEstimate} disabled={estBusy || !estRef}>Estimate</button>
           {estErr && <span className="error-text" style={{ marginTop: 0 }}>{estErr}</span>}
         </div>

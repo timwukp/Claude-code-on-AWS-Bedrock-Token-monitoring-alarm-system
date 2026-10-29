@@ -40,7 +40,7 @@ echo "Building frontend…"
 ( cd frontend && npm ci && npm run build )
 
 echo "Uploading to s3://${BUCKET}…"
-aws s3 sync frontend/dist "s3://${BUCKET}" --delete
+aws s3 sync frontend/dist "s3://${BUCKET}" --delete --exclude "*.map"
 
 echo "Invalidating CloudFront ${DIST_ID}…"
 aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*" >/dev/null

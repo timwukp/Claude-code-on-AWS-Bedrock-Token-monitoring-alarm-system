@@ -8,6 +8,10 @@ import { AutomationStack } from '../lib/stacks/automation-stack';
 import { EtlStack } from '../lib/stacks/etl-stack';
 import { LakehouseStack } from '../lib/stacks/lakehouse-stack';
 import { LoggingStack } from '../lib/stacks/logging-stack';
+import { AuthStack } from '../lib/stacks/auth-stack';
+import { DoraStack } from '../lib/stacks/dora-stack';
+import { ApiStack } from '../lib/stacks/api-stack';
+import { FrontendStack } from '../lib/stacks/frontend-stack';
 
 /** The tracked CI config — the same one `make synth` uses in CI, so tests see what CI sees. */
 export const cfg: EnvConfig = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'lib', 'config', 'ci.json'), 'utf8'));
@@ -34,7 +38,15 @@ export function synthApp(overrideCfg: EnvConfig = cfg) {
     env, cfg, rawLogBucket: data.rawLogBucket,
     bedrockLogGroup: lakehouse.bedrockLogGroup, bedrockLogsRole: lakehouse.bedrockLogsRole, bodiesBucket: lakehouse.bodiesBucket,
   });
-  return { app, network, data, automation, etl, lakehouse, logging };
+  const auth = new AuthStack(app, 'T-Auth', { env, cfg });
+  const dora = new DoraStack(app, 'T-Dora', { env, cfg, tables: data.tables });
+  const api = new ApiStack(app, 'T-Api', {
+    env, cfg, userPool: auth.userPool, tables: data.tables, athena: data.athena,
+    rawLogBucket: data.rawLogBucket, curatedBucket: data.curatedBucket, dataKey: data.dataKey,
+    dora: { collectorFn: dora.collectorFn, githubSecret: dora.githubSecret },
+  });
+  const frontend = new FrontendStack(app, 'T-Frontend', { env, cfg, api: api.restApi, userPool: auth.userPool });
+  return { app, network, data, automation, etl, lakehouse, logging, auth, dora, api, frontend };
 }
 
 /** Docker image asset sources recorded in a stack's asset manifest (platform lives there, not in the template). */

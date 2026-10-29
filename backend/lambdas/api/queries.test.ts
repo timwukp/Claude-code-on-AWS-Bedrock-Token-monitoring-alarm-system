@@ -1,4 +1,4 @@
-import { projectExprFrom, sanitizeTenant, TEMPLATES } from './queries';
+import { daysFor, projectExprFrom, sanitizeTenant, templateFor, TEMPLATES } from './queries';
 import { CURATED_SOURCE as SRC } from './invocation-source';
 
 /**
@@ -128,5 +128,23 @@ describe('byProject applies the route factor (feature-38)', () => {
     expect(est).toContain("* (CASE WHEN l.modelId LIKE '%nova-micro%' OR l.modelId LIKE '%gpt-oss-120b%' OR l.modelId LIKE '%gpt-oss-20b%' THEN 1 WHEN l.modelId LIKE 'global.%' OR l.modelId LIKE '%/global.%' THEN 1 ELSE 1.1 END)");
     // the route CASE wraps all four terms (one factor, applied once), after the last rate CASE
     expect(est.lastIndexOf('ELSE 1.1 END')).toBeGreaterThan(est.lastIndexOf('cacheWriteInputTokenCount'));
+  });
+});
+
+
+describe('request validation on POST /v1/queries (feature-47)', () => {
+  it('only own template names resolve — prototype names are not templates', () => {
+    expect(templateFor('byProject')).toBe(TEMPLATES.byProject);
+    expect(templateFor('constructor')).toBeNull();
+    expect(templateFor('__proto__')).toBeNull();
+    expect(templateFor('toString')).toBeNull();
+    expect(templateFor(42)).toBeNull();
+    expect(templateFor(undefined)).toBeNull();
+  });
+  it('days must be a finite number, clamped to 1–90 whole days; absent → 7', () => {
+    expect(daysFor(undefined)).toBe(7);
+    expect(daysFor(30)).toBe(30); expect(daysFor('45')).toBe(45); expect(daysFor(2.9)).toBe(2);
+    expect(daysFor(0)).toBe(1); expect(daysFor(1000)).toBe(90);
+    expect(daysFor('abc')).toBeNull(); expect(daysFor(NaN)).toBeNull(); expect(daysFor(Infinity)).toBeNull();
   });
 });

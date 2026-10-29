@@ -19,6 +19,24 @@ enforced at every layer; this doc is the contract.
 | S3 (curated) | Optional per-tenant prefixes; workgroup output is KMS-encrypted. |
 | Attribution | Bedrock logs carry no IAM identity, so tenant attribution depends on callers tagging requests with `requestMetadata.tenant`. Document this requirement to integrators. |
 
+## Deployment assumption and trust boundary (owner decision 2026-10-28)
+
+**One deployment = one organisation.** Tenants are internal teams of the AWS account that owns the deployment,
+not separate customers. Three consequences are deliberate and should be understood before reading the isolation
+table above as a security boundary between adversaries:
+
+1. **Account-level data is shared on purpose.** The project/repo registry, the Cost Explorer bill panel, the AWS
+   Budget, quota headroom and fleet latency are account-wide and visible to every tenant; the UI labels them so.
+   Identity ARNs and account ids in the registry are shown to administrators only.
+2. **Attribution is cooperative.** `requestMetadata.tenant` / `project_id` / `user_id` are written by whoever calls
+   Bedrock in the account; the pipeline cannot verify them. A caller can mislabel its own traffic — including as
+   another tenant's. The platform makes labels visible and auditable (the bill panel, unpriced/unattributed
+   states); it does not make them trustworthy. A caller that must not be able to do this needs an application
+   inference profile (routed, IAM-enforceable attribution) rather than metadata.
+3. **Isolation does hold at the read boundary.** Every API handler scopes DynamoDB reads by the JWT's immutable
+   `custom:tenantId`; Athena executions are bound to the tenant that started them; registry mutations require the
+   `admin` group. Those are enforced server-side regardless of (1) and (2).
+
 ## Data ingestion requirement
 
 For per-tenant analytics to work, the application calling Bedrock **must** set request metadata,

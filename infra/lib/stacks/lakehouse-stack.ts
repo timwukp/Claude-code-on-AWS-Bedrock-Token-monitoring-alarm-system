@@ -177,7 +177,7 @@ export class LakehouseStack extends cdk.Stack {
     const streamArn = (name: string) => `arn:aws:firehose:${cfg.region}:${cfg.account}:deliverystream/${name}`;
     const transform = (idName: string, streamName: string) => {
       const fn = new NodejsFunction(this, idName, {
-        runtime: lambda.Runtime.NODEJS_20_X,
+        runtime: lambda.Runtime.NODEJS_22_X,
         entry: lambdaEntry('lakehouse', 'transform.ts'),
         projectRoot: BACKEND_ROOT,
         depsLockFilePath: BACKEND_LOCK,

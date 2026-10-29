@@ -40,13 +40,16 @@ export class EtlStack extends cdk.Stack {
 
     // --- Lightweight aggregator (every 15 min) ---
     const aggregatorFn = new NodejsFunction(this, 'AggregatorFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       entry: lambdaEntry('ingestion', 'aggregator.ts'),
       projectRoot: BACKEND_ROOT,
       depsLockFilePath: BACKEND_LOCK,
       handler: 'handler',
       timeout: cdk.Duration.minutes(5),
       memorySize: 512,
+      // Exactly one run at a time: a timed-out run retried by Lambda while the next schedule fires would
+      // ADD the same unmarked objects twice (feature-47 review). Retries come from the schedule, not Lambda.
+      reservedConcurrentExecutions: 1,
       tracing: lambda.Tracing.ACTIVE,
       environment: {
         AGGREGATES_TABLE: tables.aggregates.tableName,
@@ -73,7 +76,7 @@ export class EtlStack extends cdk.Stack {
 
     new events.Rule(this, 'AggregatorSchedule', {
       schedule: events.Schedule.rate(cdk.Duration.minutes(15)),
-      targets: [new targets.LambdaFunction(aggregatorFn)],
+      targets: [new targets.LambdaFunction(aggregatorFn, { retryAttempts: 0 })],
     });
 
     // --- Daily bill collector (feature-40) ---
@@ -82,7 +85,7 @@ export class EtlStack extends cdk.Stack {
     // Needed because Bedrock Mantle traffic bills under the ordinary usage types but never reaches the
     // invocation logs. ce:GetCostAndUsage supports no resource scoping.
     const billCollectorFn = new NodejsFunction(this, 'BillCollectorFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       entry: lambdaEntry('ingestion', 'bill-collector.ts'),
       projectRoot: BACKEND_ROOT,
       depsLockFilePath: BACKEND_LOCK,

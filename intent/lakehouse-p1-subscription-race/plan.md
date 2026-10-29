@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** de51b8a9a9107a1494da52a3f453b771fcd1bac4
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #83. #84 (peer) is open and will rebase after this.
 

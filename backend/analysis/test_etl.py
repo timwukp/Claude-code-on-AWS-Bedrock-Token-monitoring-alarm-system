@@ -13,6 +13,7 @@ import json
 import unittest
 
 from etl import (
+    _to_int,
     CURATED_COLUMNS,
     day_prefix,
     derive_dt,
@@ -116,6 +117,22 @@ class ParseLogLinesTest(unittest.TestCase):
         self.assertEqual(derive_dt(""), "")
         rows = parse_log_lines(json.dumps(_record(timestamp="2026-01-15T00:00:00Z")))
         self.assertEqual(rows[0]["dt"], "2026-01-15")
+
+
+class ToIntTest(unittest.TestCase):
+    """feature-47: a hostile or corrupt count must read as 0, never raise or go negative."""
+
+    def test_ordinary_and_missing(self):
+        self.assertEqual(_to_int(42), 42)
+        self.assertEqual(_to_int("7"), 7)
+        self.assertEqual(_to_int(None), 0)
+        self.assertEqual(_to_int("abc"), 0)
+
+    def test_infinity_negative_and_huge(self):
+        self.assertEqual(_to_int(float("inf")), 0)      # int(inf) raises OverflowError — was uncaught
+        self.assertEqual(_to_int(1e309), 0)             # the JSON literal that parses to inf
+        self.assertEqual(_to_int(-5), 0)
+        self.assertEqual(_to_int(2**60), 0)
 
 
 class SkippableKeyTest(unittest.TestCase):

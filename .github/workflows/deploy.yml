@@ -16,11 +16,23 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Deploys create IAM: require the protected environment (reviewers configured in repo settings) and
+    # only ever run from main — a feature branch cannot dispatch a deploy of itself (feature-47).
+    environment: production
+    if: github.ref == 'refs/heads/main'
+    env:
+      DEPLOY_ENV: ${{ github.event.inputs.env }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Validate the environment name
+        run: |
+          # The input is interpolated into cdk/shell commands below; it must be a plain config name.
+          if ! printf '%s' "$DEPLOY_ENV" | grep -Eq '^[a-z0-9-]{1,32}$'; then
+            echo "::error::env must match ^[a-z0-9-]{1,32}$ (got '$DEPLOY_ENV')"; exit 1
+          fi
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with: { node-version: '20' }
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
@@ -28,9 +40,9 @@ jobs:
         working-directory: infra
         run: |
           npm ci
-          npx cdk deploy --all --require-approval never --context env=${{ github.event.inputs.env }}
+          npx cdk deploy --all --require-approval never --context "env=$DEPLOY_ENV"
       - name: Build & publish frontend
-        run: ./scripts/deploy-frontend.sh ${{ github.event.inputs.env }}
+        run: ./scripts/deploy-frontend.sh "$DEPLOY_ENV"
       - name: Validate admin Lambda config
         run: |
           chmod +x ./scripts/validate-admin-config.sh
