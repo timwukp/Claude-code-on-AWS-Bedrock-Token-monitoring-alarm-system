@@ -1,0 +1,85 @@
+{
+ "timestamp": "2026-10-28T04:35:03Z",
+ "accountId": "123456789012",
+ "region": "us-east-1",
+ "requestId": "9678191a-595c-4a50-95bf-453cac7c5a38",
+ "operation": "InvokeModel",
+ "modelId": "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/5qevtq09cw39",
+ "input": {
+  "inputContentType": "application/json",
+  "inputBodyJson": {
+   "max_tokens": 1024,
+   "system": [
+    {
+     "type": "text",
+     "text": "[redacted]"
+    },
+    {
+     "type": "text",
+     "text": "[redacted]",
+     "cache_control": {
+      "type": "ephemeral"
+     }
+    }
+   ],
+   "messages": [
+    {
+     "role": "user",
+     "content": "[redacted]"
+    }
+   ],
+   "thinking": {
+    "type": "disabled"
+   },
+   "metadata": {
+    "user_id": "[redacted]"
+   },
+   "anthropic_version": "bedrock-2023-05-31",
+   "anthropic_beta": [
+    "claude-code-20250219"
+   ],
+   "model": "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/5qevtq09cw39",
+   "stream": false
+  },
+  "inputTokenCount": 686,
+  "cacheReadInputTokenCount": 0,
+  "cacheWriteInputTokenCount": 4511
+ },
+ "output": {
+  "outputContentType": "application/json",
+  "outputBodyJson": {
+   "model": "anthropic.claude-haiku-4-5-20251001-v1:0",
+   "id": "msg_bdrk_4eqt7tdga2hnrvrfqf5zubve2qqaop3slpt2zr42qwe6v6a45uxa",
+   "type": "message",
+   "role": "assistant",
+   "content": [
+    {
+     "type": "text",
+     "text": "[redacted]"
+    }
+   ],
+   "container": null,
+   "stop_reason": "end_turn",
+   "stop_sequence": null,
+   "stop_details": null,
+   "usage": {
+    "input_tokens": 686,
+    "cache_creation_input_tokens": 4511,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 4511,
+     "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 112,
+    "service_tier": "standard"
+   }
+  },
+  "outputTokenCount": 112
+ },
+ "identity": {
+  "arn": "arn:aws:iam::123456789012:user/timwu"
+ },
+ "inferenceRegion": "us-east-2",
+ "schemaType": "ModelInvocationLog",
+ "schemaVersion": "1.0"
+}

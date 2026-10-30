@@ -1,0 +1,44 @@
+{
+ "schemaType": "ModelInvocationLog",
+ "schemaVersion": "1.0",
+ "timestamp": "2026-10-28T10:00:00Z",
+ "accountId": "123456789012",
+ "region": "us-east-1",
+ "requestId": "req-1",
+ "operation": "InvokeModel",
+ "modelId": "anthropic.claude-haiku-4-5-20251001-v1:0",
+ "identity": {
+  "arn": "arn:aws:iam::123456789012:user/demo"
+ },
+ "input": {
+  "inputContentType": "application/json",
+  "inputBodyJson": {
+   "anthropic_version": "bedrock-2023-05-31",
+   "messages": [
+    {
+     "role": "user",
+     "content": "[redacted]"
+    }
+   ]
+  }
+ },
+ "output": {
+  "outputContentType": "application/json",
+  "outputBodyJson": {
+   "id": "m",
+   "type": "message",
+   "role": "assistant",
+   "content": [
+    {
+     "type": "text",
+     "text": "[redacted]"
+    }
+   ],
+   "stop_reason": "end_turn",
+   "usage": {
+    "input_tokens": 15,
+    "output_tokens": 4
+   }
+  }
+ }
+}

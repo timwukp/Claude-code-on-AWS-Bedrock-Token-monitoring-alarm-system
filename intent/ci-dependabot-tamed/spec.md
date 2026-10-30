@@ -3,7 +3,7 @@
 - **Intent:** ./intent.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Status:** signed-off
+- **Status:** shipped
 
 ## Behaviour
 1. `.github/dependabot.yml` — six ecosystems (actions, npm ×3, pip, docker), `interval: weekly, day: monday`,

@@ -1,0 +1,11 @@
+{
+ "vendor": "openai",
+ "api_family": "openai_responses",
+ "token_source": "envelope",
+ "input_tokens": 17,
+ "output_tokens": 100,
+ "reasoning_tokens": 34,
+ "finish_reason": "stop",
+ "cache_read_tokens": 0,
+ "route": "us"
+}

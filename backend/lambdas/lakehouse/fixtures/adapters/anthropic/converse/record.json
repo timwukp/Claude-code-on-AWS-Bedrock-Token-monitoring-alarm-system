@@ -1,0 +1,2128 @@
+{
+ "timestamp": "2026-10-28T10:58:33Z",
+ "accountId": "123456789012",
+ "region": "us-east-1",
+ "requestId": "40098126-b5ed-4b22-a709-53fa35180ed5",
+ "operation": "ConverseStream",
+ "modelId": "global.anthropic.claude-sonnet-5-5",
+ "input": {
+  "inputContentType": "application/json",
+  "inputBodyJson": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "text": "[redacted]"
+      },
+      {
+       "text": "[redacted]"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "reasoningContent": {
+        "reasoningText": {
+         "text": "[redacted]",
+         "signature": "CAQS+gkKEggTEAEYAjgBQgh0aGlua2luZxIMO4LcCHdS8+jFpY/sGgyFYI9mVh2mJeWMwkYiMJHFira5vvGRHoTLyJpWqkWObAMQDn+VRv8jwQviy582qizDrRu9YuA4Erg12Un64iqVCYxCQSnT45lceZScujR75uey8Fk8SgE6L3LiFiKpHJguIkN4qsfIA5jVnbhbwejTQKiYOgJ0sTrxa0lb5t4o7qbYuB+/+FxUzDMbxM4ZO8evBv+pGELS/Kn9R4Q4iNq0S7DdfZsxjUQYqfxGEVNpYsA5bqMSgZgddVl8jLR+avqIKRHgNdhfBHBQzP48egwWfMxxBriExboKSMiyEDqp37JBqS67gauhxUmKRYftioOsoBtgjD1AiEkcOBiCpPDDhQ2m9jNYBOt0ZtMAmjUoC9I43j2HuYADtmMkAKoC2fEJuALHaZtQlzgVY7g/Yn6LXvPufXxqSRhU/jsueRLtOrQLMytttJr50ph2+MtaXNx/q1rGNwmAA/SufwpxoLId5ttAiusqKWQ80Ze/UOU85NLvYyD0Zj6jjNaHezdeR/ze+C3UWh0yZLwBeWRUTeA6SicaTuHzTL13DwIPYWi8Q5XVWP0Ijn4xsO189HgmqhM9MCzaHsnZKRXti2ovHFBlQgqNJirkGetT6fqCHUjJ/mkMxv1K2uRN1qA2AdS4oCkGAWAQqLLafjZaRteGjNQ/qnoygQlWU7HH4Sl5L7T0VBfZLrUfLopYz9juLPgBHCvwZgQ/nU2RyLHUX3RSXRPn6LJgMeq8HjIBghFiqesNJmFxMPtpTBcT5Si3SP4FyvwcrekxEzfToLKmX9xHl9eSAaeTckQHVU1VqRuudqUBg+KBzUcJhCjn6XB51Jnmk7Hq18SZfK7Gmk/SZuLOaQJBUnYRRgvuL88iliII3eP5tPq/9Twj304eY2ueYtG981xq5rBgxTzDCbeVTUw8cEi0oSerlxwAdTZy3Kngc47DqeymHJb/9Aas12Tn1J1IyOoQAWvAqhWXsZqP4VuIPdwRJ/vqdDYQLRKXTF2DgZ2HFFcPDWwaxfShuLmqCUbOgpEoJKd4XXKyquk/2NooWchzALd+DS2CjtmO/wNLuGHNkC+1h29WSkztsAUvOowmDL8W+hSuAjXHggUnMiy1jEk2LVPKuXtZdTyydwaZ34cr0BnaQbGzV2LSFv0yLbVS+tkNf+YW7su9SzYkXb3EkCnEHJ4kEkUMeoX4a2/bbtcdJDrC7lM7xadBe6exb4x4ziCsjqeAC4Tyzfts6OvWSyDVljmubUCQlh//9LiH4KVttlb0dggZZ5s1pQ1bQNKT3vJduZxCFNQHqt3ZzD6zlMscKyVgLv+DAy0umCyDjYeCJnCo7w1jN6/2zi0yussbxFF/G3SIE5k5Gg+tudl62f0qYkciv3qYH4KNw7qMinHyQQQhc+TtXizeAoB5wkQ+IMyrswxhwqJXFnZqbp0Qz7R50KeJXnY16x+E3PG96rdxHhjurQBe8zYvSZySkvEdpyjMp+y2JeBcPfAW/SksWVjn6kWUCr7HGOj/pExVmfFwIC8LH4U1DnoG3YqFUBkEIPDFoQSfHIr5dtbjEDtZpqAIsuxbtAAoL9CfqbpCSuGyQ053DawcxDnpR8ego/IiqIEQoKrvXWqMaIT+00uLwZ7rU05xv8LEUK0U885ab6P9+r7ZSO8YIRgB"
+        }
+       }
+      },
+      {
+       "toolUse": {
+        "toolUseId": "tooluse_lpVM5t1Giz1PDfxcMPLAbC",
+        "name": "code_interpreter",
+        "input": {
+         "code_interpreter_input": {
+          "action": {
+           "type": "executeCode",
+           "language": "python",
+           "code": "import boto3, json\ns = boto3.client('secretsmanager', region_name='us-east-1')\nc = json.loads(s.get_secret_value(SecretId='token-monitor-demo/login-creds')['SecretString'])\nprint(c['url'])\nemail=c.get('email'); pw=c.get('password')\nprint(list(c.keys()), email)"
+          }
+         }
+        }
+       }
+      },
+      {
+       "toolUse": {
+        "toolUseId": "tooluse_FlzneOSMyw3Ti1Vignbz5S",
+        "name": "browser",
+        "input": {
+         "browser_input": {
+          "action": {
+           "type": "init_session",
+           "description": "QA PR84",
+           "session_name": "qa-tokenmonitor-pr84"
+          }
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": [
+      {
+       "toolResult": {
+        "toolUseId": "tooluse_lpVM5t1Giz1PDfxcMPLAbC",
+        "content": [
+         {
+          "text": "[redacted]"
+         }
+        ]
+       }
+      },
+      {
+       "toolResult": {
+        "toolUseId": "tooluse_FlzneOSMyw3Ti1Vignbz5S",
+        "content": [
+         {
+          "json": {
+           "description": "QA PR84",
+           "sessionName": "qa-tokenmonitor-pr84"
+          }
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "reasoningContent": {
+        "reasoningText": {
+         "text": "[redacted]",
+         "signature": "CAQS3QUKEggTEAEYAjgBQgh0aGlua2luZxIM9/ObBOs97i1wy+O4Ggyrb0mDOhNf/RezjUYiMJlSTVtBnGTGmKOuzLJqq4oFvnPrE803kFi3JjfoPqg2wQH8kcvxnAOYNH2hn45nvSr4BBZHxVDXHEjyakg4v44JJPq4uGt7TblYFE0h0/Lxe+0KXiNVewP3WUB0sfFZ9jP8nelWGb8NrMqL8jWgpIuJ+RoKtMAYkWQqfkljkQyLL7MVP6tL/UmmGc8VgPJ2Ck/W9X1BGpcpxscDXZIWlRzoYo5kTKfoywqVNOeFlTnYG2A4esOMTpeiYP/jl8H3I5fnG035pJKELiOpcuURtw72tZX6uscEhkum7d1O4zhmvuVRaGoondBB7bk9nGBMkQda8VPZ0goVq/BtVqcH+BOcZ1LOYHhMo/WDGlIMailQOC/XJYUbcBYsueEWJzF3MnEmkVQsgLXPBp0NvUW3ccN1QmAZAfyJit2gqwoPPjM02ovt8MDDbe1s/a6gvhCc8K6VGP0XxeYr5WLXhqLn7bh959rez5BzpeJ7N19uwDGZWnJq9oTqS5t56RQHc+hBT6uYvW7DdxF2GvmfpqIWI+zvdTk8WDK+KHsj4t3EpasL3T6NUMeGwLjgpURkvA0t+e5wu9uOtW8/XNKaItbWE/3ogyRC4luS6n7e3rGc5zb/S7u+g+rbg17PsSrbB+5DGKlwRfllWzhHdpxbr7ya+mXK4NMUcufNDebAVTrXk76gDd4of1KI8Szs4mt65V5S2QONqbrlf+DwGRihKerFxxtYdzHdJnT+SPUZypXIHGNVhsF8wLizjX39ZNVse5hCrwxKzRPFuwTj9lnV+mHowHtwb2lbGfbl8e5W5w21kVKGGlqirakY+X3Ut4lGC3oVRSjab8FvfhIeb3yfJpcmccHI5BvmvN++gghLUe4VqHLWj4ghwEhuZkYdrIivhKzPHHNDIap4j0yODqFlGAE="
+        }
+       }
+      },
+      {
+       "toolUse": {
+        "toolUseId": "tooluse_hnQqOrY9yLWOn3Tmp8FzQc",
+        "name": "shell",
+        "input": {
+         "command": "aws sts get-caller-identity 2>&1 | head; env | grep -i aws | sed 's/=.*//' ; ls ~/.aws 2>&1"
+        }
+       }
+      },
+      {
+       "toolUse": {
+        "toolUseId": "tooluse_DmwThk0lRYsGPqHhpfpUKj",
+        "name": "code_interpreter",
+        "input": {
+         "code_interpreter_input": {
+          "action": {
+           "type": "executeCommand",
+           "command": "aws sts get-caller-identity 2>&1 | head -3; env | grep -i aws | sed 's/=.*//'; ls ~/.aws 2>&1"
+          }
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": [
+      {
+       "toolResult": {
+        "toolUseId": "tooluse_hnQqOrY9yLWOn3Tmp8FzQc",
+        "content": [
+         {
+          "text": "[redacted]"
+         }
+        ]
+       }
+      },
+      {
+       "toolResult": {
+        "toolUseId": "tooluse_DmwThk0lRYsGPqHhpfpUKj",
+        "content": [
+         {
+          "text": "[redacted]"
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "reasoningContent": {
+        "reasoningText": {
+         "text": "[redacted]",
+         "signature": "CAQSwgUKEggTEAEYAjgBQgh0aGlua2luZxIMW0pLlI+4XMPAY/rQGgxUu4lA2y3ns54BGhEiMJ4+qiaqnyypAAXOYuZnGGG4VWG3boWP+wqwjNx7YquXGn9+fIlPqtuHOQALf5sHRirdBC6jkD1GaPcfOz6YbZTPSIq47koEPb8HFsG/gpu2Q/R8/QPV9m35Zww9eR335f+eet+TJ15tccPcU5NDa8gKeQ+1TJYGhvr4xslLnX70YaPnlIV5/1m5Dms7h7YdiEBKrncOH90WHAo3lAzrS31pTYGstID7q+lwhQYpgZi72JX6ghVTyr0EmM27NFJ5zh3GGKgip9i8kDwApH4aKqHMzHOykMG6J/kfIEcTE5J65qlcnpbaOBrYSdy9gCrSbfncbkbrNoVVoBQNfhRnr8IeGArqOK952+SUVDyq6Y+cMb98hHN4lM/qNrl2f9VzlZiV6UyPdTwAJX/qrtGbDl3jBzAOq6CMRuTFc5S/zQEoSXLgC7qOs9ym4DeUI/zC/YVZzuL1d1WdVHYOlukkaWAcGi1AAlbrF8Fp0GxklQSApF6W1GV0czX6kdFLTIiG+e17bIBENEsWRQux82Fj7a3xpbehc948p4Mj4Gy93p/YYKvmHl2ku7Ef51k+tYVZxmTCQOn8dJ8V/prGENLO7SPhqmKgPCZzGbtDVhAT4AxFc9sVci2nM1Tb9QDemAreeLLbZO0+oeBEpvCOP+PuVf3hS2C9CKEJriBfF510nNxyzA9db0/E4ZbIlLFQTa95xvPcVCXw6oyDWvNPaJSJwD0D+EJFBB1ycygNtUzGPsLZ97FtDv5bsQjtlNZ0eU9rQiTi5VqG6DiIA/gyRS77rRQEskpcs2Md/fQRyw88eKF0R/e9Jb1G5zPHlnqerGxDW2i6QKljdKUUUdPHI3UxE1ZYwaoE/wV15+cLWOnbi2/MGAE="
+        }
+       }
+      },
+      {
+       "toolUse": {
+        "toolUseId": "tooluse_28gE16cnB2pJkFrhUo9lSA",
+        "name": "shell",
+        "input": {
+         "command": "cd /tmp && python3 - <<'E'\nimport boto3, json\ns = boto3.client(\"secretsmanager\", region_name=\"us-east-1\")\nc = json.loads(s.get_secret_value(SecretId=\"token-monitor-demo/login-creds\")[\"SecretString\"])\nprint(c[\"url\"], list(c.keys()), c.get(\"email\"))\njson.dump(c, open(\"/tmp/.c.json\",\"w\"))\nE\nmkdir -p /mnt/reports/screenshots; ls /mnt/reports"
+        }
+       }
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": [
+      {
+       "toolResult": {
+        "toolUseId": "tooluse_28gE16cnB2pJkFrhUo9lSA",
+        "content": [
+         {
+          "text": "[redacted]"
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "reasoningContent": {
+        "reasoningText": {
+         "text": "[redacted]",
+         "signature": "CAQSxgkKEggTEAEYAjgBQgh0aGlua2luZxIMd5bAtGqFvgNeEhd4GgyPEEdxiiUX/hqqKx4iMNwjMHr8sJVL3KdSNASSoZ//XpEfwZFH6PMfTgMqhnG/VBRi2eWKFFjidnu2+gii/yrhCP3bW3PfB/j/WBZsB82k60KXla3kmHgx0TzgYPI9knVFvbV2L2asznDHLuBqetShWwKIQMaGrZ5J3H7VHtITPx5Ko8Ck6B0FbVifNPxor3kuqLapZMWcIMp5Bydlrw3JfO2iJlV68XnrRq6zb0DlnDkB3dg7/4MelV/abwStHxp0VO0awbgFZFXybQ1PhoMdzzbOrXUYC7Mmz1w6Qkbr+tNIKG5eFmVwAd2Qmvx6V3qyt63oSKNWlnvagb8mcsKG3Wt/CXZTQ53RYCL0TQt3IWRgKscgj0HSGJJofWeAR6HmQkFVcyT8Uz55AIxzDUXZuogQ73ZXsKqv2te4CmKj/gUH1OJ9yhTmVeOlLE1LHE3lnEWJmP3ypZC30W96Rjv0mfJ/tPYIt3RHlYLNNM6LH5NexNscuwz1UB2yZcyE7zSrGhQQs9VwGd8hNSKLk4o4eV2G1GruEg4qKdGb/MkZWvQ4rjCDZp/2SvdkghMhzUob2HO/SoqXN/m3NkGkTF7MxqpxOC2URdX7zRbtzLB8sFB+Kev3DtEFDC2poAjrRZVPNASpYvQBTcY4H2ZsZ2b+XNJSDx1fF5icnJnI/Qh/rXKvlY0YhvUJeXKuZEMoo4Yy7U4X7sYjCk3NzZXeF0XCSzZH7Jqj7fHi369Z8UN+mQUfNcijL0kT79Hd9qJqPDwSAViRQQhPoKW1VeHQlYmsTDPhFyQRu8uFd1uef9e3KXeTIdxMYCmCX+41JeVSwdDSwh65WxsxxTq51mpT/c6J2HeV/6QdXDSmIuJzFxhTkMV9JgLQVRMK1am6g1Gk+hK98UXsIoHfUXh7A1Xn9X1BZ8sBCkSA/XMfd9+a1Wg1OSTrionUOniVKnCzvQm+icWGKQlLi3B+irg8KAaOwRjQo/uEjploAr/zKqt5KWDzmOk2O8s0LUdI4OfS/nlQXW3an53LfkYPRuO3QUTLH774ZOavlUq7eNA0Q4dJmmnA2ODnkLiExAzuuGamRlFAO6pnKp009Ql7WQBVMUvSO7aWOdF8Qdnfi1BORL6JS3hTK+k0ORJ1twMpviMCbS08OZV3rktDkC7bU2M3Gvje8Dpow6aCZ/hxlcgMKJfd1wvBs9zq7QQ2iCK6hcwAnSqbaSQBabfMlfWS9ZVa5BwGow5+3fw8RfuCAHVOQscIUi/xZzoEOKn1sAzIEhcKlGxJRwEycx3jNeYiLgjAv3+7X+nRmCdnfYbqQ1OzGym4oqIkxaoyp6CpGAjc+tG7/+we2DX6v5CrrvVFnfQWW8tRNZLZ1VfLKtLbA0hCB1u8aMnKoz31jaoB8uEvzohgfgxAdBy9tUiheXNl5tJHo8gkgEVQ9A57ZH+73sywZjsra6fpZIMdCugToCpuDUNQmAbupjLsV4yaJHRcGnbKZ+K8evw8U+ESvj56qVjR3xjqbVGVkp7oFpEDIcor95hlCj3GhAn4PI6z4PWa2yOSBEMvYap1I5gQXzLo/SJhtaAyh5HLjZCFGAE="
+        }
+       }
+      },
+      {
+       "toolUse": {
+        "toolUseId": "tooluse_rhGJxjD0WicR6azdCkQfiN",
+        "name": "browser",
+        "input": {
+         "browser_input": {
+          "wait_time": 4,
+          "action": {
+           "type": "navigate",
+           "session_name": "qa-tokenmonitor-pr84",
+           "url": "https://d1vb50945w70c7.cloudfront.net/"
+          }
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": [
+      {
+       "toolResult": {
+        "toolUseId": "tooluse_rhGJxjD0WicR6azdCkQfiN",
+        "content": [
+         {
+          "text": "[redacted]"
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "toolUse": {
+        "toolUseId": "tooluse_sk2cfunRnu2CMBhBqaQIsb",
+        "name": "browser",
+        "input": {
+         "browser_input": {
+          "action": {
+           "type": "evaluate",
+           "session_name": "qa-tokenmonitor-pr84",
+           "script": "JSON.stringify({title:document.title, inputs:[...document.querySelectorAll('input,button')].map(e=>[e.tagName,e.name,e.type,e.id,e.innerText]), h:[...document.querySelectorAll('h1,h2')].map(e=>e.innerText)})"
+          }
+         }
+        }
+       }
+      },
+      {
+       "toolUse": {
+        "toolUseId": "tooluse_syWyEIsh0f6OY9IxLon9dT",
+        "name": "shell",
+        "input": {
+         "command": "python3 -c \"import json;print(json.load(open('/tmp/.c.json'))['password'])\" 2>/dev/null"
+        }
+       }
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": [
+      {
+       "toolResult": {
+        "toolUseId": "tooluse_sk2cfunRnu2CMBhBqaQIsb",
+        "content": [
+         {
+          "text": "[redacted]"
+         }
+        ]
+       }
+      },
+      {
+       "toolResult": {
+        "toolUseId": "tooluse_syWyEIsh0f6OY9IxLon9dT",
+        "content": [
+         {
+          "text": "[redacted]"
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "reasoningContent": {
+        "reasoningText": {
+         "text": "[redacted]",
+         "signature": "CAQSxgUKEggTEAEYAjgBQgh0aGlua2luZxIMzpjG5trn02ZT4Wk0Ggyx5SSltRLtNXF07csiMNx4mPs95xezTdmCW9wS3a+JkPP9CcZJjI1XbO57ZmWQXP2tcVD/0Lls5jRVKQQ+tyrhBGkuZeAE2NKg7ofp7E5iq/vzBoxtuqNq7vlWyVvalMmKWYWVzlWXqMdQWjS6tnUEXeHto6bh/MhwVkUWpBLhYDNdt67NhaufaBfDJ3d95guT1REBEPjav/ELU1tgAgdb7tJi2ntLcI6zVOGk9fhZwfg8yaR+8BbD2IYSSyBsG1+u2mXUKBiQvg+pOeDo6RPcXOz0bY6tBu2M2nakcutnpMtsW11QAd4LHujyv+RJBjud/PdzfoSTd9q5/f2Y9NQ4rqsHXylz2ST91sMRZ0b28iD4GT0qv6tRPZkh/qb1FAsdUrLTw2Yu6sSODOGDY7PDFrVo+O8nE/R0Q2yxO+RlCOiiqVnm24rhB3PfpdFcEbFHRV/NALgMVWSJMazDPH99Bt4pViCn9EliGoJN1EHfBraXKC2t+bNrtc/VcIZFUg1cFSDQLZ6ODAy/sGhdoCLizyaAXPvaMv5beY/vm6HMN0NGK09ZPXN6/thwMdRBTw2MonDovc3UoRlVI2HjMaoqW65EkHSjmFoC8TUmlf5V8uwZmBX6dgT0Xda8T7hcDwvMUukTekFEiQrzjzYbxzPAIlczSkVgEa6CFrF/n/meUjYkiAVvbnt8Oss9hSIsO9tcjmWH+JSAQkuDpdmyX6bTRg/On4sVO68/dftdQnLhael/zWz2gIospOZhqBq3eNAthK+AGY1PsgoK7wd/l9wP686NGkOo3pogU+VWUhR0ISlVAbAnwbzlGGtsJU0JhAkcotKM1wM0psLjq1YKF/Puqbv47pysYJa1B8KYoH6V0TedpSzXmZAYQ83cnawjb5ayshgB"
+        }
+       }
+      },
+      {
+       "toolUse": {
+        "toolUseId": "tooluse_JFVbhMH2FQRfClcyFDh6kH",
+        "name": "browser",
+        "input": {
+         "browser_input": {
+          "action": {
+           "session_name": "qa-tokenmonitor-pr84",
+           "selector": "#email",
+           "text": "[redacted]",
+           "type": "type"
+          }
+         }
+        }
+       }
+      },
+      {
+       "toolUse": {
+        "toolUseId": "tooluse_vXutZDXfXaMtlTNomhdOqe",
+        "name": "browser",
+        "input": {
+         "browser_input": {
+          "action": {
+           "session_name": "qa-tokenmonitor-pr84",
+           "selector": "#password",
+           "text": "[redacted]",
+           "type": "type"
+          }
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": [
+      {
+       "toolResult": {
+        "toolUseId": "tooluse_JFVbhMH2FQRfClcyFDh6kH",
+        "content": [
+         {
+          "text": "[redacted]"
+         }
+        ]
+       }
+      },
+      {
+       "toolResult": {
+        "toolUseId": "tooluse_vXutZDXfXaMtlTNomhdOqe",
+        "content": [
+         {
+          "text": "[redacted]"
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "reasoningContent": {
+        "reasoningText": {
+         "text": "[redacted]",
+         "signature": "CAQS5QUKEggTEAEYAjgBQgh0aGlua2luZxIM+gABWHPtWMEd7//FGgzshhvu4n52OU1DfFUiMAeE4ZQUzEVOQybQKORfejTXzyO3VfZJ0MjLxr4SpBljNHSZUczmSvy9udWuM5VPUyqABbqjV5O1LgEBojGP3YTDA7DIUlicd69oULqvwVvylHpHo8qKONTwuXyE8KB+ZjzCwgR0ziUZ/I12HROK5nH6HgfhydnWlPcMNKMU8pNbJWDOIbcFLo2l2pjH32+j18M4jUTzty7kEeMlIWLaKdZ8nKbkplg75gKqbRBsPIniKCdu5ivXrvxarNKYqj5nU4bbgW3Eryb2w4VA6jICOTWqn+9E9CzD7Vo6XimFqy6DixHnwm+lmgT0/2BXISEEXW1B4zYPXjkxIrnlP69cfF4ajKBSLShVeDMnPIXsvfCceNGjCBrFPyv2e8W85JQl3Zbaw/WccpUJK79M10k0CHVivszlwIv9PTUX6ZkaE1cSJTWEkumZiEyrVpLWdz5aSiPL8Cub5eS3htlVHGe2HH30I5W5RfIt1MAbPvRXxkys85xz8jiv7vmR5EB1CMaDVy4xsbovPUsHuLJFznq7LdAuAhOJ7TMJ0wuSBtu8TnTXYThpc8e66oIoYV16jv1Q9G6FnnzGOnkFiJxLHTQiYG7G2iVGMeiVl1zFhtNSqEb1yNosSO/7i8CrpAcfjKWjb+qTc5fBZILsKqNN4Tx/JSOXEsNavw6A1i1WkngjImhmu3f3eC2jm7JpoE0YLULFjc7ahc7/0FjwMhCylToIo4Qvmy8mnNcnUhhf1TR238X9AGlumIvcfUk/Tt67ee7viCqAtGiWwaBRpOs/NuC/sLagfDT9sLo4/OSesgl0jhbWovQa3mMyDRgGt6G++SXgaZFK6OL/zsg3HI3EwTjD33CP9U+4eToJs/j5gd5x0mQ4zYbdDCK/B+fXa3q1T4aB1uC5b6i8Ry80hCFusbkRV0r5rk0YAQ=="
+        }
+       }
+      },
+      {
+       "toolUse": {
+        "toolUseId": "tooluse_ZHjMKm8Zq9y4whuxvffkTz",
+        "name": "browser",
+        "input": {
+         "browser_input": {
+          "wait_time": 4,
+          "action": {
+           "type": "click",
+           "session_name": "qa-tokenmonitor-pr84",
+           "selector": "button[type=submit]"
+          }
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": [
+      {
+       "toolResult": {
+        "toolUseId": "tooluse_ZHjMKm8Zq9y4whuxvffkTz",
+        "content": [
+         {
+          "text": "[redacted]"
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "toolUse": {
+        "toolUseId": "tooluse_XpE9fXoso420CoLLoEMLXL",
+        "name": "browser",
+        "input": {
+         "browser_input": {
+          "action": {
+           "type": "evaluate",
+           "session_name": "qa-tokenmonitor-pr84",
+           "script": "window.__errs=[];window.__net=[];const oe=console.error;console.error=function(...a){window.__errs.push(a.map(String).join(' ').slice(0,300));oe.apply(console,a)};window.addEventListener('error',e=>window.__errs.push('onerror '+e.message));window.addEventListener('unhandledrejection',e=>window.__errs.push('unhandled '+e.reason));const of=window.fetch;window.fetch=async function(...a){const t=Date.now();try{const r=await of.apply(this,a);window.__net.push([String(a[0]).slice(0,120),r.status,Date.now()-t]);return r}catch(e){window.__net.push([String(a[0]).slice(0,120),'ERR '+e.message,Date.now()-t]);throw e}};JSON.stringify({url:location.href,nav:[...document.querySelectorAll('nav a, aside a')].map(a=>[a.innerText.trim(),a.getAttribute('href')]),text:document.body.innerText.slice(0,200)})"
+          }
+         }
+        }
+       }
+      },
+      {
+       "toolUse": {
+        "toolUseId": "tooluse_IZBetfEDWTMvAm0IwBev90",
+        "name": "browser",
+        "input": {
+         "browser_input": {
+          "action": {
+           "type": "screenshot",
+           "path": "/mnt/reports/screenshots/01-post-login.png",
+           "session_name": "qa-tokenmonitor-pr84"
+          }
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": [
+      {
+       "toolResult": {
+        "toolUseId": "tooluse_XpE9fXoso420CoLLoEMLXL",
+        "content": [
+         {
+          "text": "[redacted]"
+         }
+        ]
+       }
+      },
+      {
+       "toolResult": {
+        "toolUseId": "tooluse_IZBetfEDWTMvAm0IwBev90",
+        "content": [
+         {
+          "text": "[redacted]"
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "reasoningContent": {
+        "reasoningText": {
+         "text": "[redacted]",
+         "signature": "CAQS2QUKEggTEAEYAjgBQgh0aGlua2luZxIM4I6Q+Id+yiZU9fL0GgwLD37t1Z0THU4xbZ4iMJLiw75dN5f7Oy8giuDgO3QEzBiDFD3gHzNKt+idh1ULtRbxKxN2G4UesE4OVSH2Lir0BEqIGU3zAQLLcARS4l5MmbUv3REjXCrjA+b5A/2uiDFIEYpuZfZ4TFPP24BDHYYQdgzl4PhK7TUERO+D3RbBSK7F2r5IvkjrUCvFkB+tGReBT9JYwLT/M8M1shlywoh7WvmrRsvKsCG7knD2QC1vh5YN7SwN7LD3dUoWdTDokmmAGopcLjVpmEn5Pmz2b2dyXTpW31b2f4AzSvzQ3zy4id4U2u5U6FGcXmtFou0ZlMAWaHiibD4BabA1STsi+0AMMY2kiJlmT2l+h0nM1mFoNZQ2qENIugU/LqbmlA9gGRZIKcdOWaz9QRXXUvDjmJDLoSbPx7p5Du5UFbMx4pmxe+2PMyJQuZqcvUC79O0K6A7b0PZIpomADOlg87vR5t1/l99Jeeoo1gehbkPEhDA04ek9HxivdkRyTm9C99lU2r7VNpq1L8R01Lt2m+SD7YylFRh6eSibRBAeevXfD+J1MmLuTrei+nKFJWpwS2oy5OAzUC0Gbv3w0eIHiBj0i7NvVUi9HWNYO1m7Czgj1dDSFJ7v1PReY4otnzrqwX+mR6L2W26MRTz09uyWvo3uI/NiOGZ3/7B1WEj7bC7K3h4m/J4sUYWhvu+STOOlCyWYLIdM8U/3qZqApnd8kKJla77mELC2hnfCQNU2v9s5y6X9tar+atj1IyKOFbBQuNi0FEA/qHtHuWudGwZdMMPvL6+QlR7ZAy9H+EP6dCW9LadHt8qGTL0miswDqhx4C4914SrdZOYdanxokHYGHpIVH2BDLMeOPaaHtcw56hH4u0lYyvmV3CfLKO5AQU9HQ14KxfY6ZFEy0xZ/L9ogqjn9WngIwfMAnqQYAQ=="
+        }
+       }
+      },
+      {
+       "toolUse": {
+        "toolUseId": "tooluse_3LuBSjxVYSwYedCFl5ZPQb",
+        "name": "browser",
+        "input": {
+         "browser_input": {
+          "wait_time": 5,
+          "action": {
+           "type": "evaluate",
+           "session_name": "qa-tokenmonitor-pr84",
+           "script": "document.querySelector('main')?.innerText || document.body.innerText"
+          }
+         }
+        }
+       }
+      },
+      {
+       "toolUse": {
+        "toolUseId": "tooluse_YFHoCbGvvwJTY47NooDIl5",
+        "name": "shell",
+        "input": {
+         "command": "ls -la /mnt/reports/screenshots"
+        }
+       }
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": [
+      {
+       "toolResult": {
+        "toolUseId": "tooluse_3LuBSjxVYSwYedCFl5ZPQb",
+        "content": [
+         {
+          "text": "[redacted]"
+         }
+        ]
+       }
+      },
+      {
+       "toolResult": {
+        "toolUseId": "tooluse_YFHoCbGvvwJTY47NooDIl5",
+        "content": [
+         {
+          "text": "[redacted]"
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "reasoningContent": {
+        "reasoningText": {
+         "text": "[redacted]",
+         "signature": "CAQSnAsKEggTEAEYAjgBQgh0aGlua2luZxIMlYrsOJLdbEGkG3SlGgzZ9Ekgj0tgTFi95V0iMOP2T4MWkWJNnloWJCII2lH3x+TFxqwZDvhZhbbNXywURWtBrFiBGHbZc4tux7/LMCq3CrJ9QR6VUIW5cv33ApNdjeWlYg/kzcqaIPHmeoHVVd5IEXa3AnVZ4z2KhhKoO4sRffU2xqkKapKSJ0vJibxFKQ2EJwVmMeUbwysrWDNKAdYzATv0INqZNqcN3/3jGUV/DzTPJLoURJLJH33yKP0sRyLvzFilF2hQJa/5/UUu293r8J3i6/pPmGMZ+ZKRaZm0j1gfJ41chFUDUYrzfdoJIuOikz10q6H5elTzVfl+5jDFSGmSoQCZ7KFamKzzJPlpDXXGvoVTyhw5GBcoJLDTfNVT6k0TXp7Npg+xdF4C8Hf7LIFFYE90k8daa248w5RuBVBlcb9qOAuvoV6odC4TmS266WqMuLNz9GQzP/7l16O5Qf3PGm/TDQusVIretuXrJmPNiRecAHRDjQwtXSHUI9QxO2c8Iwrl2lyw2iiXnTZc75zKogqqrONru9uIskFLIe8C81/wQCSCTh0n31ON5KQLK+RxekA8FWEgXzvhi+aKE1BnHrsdghmLG/ANxXjLDoGdjCUw1y8a5mar6XzFic5bZdEsoFiqpoFWOP49RMUlyiln+XwvgFUf3RAf+or+MI90YJ3RLJSEA0wviWfmMK3pNh4hQNiaRgo/qxCb9VUUlYrTYSTB5+sm1DtuuJyQiY+P+S9unF3nRO2ZSL1uCs78Ph8dR2GsW2aZWjO+n7yjBAonrpDum0ay7XCN/m2CXSUCfEJNJVlJb9AnYhh7eO8I1+hM3ceDMikQKOMueYSGzGQE5EXQQLDiE19epZC2qdwwlbaO6Fd4RcCa1J+pK/aZtK8bWp/1hmhSB3hYwoRe4snwM26F6O6tUMlhovn5rZc2MG6XMcCOgMrBegWOoDHn9yWgFcmG7xNvRJLRJwZNKfp2484jFppa/YZEFJH+kqxzS+kNIinGAdVT6UyebYEbo3zDzmsqOhU5U8OY5oH/VN661bcJCoylYnVe7Gkf5Ts1MierTef3GkHaM8ZIC1V6kRZBA60cxp1hE66n9VwqQUvRi4W38VXa+32AO8g790YWCbNdOWCRkQ42fQt4eyX8cy12+QOT5GQ/CG8gO9P/anEvDYQTeZxsTad0TYoPr1zsYzT/9Q1FABIcEskvV+pjhQM7sOgbJOMz756m76swXBZIQet7Yn3Sz927hziiWSRDYasMhAce+SdB4RUStmr9mGruiaqesZeAs48TEhsDeoSp3nuDuClELBoyyVEdO5xK9CoA1nJSoQMLthkIjYl3tLFaL8ytX97NpsYCGByR9QBEMuPPo+tLmdz97iSG9TbRQWePpmpbnuU1sr7gX0P7LBfPcIWPhjUgjREHE3DAaHe59+mnKy89rTZAJtiHjqOUqkruu7Oqn8SHr1DH2T6WMDkDdLUDGabqXaT+b52BStnxEzWKCFnm1KgpAaA/vnj4mHH15qu9C0HolVCn9cuQmtPYOTBN8Ggz3qdUBrY00HKEdA4eLbsMcwHGdvEqZB+fh2oRLnTjqIEuzBEy4GpIAkrjnT04ggA/hdDrlpQdwjQx/Bk/wtPzHyw+OObIGJKJ0dWcgquHV6yu9YIG8ZtPmxkI0KWWkTLB+GJFkaQcvCYp3QEr/zb2TQgPACf2WyhBOKKCpBzMOncCuY+Jg7gMCEEsAQRvCy0gR2pnwq4xED0a62HrvJZNs1gJvMeFu02MBlKePQ3kkGCqU1KjLGkbKZxeFWA0mxaIch6Nx/L8gagKZvyfqLzE5aivarBUW6RqgV8OBzp9Lj/T4TAENYOpJi12/lJX2RiWW7/xbf47siVvlPp4ABgB"
+        }
+       }
+      },
+      {
+       "toolUse": {
+        "toolUseId": "tooluse_f3SexhO3VU30SkEgLzQ6h7",
+        "name": "browser",
+        "input": {
+         "browser_input": {
+          "action": {
+           "type": "evaluate",
+           "session_name": "qa-tokenmonitor-pr84",
+           "script": "document.querySelector('a[href=\"/usage\"]').click(); await new Promise(r=>setTimeout(r,6000)); JSON.stringify({u:location.href,errs:window.__errs,net:window.__net})+'\\n'+document.querySelector('main').innerText"
+          }
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": [
+      {
+       "toolResult": {
+        "toolUseId": "tooluse_f3SexhO3VU30SkEgLzQ6h7",
+        "content": [
+         {
+          "text": "[redacted]"
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "toolUse": {
+        "toolUseId": "tooluse_KT0bYLJtUl1o0t9aCS8ZNi",
+        "name": "browser",
+        "input": {
+         "browser_input": {
+          "action": {
+           "type": "evaluate",
+           "session_name": "qa-tokenmonitor-pr84",
+           "script": "(async()=>{document.querySelector('a[href=\"/usage\"]').click(); await new Promise(r=>setTimeout(r,6000)); return JSON.stringify({u:location.href,errs:window.__errs,net:window.__net})+'\\n'+document.querySelector('main').innerText})()"
+          }
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": [
+      {
+       "toolResult": {
+        "toolUseId": "tooluse_KT0bYLJtUl1o0t9aCS8ZNi",
+        "content": [
+         {
+          "text": "[redacted]"
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "reasoningContent": {
+        "reasoningText": {
+         "text": "[redacted]",
+         "signature": "CAQSsgUKEggTEAEYAjgBQgh0aGlua2luZxIMCK+yrB49jJlrnSOUGgwle3JG9zGkvqb9NTEiMMZUhhmcMoDv3ZjTMbuGJX0nfFZ61hYxJZ/jlYWYwmyeRbqF1TRQGfgQRID0ItB9rCrNBN9El5wKT7EuFgHujulA8mqet6TdweXWGfipj2Zn29lIMa7l6C9IudrlA/3BclRTg/b+I8j5FC2+LW5VdH+crkvZx2gK8enJB82LJHgDLbA4AB/Bd+7TuC2Acr1NdlVPlrjqcr79dUwB7VEZGKnW1a82b6CfOl2bI/lsVwujiCvnq+vvPZ4vx49kJdrEQUGv8QjEjhBHvGj3KX0LybnQqeZ83YqvPbN4EGV483tb6kI1bumTwqcCkM41bqkwQ0JD8I5nRfuzOXZ6b/q5p0K916AJSMJGGb4uGbwiuDBcUp6ZjehBPGwGQ4TVoFawb9Coal4mUatR9BM9iUasOy22ByxUp6F+nvz/AbbGpUy3NC5BdgPm5GdkWfDq6CezNh91QchS3MNf+24c9l3OJoLGwZOrpHsanzl1LH5rkMlkOfAvSsIl7xd9IXMXbbXh8vBWCrDQ8KVzMRLi9yBcNiyPsI2Q7D7JP149nf6oNDnpKEL5TY7Doc5LnXrmVCHBsLY2ShhHJCS7RxEUOBovuZmQlmr/LOryqEDWF2DFiZ3uIj6rS7hdAevYb6bTNxAtI7VL/9/RelkFTkvL2/myvJ4/0ESPocGOz62QzX7KHC+70cc6CDLqzuPyp3OxUiIN7ypdjyThouubPTIsiSRXW0NW0dge9dKEkKBMZyYiB1t3+YiZdnN9Ap/bVQWP0lIYPB0BVG05lbh4HoCaamhEs2rgGU7uMS4QlTo430CJFCPxim709etOCCwg3vZ0RLh1kN94HY//5YgSzz8AzElPNGkYAQ=="
+        }
+       }
+      },
+      {
+       "toolUse": {
+        "toolUseId": "tooluse_V5AXsXUeTFoI8U4ngvhato",
+        "name": "browser",
+        "input": {
+         "browser_input": {
+          "action": {
+           "type": "evaluate",
+           "session_name": "qa-tokenmonitor-pr84",
+           "script": "JSON.stringify({u:location.href,errs:window.__errs,net:window.__net})+'\\n'+document.body.innerText.split('Sign out').slice(1).join('')"
+          }
+         }
+        }
+       }
+      },
+      {
+       "toolUse": {
+        "toolUseId": "tooluse_XPV7cRaJUy1zrlPVkLkuD6",
+        "name": "browser",
+        "input": {
+         "browser_input": {
+          "action": {
+           "type": "screenshot",
+           "path": "/mnt/reports/screenshots/02-usage.png",
+           "session_name": "qa-tokenmonitor-pr84"
+          }
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": [
+      {
+       "toolResult": {
+        "toolUseId": "tooluse_V5AXsXUeTFoI8U4ngvhato",
+        "content": [
+         {
+          "text": "[redacted]"
+         }
+        ]
+       }
+      },
+      {
+       "toolResult": {
+        "toolUseId": "tooluse_XPV7cRaJUy1zrlPVkLkuD6",
+        "content": [
+         {
+          "text": "[redacted]"
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "reasoningContent": {
+        "reasoningText": {
+         "text": "[redacted]",
+         "signature": "CAQSkAoKEggTEAEYAjgBQgh0aGlua2luZxIMX5PhOHCkhKbNxT0pGgw3iDLr+ncl9+2t/90iMIv7HQTDfeE+VpotXJsH9DA+hf+szlrcQxZEzllL7zwqw8MVm6v/iA4WmUITIrPRBSqrCbn16NmGler/cOHNgaIuG2Kp3khmwOzgs+h68jth+2d9K9O9KG21ZrCi+41zIXfJXP+hzcht5QyDNYac30vTSxN8+Sm6UIe5G063eNSdpuTWA/fQXFMLLnN+JONvnb/atqE8c+tEA3/bAnHrFIl/vMkQUQ4fJzZeuTy9BQ3w7NYr3tUhvT+Ntn/ngcXTmBnfC0+jW7SpxQ2zOXybGTbo96gC13AnKC3Mz+X52OkntQORrHFzkO5C6GZDtFcV/1eHXliT8jk0fSGjKhu1lvXmhIJpvAWdzOLDtB6xnQ+RbUxdhfvvA6w1mzw/F7IHa+76NUEw5UQ0YafiE40xtzvbBX/L6lNwcj4WpkAbKmDmQO2oF2kntchTI+67EWY2UDUuaO8ZeHe0m417JJUiKszi3f9arrUCgbNvKrfcR82nGKxeTJTps4sLropyjvIVEIYINMAXGh7UZbfzl7ZDah20lwWI99N/28VI0rpNBJikxuMeWQOitrmEgWtZhmtOeqfBJCRUgD4LXi0RhRfaW63CNjPdR02FBHxEjEOgRghu/OMxe9zcjCxhUC5FFIvCVKkSa2z2KAES/fPputekS+sSKv9XRqSNc+W9XncW6NuPbgjmsax7OeHgPPrVu/RXtKBQ5aD1hb2k9L6kCjcFFnk6wEs2RLUBFfGBkTOd7qlYlWJdjqodsxKmvYjaYdCiFRgEE3zxjF0bV2DZo3a3FNX2lEgkoMb+QXQfhFDa6llhWZ+XAlemKcw/1UHbx0m6F1esfWyb6LRilxcQOzkAyeXac2GXKzMvdIgFklTASTM/G41K4hkZ9ztiM9Wp19Cao75Fy4Qdzf0yqTssDBwn9A03kjAOo5pADRYg+GOs5Mn4/zhNw1U/boQ9siSgKwp6Zzd1Z2L9zYFqW65/xe/3TNWfxxdxjroYJxplT/b6Img/+/mfqH9zv48wEVUYWm7TtuFrxNkLe1vLGMSmaREGmBMJvT6iraE6rF4bbQNF/aA1vlcba/j2SWUQ//gpR1d61K9gBvKDCqerm3cgA1D7NuU3SHSn/7BDxfCTpp4mKDz1+C0+GFWTdRomUqS1ClRWynz0+JO25GBXQZoa2BaQqnwToqYYo0g0lbfH2UzMEtRCvivpqi5jHHlfM876GMtvRbvxTXnQI5rwdZ6YfYr/XMr/seGRy+7ukUR8HdOI4rI7KXLky7ZPuRQT7Fid6y/DDibtA+Kv642Gjtk4kITV42GJYM56WE9C2nnGcK3SdBSUnhl8/Awlb1XPWEpPaTuZqagkUmNmGOeu5x3/OxsRMrPwWf5I8ITwdW4YX9Q14j7JEQYrrmwaVS6EEOBL3QshI8k6IqR6Qh1Kzuxn+e6+Fq9Qyne+7ofzOJGfAuiDC9kEq4k++3C5iGPOkcSguTcmnYSniis7kZEqQOlQ0TWmfdZC0KX2eLK4NZAeQWxnYhVhIk+hhEKG+ihhBTfA2R4zivoQzFhrdRhJ+cbw0JWb+cpBlS56iyvjI5EMy5DZwi2aDwj4OQbBC8p/KwEbKsx79j6huYoKlWTAzSg8oP0vxjMh03SUbiktMhzzhy48yGkz8M6g8nJMvQ+4Sj/rJ3sYAQ=="
+        }
+       }
+      },
+      {
+       "toolUse": {
+        "toolUseId": "tooluse_OPklXv20oZ28WHq2xICO9n",
+        "name": "browser",
+        "input": {
+         "browser_input": {
+          "action": {
+           "type": "evaluate",
+           "session_name": "qa-tokenmonitor-pr84",
+           "script": "(async()=>{const b=[...document.querySelectorAll('button')].find(b=>b.innerText.trim()==='Table');b.click();await new Promise(r=>setTimeout(r,800));const t=document.querySelector('table');const rows=[...document.querySelectorAll('table')].map(t=>t.innerText.split('\\n').length);const first=document.querySelectorAll('table')[0];return JSON.stringify(rows)+first.innerText.slice(0,900)+'\\nTOTAL:'+ (()=>{let i=0,o=0,n=0;first.querySelectorAll('tbody tr').forEach(r=>{const c=[...r.children].map(x=>x.innerText);n++;});return n})()})()"
+          }
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": [
+      {
+       "toolResult": {
+        "toolUseId": "tooluse_OPklXv20oZ28WHq2xICO9n",
+        "content": [
+         {
+          "text": "[redacted]"
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "reasoningContent": {
+        "reasoningText": {
+         "text": "[redacted]",
+         "signature": "CAQS4gYKEggTEAEYAjgBQgh0aGlua2luZxIMnwFjDPFB4FMbaQUzGgwQx6ahIr0+vowSSvIiMPK4JncioLav3sMaBTVJAuEp+SCAOKP4KmbK0GT143uOB76SLQD4y6g913bcT1mShyr9BYHbzOvIDmTE438w7hg2YTPYKpBEuU7iYRsKZgJ9lmavKxsp7yhOMATCKjhfBhtqDLXaR1oe5tidk7J+NiQF9T3esqGUA9mgXlG3euQINtAMxu411lCDdgJfVOVtGwvFReTtbPC4X7cLrCLK3pArH+P+GH+yxVsSBTu6lsUmGYBO9NAjmRGJt2Uei6KQZocnY7DGNoGi3Bl9o6W5kN5rx5K42FuJk/e9/K3PB1HzszMCMMzEwzz+nZd74W/2VO+5jc50staGeZpyNj7iuNFhSbXpR9Dw+r0X30U+P5SzrCu83pnBbmmyV9J/1YNTlSgXlrN/mphCvYcg+3QCWCZc+emXxAweFXS4TVhaAH9a4rQzyKu+b5mltlefxTBW1ZYPSnpp5PpEFu2aApTjvjcpyAwbuGcIz+jbNJVk30l2uTWgR8U+qL3pLiO8z+JDT+xzv8Yn3IwpdxvqfLqXiBl8QJqN1PtyKuYJFPSNrlm6g3epH0ygV1jNqGecWlItltZ4Mc26du+JjOO3bCi43U258midLE2E5hEtBiFlF4hTV6nNmjwXKspDAyGnFsMI7xA7ayfVSrvQIYyq0CWuYhNMNLpXdf+09gwbciNOc9Xw3B32IJ5cFvQRS36PP43rHCzw2bEku6PHk36WgOVUZuOIXeAEGSrYDr/0mqdNuuVIcGzXxENnrYxVIsor84U2Nz2Rbvdimk37Lwjui4Dvy6RAVDW5yb2zbAwFqRWNnnTuPjShMmAeUcI19EWADDRLOhMBsxxAYwZYmwYeGqwxUai7OOHIVyvoz9/nR0ZTRfmmqfaEYGdfXgym1nVVKoQ+ZFHcsrVj9DkWfoQwt+k8wm5UWJWWj+3TKMfIR9TTyays0gwZu8puWtJoIjMwukS2lM+erkyWUff4h+bMMlAhg6+RdEW1Z4+WS5MoNX9Uy9048KywScUxRAWRIGTVfhLcwcfr6doKMKTtZmPzmseGhmm0Tq9KZX5sM6WhS0uwN3zsFuACY/93G0rg3ouUD1xNXRgB"
+        }
+       }
+      },
+      {
+       "toolUse": {
+        "toolUseId": "tooluse_sEL0tmrInazF3r3FVf2Eco",
+        "name": "code_interpreter",
+        "input": {
+         "code_interpreter_input": {
+          "action": {
+           "type": "executeCode",
+           "language": "python",
+           "code": "inp=[6.1e3,11.0e3,0,7.0e3,0,0,2.22e6,28.3e3,4.6e3,12.0e3,5.2e3,12.3e3,962,1.7e3,23.6e3,23.4e3,7.3e3,9.7e3,0,0,948,0,0,0,76.8e3,147.4e3,0,6.5e3,74.7e3,330.1e3]\nout=[103.4e3,153.1e3,0,69.8e3,0,0,605.0e3,194.1e3,46.5e3,114.3e3,38.4e3,82.1e3,21.8e3,10.6e3,40.9e3,108.8e3,80.0e3,61.4e3,0,0,2.6e3,0,0,0,205.6e3,176.5e3,0,42.6e3,292.4e3,335.0e3]\ninv=[198,198,0,156,0,0,1310,253,68,177,67,130,28,16,77,128,86,91,0,0,4,0,0,0,317,179,0,67,348,529]\nprint(sum(inp),sum(out),sum(inv))\nprint(3.0+2.78, 1.23e3+3.0+2.78)\n# overview prior/this sums\nprint(334.16+1683.25, 1465.99+163.04+154.01+1558.32+73.41+27.96+5.54+2.84, 2017.41/3451.11-1)"
+          }
+         }
+        }
+       }
+      },
+      {
+       "toolUse": {
+        "toolUseId": "tooluse_Hj1aZ3tLXvxdz6n9MIC3IJ",
+        "name": "browser",
+        "input": {
+         "browser_input": {
+          "action": {
+           "type": "evaluate",
+           "session_name": "qa-tokenmonitor-pr84",
+           "script": "(async()=>{document.querySelector('a[href=\"/costs\"]').click(); await new Promise(r=>setTimeout(r,7000)); return JSON.stringify({u:location.href,errs:window.__errs,net:window.__net.slice(2)})+'\\n'+document.body.innerText.split('Sign out').slice(1).join('')})()"
+          }
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": [
+      {
+       "toolResult": {
+        "toolUseId": "tooluse_sEL0tmrInazF3r3FVf2Eco",
+        "content": [
+         {
+          "text": "[redacted]"
+         }
+        ]
+       }
+      },
+      {
+       "toolResult": {
+        "toolUseId": "tooluse_Hj1aZ3tLXvxdz6n9MIC3IJ",
+        "content": [
+         {
+          "text": "[redacted]"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ],
+   "system": [
+    {
+     "text": "[redacted]"
+    },
+    {
+     "text": "[redacted]"
+    }
+   ],
+   "inferenceConfig": {},
+   "toolConfig": {
+    "tools": [
+     {
+      "toolSpec": {
+       "name": "shell",
+       "description": "Execute a bash command and return the results.\n\nReturns:\n    Dict with stdout, stderr, and exit_code",
+       "inputSchema": {
+        "json": {
+         "type": "object",
+         "properties": {
+          "command": {
+           "type": "string",
+           "description": "The bash command to execute"
+          },
+          "timeout": {
+           "type": "integer",
+           "description": "Timeout in seconds (default: 300)",
+           "default": 300
+          }
+         },
+         "required": [
+          "command"
+         ]
+        }
+       }
+      }
+     },
+     {
+      "toolSpec": {
+       "name": "file_operations",
+       "description": "Text editor tool for viewing and modifying files.\n\nReturns:\n    Result of the operation",
+       "inputSchema": {
+        "json": {
+         "type": "object",
+         "properties": {
+          "path": {
+           "type": "string",
+           "description": "Path to the file or directory"
+          },
+          "new_str": {
+           "type": "string",
+           "description": "Replacement text (for str_replace and insert commands)",
+           "default": null
+          },
+          "old_str": {
+           "type": "string",
+           "description": "Text to replace (for str_replace command)",
+           "default": null
+          },
+          "file_text": {
+           "type": "string",
+           "description": "Content for new file (for create command)",
+           "default": null
+          },
+          "view_range": {
+           "description": "[start_line, end_line] for viewing specific lines (for view command)",
+           "default": null,
+           "type": "array",
+           "items": {
+            "type": "integer"
+           }
+          },
+          "insert_line": {
+           "type": "integer",
+           "description": "Line number to insert after (for insert command)",
+           "default": null
+          },
+          "command": {
+           "type": "string",
+           "description": "The command to execute (\"view\", \"str_replace\", \"create\", \"insert\")"
+          }
+         },
+         "required": [
+          "command",
+          "path"
+         ]
+        }
+       }
+      }
+     },
+     {
+      "toolSpec": {
+       "name": "browser",
+       "description": "Browser automation tool for web scraping, testing, and automation tasks.\n\nThis tool provides comprehensive browser automation capabilities using Playwright\nwith support for multiple browser engines. It offers session management, tab control,\npage interactions, content extraction, and advanced automation features.\n\nUsage with Strands Agent:\n```python\nfrom strands import Agent\nfrom strands_tools.browser import Browser\n\n# Create the browser tool\nbrowser = Browser()\nagent = Agent(tools=[browser.browser])\n\n# Initialize a session\nagent.tool.browser(\n    browser_input={\n        \"action\": {\n            \"type\": \"init_session\",\n            \"description\": \"Example ession\",\n            \"session_name\": \"example-session\"\n        }\n    }\n)\n\n# Navigate to a page\nagent.tool.browser(\n    browser_input={\n        \"action\": {\n            \"type\": \"navigate\",\n            \"url\": \"https://example.com\",\n            \"session_name\": \"example-session\"\n        }\n    }\n)\n\n# Close the browser\nagent.tool.browser(\n    browser_input={\n        \"action\": {\n            \"type\": \"close\",\n            \"session_name\": \"example-session\"\n        }\n    }\n)\n```\n\nReturns:\n    Dict containing execution results.",
+       "inputSchema": {
+        "json": {
+         "$defs": {
+          "InitSessionAction": {
+           "description": "Action for creating a new browser session. Use this as the first step before any browser automation tasks.\nRequired before navigating to websites, clicking elements, or performing any browser operations.",
+           "title": "InitSessionAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "Initialize a new browser session",
+             "const": "init_session",
+             "title": "Type",
+             "type": "string"
+            },
+            "description": {
+             "title": "Description",
+             "type": "string",
+             "description": "Required description of what this session will be used for"
+            },
+            "session_name": {
+             "pattern": "^[a-z0-9-]+$",
+             "description": "Required name to identify the session",
+             "title": "Session Name",
+             "type": "string",
+             "maxLength": 36,
+             "minLength": 10
+            }
+           },
+           "required": [
+            "type",
+            "description",
+            "session_name"
+           ]
+          },
+          "GetTextAction": {
+           "description": "Action for extracting text content from web page elements. Use this to read visible text from specific\nelements like headings, paragraphs, labels, or any element containing text data you need to capture.",
+           "title": "GetTextAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "Get text content from an element",
+             "const": "get_text",
+             "title": "Type",
+             "type": "string"
+            },
+            "session_name": {
+             "title": "Session Name",
+             "type": "string",
+             "description": "Required session name from a previous init_session call"
+            },
+            "selector": {
+             "title": "Selector",
+             "type": "string",
+             "description": "CSS selector for the element"
+            }
+           },
+           "required": [
+            "type",
+            "session_name",
+            "selector"
+           ]
+          },
+          "EvaluateAction": {
+           "description": "Action for executing JavaScript code in the browser context. Use this to run custom scripts, manipulate DOM\nelements, extract complex data, or perform advanced browser operations that aren't covered by other actions.",
+           "title": "EvaluateAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "Execute JavaScript code",
+             "const": "evaluate",
+             "title": "Type",
+             "type": "string"
+            },
+            "session_name": {
+             "title": "Session Name",
+             "type": "string",
+             "description": "Required session name from a previous init_session call"
+            },
+            "script": {
+             "title": "Script",
+             "type": "string",
+             "description": "JavaScript code to execute"
+            }
+           },
+           "required": [
+            "type",
+            "session_name",
+            "script"
+           ]
+          },
+          "SwitchTabAction": {
+           "description": "Action for changing focus to a different browser tab. Use this to switch between multiple open tabs,\ncontinue work on a previously opened page, or alternate between different websites.",
+           "title": "SwitchTabAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "Switch to a different tab",
+             "const": "switch_tab",
+             "title": "Type",
+             "type": "string"
+            },
+            "session_name": {
+             "title": "Session Name",
+             "type": "string",
+             "description": "Required session name from a previous init_session call"
+            },
+            "tab_id": {
+             "title": "Tab Id",
+             "type": "string",
+             "description": "ID of the tab to switch to"
+            }
+           },
+           "required": [
+            "type",
+            "session_name",
+            "tab_id"
+           ]
+          },
+          "BrowserInput": {
+           "description": "Input model for browser actions.",
+           "title": "BrowserInput",
+           "type": "object",
+           "properties": {
+            "wait_time": {
+             "anyOf": [
+              {
+               "type": "integer"
+              },
+              {
+               "type": "null"
+              }
+             ],
+             "description": "Time to wait after action in seconds",
+             "default": 2,
+             "title": "Wait Time"
+            },
+            "action": {
+             "title": "Action",
+             "oneOf": [
+              {
+               "$ref": "#/$defs/InitSessionAction"
+              },
+              {
+               "$ref": "#/$defs/ListLocalSessionsAction"
+              },
+              {
+               "$ref": "#/$defs/NavigateAction"
+              },
+              {
+               "$ref": "#/$defs/ClickAction"
+              },
+              {
+               "$ref": "#/$defs/TypeAction"
+              },
+              {
+               "$ref": "#/$defs/EvaluateAction"
+              },
+              {
+               "$ref": "#/$defs/PressKeyAction"
+              },
+              {
+               "$ref": "#/$defs/GetTextAction"
+              },
+              {
+               "$ref": "#/$defs/GetHtmlAction"
+              },
+              {
+               "$ref": "#/$defs/ScreenshotAction"
+              },
+              {
+               "$ref": "#/$defs/RefreshAction"
+              },
+              {
+               "$ref": "#/$defs/BackAction"
+              },
+              {
+               "$ref": "#/$defs/ForwardAction"
+              },
+              {
+               "$ref": "#/$defs/NewTabAction"
+              },
+              {
+               "$ref": "#/$defs/SwitchTabAction"
+              },
+              {
+               "$ref": "#/$defs/CloseTabAction"
+              },
+              {
+               "$ref": "#/$defs/ListTabsAction"
+              },
+              {
+               "$ref": "#/$defs/GetCookiesAction"
+              },
+              {
+               "$ref": "#/$defs/SetCookiesAction"
+              },
+              {
+               "$ref": "#/$defs/NetworkInterceptAction"
+              },
+              {
+               "$ref": "#/$defs/ExecuteCdpAction"
+              },
+              {
+               "$ref": "#/$defs/CloseAction"
+              }
+             ],
+             "discriminator": {
+              "propertyName": "type",
+              "mapping": {
+               "navigate": "#/$defs/NavigateAction",
+               "init_session": "#/$defs/InitSessionAction",
+               "forward": "#/$defs/ForwardAction",
+               "execute_cdp": "#/$defs/ExecuteCdpAction",
+               "get_text": "#/$defs/GetTextAction",
+               "back": "#/$defs/BackAction",
+               "press_key": "#/$defs/PressKeyAction",
+               "refresh": "#/$defs/RefreshAction",
+               "screenshot": "#/$defs/ScreenshotAction",
+               "type": "#/$defs/TypeAction",
+               "click": "#/$defs/ClickAction",
+               "close_tab": "#/$defs/CloseTabAction",
+               "list_local_sessions": "#/$defs/ListLocalSessionsAction",
+               "get_cookies": "#/$defs/GetCookiesAction",
+               "list_tabs": "#/$defs/ListTabsAction",
+               "new_tab": "#/$defs/NewTabAction",
+               "network_intercept": "#/$defs/NetworkInterceptAction",
+               "get_html": "#/$defs/GetHtmlAction",
+               "set_cookies": "#/$defs/SetCookiesAction",
+               "switch_tab": "#/$defs/SwitchTabAction",
+               "close": "#/$defs/CloseAction",
+               "evaluate": "#/$defs/EvaluateAction"
+              }
+             }
+            }
+           },
+           "required": [
+            "action"
+           ]
+          },
+          "ListLocalSessionsAction": {
+           "description": "Action for viewing all active browser sessions. Use this to see what browser sessions are currently\navailable for interaction, including their names and descriptions.",
+           "title": "ListLocalSessionsAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "List all local sessions managed by this tool instance",
+             "const": "list_local_sessions",
+             "title": "Type",
+             "type": "string"
+            }
+           },
+           "required": [
+            "type"
+           ]
+          },
+          "ListTabsAction": {
+           "description": "Action for viewing all open browser tabs in the current session. Use this to see what tabs are available,\nget their IDs for switching, or manage multiple open pages.",
+           "title": "ListTabsAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "List all open browser tabs",
+             "const": "list_tabs",
+             "title": "Type",
+             "type": "string"
+            },
+            "session_name": {
+             "title": "Session Name",
+             "type": "string",
+             "description": "Required session name from a previous init_session call"
+            }
+           },
+           "required": [
+            "type",
+            "session_name"
+           ]
+          },
+          "TypeAction": {
+           "description": "Action for entering text into input fields. Use this to fill out forms, search boxes, text areas, or any\ntext input element. Requires a CSS selector to identify the input field.",
+           "title": "TypeAction",
+           "type": "object",
+           "properties": {
+            "session_name": {
+             "title": "Session Name",
+             "type": "string",
+             "description": "Required session name from a previous init_session call"
+            },
+            "selector": {
+             "title": "Selector",
+             "type": "string",
+             "description": "CSS selector for the element to type into"
+            },
+            "text": {
+             "title": "Text",
+             "type": "string",
+             "description": "Text to type"
+            },
+            "type": {
+             "description": "Type text into an element",
+             "const": "type",
+             "title": "Type",
+             "type": "string"
+            }
+           },
+           "required": [
+            "type",
+            "session_name",
+            "selector",
+            "text"
+           ]
+          },
+          "NetworkInterceptAction": {
+           "description": "Action for intercepting and monitoring network requests matching a URL pattern. Use this to capture API calls,\nmonitor data exchanges, debug network issues, or analyze communication between the browser and servers.",
+           "title": "NetworkInterceptAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "Set up network interception",
+             "const": "network_intercept",
+             "title": "Type",
+             "type": "string"
+            },
+            "pattern": {
+             "title": "Pattern",
+             "type": "string",
+             "description": "URL pattern to intercept"
+            },
+            "session_name": {
+             "title": "Session Name",
+             "type": "string",
+             "description": "Required session name from a previous init_session call"
+            }
+           },
+           "required": [
+            "type",
+            "session_name",
+            "pattern"
+           ]
+          },
+          "NavigateAction": {
+           "description": "Action for navigating to a specific URL. Use this to load web pages, visit websites, or change the\ncurrent page location. Must have an active session before using.",
+           "title": "NavigateAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "Navigate to a URL",
+             "const": "navigate",
+             "title": "Type",
+             "type": "string"
+            },
+            "session_name": {
+             "title": "Session Name",
+             "type": "string",
+             "description": "Required session name from a previous init_session call"
+            },
+            "url": {
+             "title": "Url",
+             "type": "string",
+             "description": "URL to navigate to"
+            }
+           },
+           "required": [
+            "type",
+            "session_name",
+            "url"
+           ]
+          },
+          "SetCookiesAction": {
+           "description": "Action for setting or modifying cookies on the current page or domain. Use this to simulate user\nauthentication, set preferences, maintain session state, or inject specific cookie values for testing purposes.",
+           "title": "SetCookiesAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "Set cookies for the current page",
+             "const": "set_cookies",
+             "title": "Type",
+             "type": "string"
+            },
+            "session_name": {
+             "title": "Session Name",
+             "type": "string",
+             "description": "Required session name from a previous init_session call"
+            },
+            "cookies": {
+             "description": "List of cookie objects to set",
+             "title": "Cookies",
+             "type": "array",
+             "items": {
+              "type": "object",
+              "additionalProperties": true
+             }
+            }
+           },
+           "required": [
+            "type",
+            "session_name",
+            "cookies"
+           ]
+          },
+          "PressKeyAction": {
+           "description": "Action for simulating keyboard key presses. Use this to submit forms (Enter), navigate between fields (Tab),\nclose dialogs (Escape), or trigger keyboard shortcuts. Useful when clicking isn't sufficient.",
+           "title": "PressKeyAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "Press a keyboard key",
+             "const": "press_key",
+             "title": "Type",
+             "type": "string"
+            },
+            "session_name": {
+             "title": "Session Name",
+             "type": "string",
+             "description": "Required session name from a previous init_session call"
+            },
+            "key": {
+             "title": "Key",
+             "type": "string",
+             "description": "Key to press (e.g., 'Enter', 'Tab', 'Escape')"
+            }
+           },
+           "required": [
+            "type",
+            "session_name",
+            "key"
+           ]
+          },
+          "GetCookiesAction": {
+           "description": "Action for retrieving all cookies from the current page or domain. Use this to inspect authentication tokens,\nsession data, user preferences, or any stored cookie information for debugging or data extraction.",
+           "title": "GetCookiesAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "Get all cookies for the current page",
+             "const": "get_cookies",
+             "title": "Type",
+             "type": "string"
+            },
+            "session_name": {
+             "title": "Session Name",
+             "type": "string",
+             "description": "Required session name from a previous init_session call"
+            }
+           },
+           "required": [
+            "type",
+            "session_name"
+           ]
+          },
+          "RefreshAction": {
+           "description": "Action for reloading the current web page. Use this to refresh dynamic content, reset form states, reload\nupdated data, or recover from page errors by forcing a fresh page load.",
+           "title": "RefreshAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "Refresh the current page",
+             "const": "refresh",
+             "title": "Type",
+             "type": "string"
+            },
+            "session_name": {
+             "title": "Session Name",
+             "type": "string",
+             "description": "Required session name from a previous init_session call"
+            }
+           },
+           "required": [
+            "type",
+            "session_name"
+           ]
+          },
+          "ClickAction": {
+           "description": "Action for clicking on web page elements. Use this to interact with buttons, links, checkboxes, or any\nclickable element. Requires a CSS selector to identify the target element.",
+           "title": "ClickAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "Click on an element",
+             "const": "click",
+             "title": "Type",
+             "type": "string"
+            },
+            "session_name": {
+             "title": "Session Name",
+             "type": "string",
+             "description": "Required session name from a previous init_session call"
+            },
+            "selector": {
+             "title": "Selector",
+             "type": "string",
+             "description": "CSS selector for the element to click"
+            }
+           },
+           "required": [
+            "type",
+            "session_name",
+            "selector"
+           ]
+          },
+          "ForwardAction": {
+           "description": "Action for navigating to the next page in browser history. Use this to move forward through previously\nvisited pages after using the back action, or to redo navigation steps.",
+           "title": "ForwardAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "Navigate forward in browser history",
+             "const": "forward",
+             "title": "Type",
+             "type": "string"
+            },
+            "session_name": {
+             "title": "Session Name",
+             "type": "string",
+             "description": "Required session name from a previous init_session call"
+            }
+           },
+           "required": [
+            "type",
+            "session_name"
+           ]
+          },
+          "ScreenshotAction": {
+           "description": "Action for capturing visual screenshots of the current page. Use this to document the current state, verify\nvisual elements, debug layout issues, or create visual records of web page interactions.",
+           "title": "ScreenshotAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "Take a screenshot",
+             "const": "screenshot",
+             "title": "Type",
+             "type": "string"
+            },
+            "session_name": {
+             "title": "Session Name",
+             "type": "string",
+             "description": "Required session name from a previous init_session call"
+            },
+            "path": {
+             "anyOf": [
+              {
+               "type": "string"
+              },
+              {
+               "type": "null"
+              }
+             ],
+             "description": "Optional path for screenshot file",
+             "default": null,
+             "title": "Path"
+            }
+           },
+           "required": [
+            "type",
+            "session_name"
+           ]
+          },
+          "NewTabAction": {
+           "description": "Action for creating a new browser tab within the current session. Use this to open additional pages\nsimultaneously, compare content across multiple sites, or maintain separate workflows in parallel.\nAfter using this action, the default tab is automatically switched to the new tab",
+           "title": "NewTabAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "Create a new browser tab",
+             "const": "new_tab",
+             "title": "Type",
+             "type": "string"
+            },
+            "session_name": {
+             "title": "Session Name",
+             "type": "string",
+             "description": "Required session name from a previous init_session call"
+            },
+            "tab_id": {
+             "anyOf": [
+              {
+               "type": "string"
+              },
+              {
+               "type": "null"
+              }
+             ],
+             "description": "Optional ID for the new tab",
+             "default": null,
+             "title": "Tab Id"
+            }
+           },
+           "required": [
+            "type",
+            "session_name"
+           ]
+          },
+          "GetHtmlAction": {
+           "description": "Action for extracting HTML source code from the page or specific elements. Use this to get the raw HTML\nstructure, analyze page markup, or extract complex nested content that text extraction can't capture.",
+           "title": "GetHtmlAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "Get HTML content",
+             "const": "get_html",
+             "title": "Type",
+             "type": "string"
+            },
+            "session_name": {
+             "title": "Session Name",
+             "type": "string",
+             "description": "Required session name from a previous init_session call"
+            },
+            "selector": {
+             "anyOf": [
+              {
+               "type": "string"
+              },
+              {
+               "type": "null"
+              }
+             ],
+             "description": "CSS selector for specific element (optional)",
+             "default": null,
+             "title": "Selector"
+            }
+           },
+           "required": [
+            "type",
+            "session_name"
+           ]
+          },
+          "BackAction": {
+           "description": "Action for navigating to the previous page in browser history. Use this to return to previously visited\npages, undo navigation steps, or move backwards through a multi-step process.",
+           "title": "BackAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "Navigate back in browser history",
+             "const": "back",
+             "title": "Type",
+             "type": "string"
+            },
+            "session_name": {
+             "title": "Session Name",
+             "type": "string",
+             "description": "Required session name from a previous init_session call"
+            }
+           },
+           "required": [
+            "type",
+            "session_name"
+           ]
+          },
+          "CloseAction": {
+           "description": "Action for completely closing the browser and ending the session. Use this to clean up resources, terminate\nautomation workflows, or properly shut down the browser when all tasks are completed.",
+           "title": "CloseAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "Close the browser",
+             "const": "close",
+             "title": "Type",
+             "type": "string"
+            },
+            "session_name": {
+             "title": "Session Name",
+             "type": "string",
+             "description": "Required session name from a previous init_session call"
+            }
+           },
+           "required": [
+            "type",
+            "session_name"
+           ]
+          },
+          "ExecuteCdpAction": {
+           "description": "Action for executing Chrome DevTools Protocol commands directly. Use this for advanced browser control,\nperformance monitoring, security testing, or accessing low-level browser features not available\nthrough standard actions.",
+           "title": "ExecuteCdpAction",
+           "type": "object",
+           "properties": {
+            "session_name": {
+             "title": "Session Name",
+             "type": "string",
+             "description": "Required session name from a previous init_session call"
+            },
+            "type": {
+             "description": "Execute Chrome DevTools Protocol command",
+             "const": "execute_cdp",
+             "title": "Type",
+             "type": "string"
+            },
+            "method": {
+             "title": "Method",
+             "type": "string",
+             "description": "CDP method name"
+            },
+            "params": {
+             "anyOf": [
+              {
+               "type": "object",
+               "additionalProperties": true
+              },
+              {
+               "type": "null"
+              }
+             ],
+             "description": "Parameters for the CDP method",
+             "default": null,
+             "title": "Params"
+            }
+           },
+           "required": [
+            "type",
+            "session_name",
+            "method"
+           ]
+          },
+          "CloseTabAction": {
+           "description": "Action for closing a specific browser tab or the currently active tab. Use this to clean up completed\nworkflows, free browser resources, or close tabs that are no longer needed.",
+           "title": "CloseTabAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "Close a browser tab",
+             "const": "close_tab",
+             "title": "Type",
+             "type": "string"
+            },
+            "session_name": {
+             "title": "Session Name",
+             "type": "string",
+             "description": "Required session name from a previous init_session call"
+            },
+            "tab_id": {
+             "anyOf": [
+              {
+               "type": "string"
+              },
+              {
+               "type": "null"
+              }
+             ],
+             "description": "ID of the tab to close (defaults to active tab)",
+             "default": null,
+             "title": "Tab Id"
+            }
+           },
+           "required": [
+            "type",
+            "session_name"
+           ]
+          }
+         },
+         "type": "object",
+         "properties": {
+          "browser_input": {
+           "$ref": "#/$defs/BrowserInput",
+           "description": "Structured input containing the action to perform."
+          }
+         },
+         "required": [
+          "browser_input"
+         ]
+        }
+       }
+      }
+     },
+     {
+      "toolSpec": {
+       "name": "code_interpreter",
+       "description": "**session_name is now optional in most operations**\n\n        Sessions are automatically created when needed. You can now:\n        \u2022 Omit session_name to use an auto-generated session (recommended for simple use cases)\n        \u2022 Provide session_name for named sessions (useful for multi-step workflows)\n        \n        Quick example without session_name:\n```python\n        # No need to call initSession first\n        agent.tool.code_interpreter(\n            code_interpreter_input={{\n                \"action\": {{\n                    \"type\": \"executeCode\",\n                    \"code\": \"print('Hello, World!')\",\n                    \"language\": \"python\"\n                }}\n            }}\n        )\n```\n        \n        ---\n        \n        \n        Code Interpreter tool for executing code in isolated sandbox environments.\n\n        This tool provides a comprehensive code execution platform that supports multiple programming\n        languages with persistent session management, file operations, and shell command execution. \n        Built on the Bedrock AgentCore Code Sandbox platform, it offers secure, isolated environments \n        for code execution with full lifecycle management.\n\n        Key Features:\n        1. Multi-Language Support:\n           The tool supports the following programming languages: PYTHON, JAVASCRIPT, TYPESCRIPT\n           \u2022 Full standard library access for each supported language\n           \u2022 Runtime environment appropriate for each language\n           \u2022 Shell command execution for system operations\n\n        2. Session Management:\n           \u2022 Create named, persistent sessions for stateful code execution\n           \u2022 List and manage multiple concurrent sessions\n           \u2022 Automatic session cleanup and resource management\n           \u2022 Session isolation for security and resource separation\n\n        3. File System Operations:\n           \u2022 Read files from the sandbox environment\n           \u2022 Write multiple files with custom content\n           \u2022 List directory contents and navigate file structures\n           \u2022 Remove files and manage sandbox storage\n\n        4. Advanced Execution Features:\n           \u2022 Context preservation across code executions within sessions\n           \u2022 Optional context clearing for fresh execution environments\n           \u2022 Real-time output capture and error handling\n           \u2022 Support for long-running processes and interactive code\n\n        How It Works:\n        ------------\n        1. The tool accepts structured action inputs defining the operation type\n        2. Sessions are created on-demand with isolated sandbox environments\n        3. Code is executed within the Bedrock AgentCore platform with full runtime support\n        4. Results, outputs, and errors are captured and returned in structured format\n        5. File operations interact directly with the sandbox file system\n        6. Platform lifecycle is managed automatically with cleanup on completion\n\n        Operation Types:\n        --------------\n        - initSession: Create a new isolated code execution session\n        - listLocalSessions: View all active sessions and their status\n        - executeCode: Run code in a specified programming language\n        - executeCommand: Execute shell commands in the sandbox\n        - readFiles: Read file contents from the sandbox file system\n        - writeFiles: Create or update files in the sandbox\n        - listFiles: Browse directory contents and file structures\n        - removeFiles: Delete files from the sandbox environment\n\n        Common Usage Scenarios:\n        ---------------------\n        - Data analysis: Execute Python scripts for data processing and visualization\n        - Web development: Run JavaScript/TypeScript for frontend/backend development\n        - System administration: Execute shell commands for environment setup\n        - File processing: Read, transform, and write files programmatically\n        - Educational coding: Provide safe environments for learning and experimentation\n        - CI/CD workflows: Execute build scripts and deployment commands\n        - API testing: Run code to test external services and APIs\n\n        Usage with Strands Agent:\n```python\n        from strands import Agent\n        from strands_tools.code_interpreter import AgentCoreCodeInterpreter\n\n        # Create the code interpreter tool\n        bedrock_agent_core_code_interpreter = AgentCoreCodeInterpreter(region=\"us-west-2\")\n        agent = Agent(tools=[bedrock_agent_core_code_interpreter.code_interpreter])\n\n        # Create a session\n        agent.tool.code_interpreter(\n            code_interpreter_input={\n                \"action\": {\n                    \"type\": \"initSession\",\n                    \"description\": \"Data analysis session\",\n                    \"session_name\": \"analysis-session\"\n                }\n            }\n        )\n\n        # Execute Python code\n        agent.tool.code_interpreter(\n            code_interpreter_input={\n                \"action\": {\n                    \"type\": \"executeCode\",\n                    \"session_name\": \"analysis-session\",\n                    \"code\": \"import pandas as pd\\ndf = pd.read_csv('data.csv')\\nprint(df.head())\",\n                    \"language\": \"python\"\n                }\n            }\n        )\n\n        # Write files to the sandbox\n        agent.tool.code_interpreter(\n            code_interpreter_input={\n                \"action\": {\n                    \"type\": \"writeFiles\",\n                    \"session_name\": \"analysis-session\",\n                    \"content\": [\n                        {\"path\": \"config.json\", \"text\": '{\"debug\": true}'},\n                        {\"path\": \"script.py\", \"text\": \"print('Hello, World!')\"}\n                    ]\n                }\n            }\n        )\n\n        # Execute shell commands\n        agent.tool.code_interpreter(\n            code_interpreter_input={\n                \"action\": {\n                    \"type\": \"executeCommand\",\n                    \"session_name\": \"analysis-session\",\n                    \"command\": \"ls -la && python script.py\"\n                }\n            }\n        )\n```\n\n        Args:\n            code_interpreter_input: Structured input containing the action to perform.\n                Must be a CodeInterpreterInput object with an 'action' field specifying\n                the operation type and required parameters.\n\n                Action Types and Required Fields:\n                - InitSessionAction: type=\"initSession\", description (required), session_name (optional)\n                - ExecuteCodeAction: type=\"executeCode\", session_name, code, language, clear_context (optional)\n                  * language must be one of: {supported_languages_enum}\n                - ExecuteCommandAction: type=\"executeCommand\", session_name, command\n                - ReadFilesAction: type=\"readFiles\", session_name, paths (list)\n                - WriteFilesAction: type=\"writeFiles\", session_name, content (list of FileContent objects)\n                - ListFilesAction: type=\"listFiles\", session_name, path\n                - RemoveFilesAction: type=\"removeFiles\", session_name, paths (list)\n                - ListLocalSessionsAction: type=\"listLocalSessions\"\n\n        Returns:\n            Dict containing execution results in the format:\n            {\n                \"status\": \"success|error\",\n                \"content\": [{\"text\": \"...\", \"json\": {...}}]\n            }\n\n            Success responses include:\n            - Session information for session operations\n            - Code execution output and results\n            - File contents for read operations\n            - Operation confirmations for write/delete operations\n\n            Error responses include:\n            - Session not found errors\n            - Code compilation/execution errors\n            - File system operation errors\n            - Platform connectivity issues\n        ",
+       "inputSchema": {
+        "json": {
+         "$defs": {
+          "ExecuteCommandAction": {
+           "description": "Execute shell/terminal commands within the sandbox environment. Use this for system operations like installing\npackages, running scripts, file management, or any command-line tasks that need to be performed in the session.",
+           "title": "ExecuteCommandAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "Execute a shell command in the code interpreter",
+             "const": "executeCommand",
+             "title": "Type",
+             "type": "string"
+            },
+            "session_name": {
+             "anyOf": [
+              {
+               "type": "string"
+              },
+              {
+               "type": "null"
+              }
+             ],
+             "description": "Session name. If not provided, uses the default session.",
+             "default": null,
+             "title": "Session Name"
+            },
+            "command": {
+             "title": "Command",
+             "type": "string",
+             "description": "Required shell command to execute"
+            }
+           },
+           "required": [
+            "type",
+            "command"
+           ]
+          },
+          "FileContent": {
+           "description": "Represents a file with its path and text content for writing to the sandbox file system. Used when creating or\nupdating files during code execution sessions.",
+           "title": "FileContent",
+           "type": "object",
+           "properties": {
+            "path": {
+             "title": "Path",
+             "type": "string",
+             "description": "The file path where content should be written"
+            },
+            "text": {
+             "anyOf": [
+              {
+               "type": "string"
+              },
+              {
+               "type": "null"
+              }
+             ],
+             "description": "Text content for the file",
+             "default": null,
+             "title": "Text"
+            },
+            "blob": {
+             "anyOf": [
+              {
+               "format": "binary",
+               "type": "string"
+              },
+              {
+               "type": "null"
+              }
+             ],
+             "description": "Base64-encoded binary content for the file",
+             "default": null,
+             "title": "Blob"
+            }
+           },
+           "required": [
+            "path"
+           ]
+          },
+          "InitSessionAction": {
+           "description": "Create a new isolated code execution environment. Use this when starting a new coding task, data analysis\nproject, or when you need a fresh sandbox environment. Each session maintains its own state, variables,\nand file system.",
+           "title": "InitSessionAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "Initialize a new code interpreter session",
+             "const": "initSession",
+             "title": "Type",
+             "type": "string"
+            },
+            "description": {
+             "title": "Description",
+             "type": "string",
+             "description": "Required description of what this session will be used for"
+            },
+            "session_name": {
+             "anyOf": [
+              {
+               "type": "string"
+              },
+              {
+               "type": "null"
+              }
+             ],
+             "description": "Session name. If not provided, a default session will be used.",
+             "default": null,
+             "title": "Session Name"
+            }
+           },
+           "required": [
+            "type",
+            "description"
+           ]
+          },
+          "CodeInterpreterInput": {
+           "title": "CodeInterpreterInput",
+           "type": "object",
+           "properties": {
+            "action": {
+             "title": "Action",
+             "oneOf": [
+              {
+               "$ref": "#/$defs/InitSessionAction"
+              },
+              {
+               "$ref": "#/$defs/ListLocalSessionsAction"
+              },
+              {
+               "$ref": "#/$defs/ExecuteCodeAction"
+              },
+              {
+               "$ref": "#/$defs/ExecuteCommandAction"
+              },
+              {
+               "$ref": "#/$defs/ReadFilesAction"
+              },
+              {
+               "$ref": "#/$defs/ListFilesAction"
+              },
+              {
+               "$ref": "#/$defs/RemoveFilesAction"
+              },
+              {
+               "$ref": "#/$defs/WriteFilesAction"
+              }
+             ],
+             "discriminator": {
+              "propertyName": "type",
+              "mapping": {
+               "listLocalSessions": "#/$defs/ListLocalSessionsAction",
+               "executeCode": "#/$defs/ExecuteCodeAction",
+               "initSession": "#/$defs/InitSessionAction",
+               "removeFiles": "#/$defs/RemoveFilesAction",
+               "writeFiles": "#/$defs/WriteFilesAction",
+               "executeCommand": "#/$defs/ExecuteCommandAction",
+               "listFiles": "#/$defs/ListFilesAction",
+               "readFiles": "#/$defs/ReadFilesAction"
+              }
+             }
+            }
+           },
+           "required": [
+            "action"
+           ]
+          },
+          "ExecuteCodeAction": {
+           "description": "Execute code in a specific programming language within an existing session. Use this for running Python\nscripts, JavaScript/TypeScript code, data analysis, calculations, or any programming task. The session maintains\nstate between executions.",
+           "title": "ExecuteCodeAction",
+           "type": "object",
+           "properties": {
+            "session_name": {
+             "anyOf": [
+              {
+               "type": "string"
+              },
+              {
+               "type": "null"
+              }
+             ],
+             "description": "Session name. If not provided, uses the default session which will be auto-created if needed.",
+             "default": null,
+             "title": "Session Name"
+            },
+            "language": {
+             "$ref": "#/$defs/LanguageType",
+             "description": "Programming language for code execution",
+             "default": "python"
+            },
+            "code": {
+             "title": "Code",
+             "type": "string",
+             "description": "Required code to execute"
+            },
+            "type": {
+             "description": "Execute code in the code interpreter",
+             "const": "executeCode",
+             "title": "Type",
+             "type": "string"
+            },
+            "clear_context": {
+             "description": "Whether to clear the execution context before running code",
+             "default": false,
+             "title": "Clear Context",
+             "type": "boolean"
+            }
+           },
+           "required": [
+            "type",
+            "code"
+           ]
+          },
+          "ReadFilesAction": {
+           "description": "Read the contents of one or more files from the sandbox file system. Use this to examine data files,\nconfiguration files, code files, or any other files that have been created or uploaded to the session.",
+           "title": "ReadFilesAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "Read files from the code interpreter",
+             "const": "readFiles",
+             "title": "Type",
+             "type": "string"
+            },
+            "session_name": {
+             "anyOf": [
+              {
+               "type": "string"
+              },
+              {
+               "type": "null"
+              }
+             ],
+             "description": "Session name. If not provided, uses the default session.",
+             "default": null,
+             "title": "Session Name"
+            },
+            "paths": {
+             "description": "List of file paths to read",
+             "title": "Paths",
+             "type": "array",
+             "items": {
+              "type": "string"
+             }
+            }
+           },
+           "required": [
+            "type",
+            "paths"
+           ]
+          },
+          "ListFilesAction": {
+           "description": "Browse and list files and directories within the sandbox file system. Use this to explore the directory\nstructure, find files, or understand what's available in the session before reading or manipulating files.",
+           "title": "ListFilesAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "List files in a directory",
+             "const": "listFiles",
+             "title": "Type",
+             "type": "string"
+            },
+            "session_name": {
+             "anyOf": [
+              {
+               "type": "string"
+              },
+              {
+               "type": "null"
+              }
+             ],
+             "description": "Session name. If not provided, uses the default session.",
+             "default": null,
+             "title": "Session Name"
+            },
+            "path": {
+             "description": "Directory path to list (defaults to current directory)",
+             "default": ".",
+             "title": "Path",
+             "type": "string"
+            }
+           },
+           "required": [
+            "type"
+           ]
+          },
+          "ListLocalSessionsAction": {
+           "description": "View all active code interpreter sessions managed by this tool instance. Use this to see what sessions are\navailable, check their status, or find the session name you need for other operations.",
+           "title": "ListLocalSessionsAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "List all local sessions managed by this tool instance",
+             "const": "listLocalSessions",
+             "title": "Type",
+             "type": "string"
+            }
+           },
+           "required": [
+            "type"
+           ]
+          },
+          "WriteFilesAction": {
+           "description": "Create or update multiple files in the sandbox file system with specified content. Use this to save data,\ncreate configuration files, write code files, or store any text-based content that your code execution will need.",
+           "title": "WriteFilesAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "Write files to the code interpreter",
+             "const": "writeFiles",
+             "title": "Type",
+             "type": "string"
+            },
+            "session_name": {
+             "anyOf": [
+              {
+               "type": "string"
+              },
+              {
+               "type": "null"
+              }
+             ],
+             "description": "Session name. If not provided, uses the default session.",
+             "default": null,
+             "title": "Session Name"
+            },
+            "content": {
+             "description": "Required list of file content to write",
+             "title": "Content",
+             "type": "array",
+             "items": {
+              "$ref": "#/$defs/FileContent"
+             }
+            }
+           },
+           "required": [
+            "type",
+            "content"
+           ]
+          },
+          "LanguageType": {
+           "description": "Supported programming languages for code execution.",
+           "title": "LanguageType",
+           "type": "string",
+           "enum": [
+            "python",
+            "javascript",
+            "typescript"
+           ]
+          },
+          "RemoveFilesAction": {
+           "description": "Delete one or more files from the sandbox file system. Use this to clean up temporary files, remove outdated\ndata, or manage storage space within the session. Be careful as this permanently removes files.",
+           "title": "RemoveFilesAction",
+           "type": "object",
+           "properties": {
+            "type": {
+             "description": "Remove files from the code interpreter",
+             "const": "removeFiles",
+             "title": "Type",
+             "type": "string"
+            },
+            "session_name": {
+             "anyOf": [
+              {
+               "type": "string"
+              },
+              {
+               "type": "null"
+              }
+             ],
+             "description": "Session name. If not provided, uses the default session.",
+             "default": null,
+             "title": "Session Name"
+            },
+            "paths": {
+             "description": "Required list of file paths to remove",
+             "title": "Paths",
+             "type": "array",
+             "items": {
+              "type": "string"
+             }
+            }
+           },
+           "required": [
+            "type",
+            "paths"
+           ]
+          }
+         },
+         "type": "object",
+         "properties": {
+          "code_interpreter_input": {
+           "$ref": "#/$defs/CodeInterpreterInput",
+           "description": "Parameter code_interpreter_input"
+          }
+         },
+         "required": [
+          "code_interpreter_input"
+         ]
+        }
+       }
+      }
+     },
+     {
+      "toolSpec": {
+       "name": "skills",
+       "description": "Activate a skill to load its full instructions.\n\nUse this tool to load the complete instructions for a skill listed in\nthe available_skills section of your system prompt.",
+       "inputSchema": {
+        "json": {
+         "type": "object",
+         "properties": {
+          "skill_name": {
+           "type": "string",
+           "description": "Name of the skill to activate."
+          }
+         },
+         "required": [
+          "skill_name"
+         ]
+        }
+       }
+      }
+     }
+    ],
+    "toolChoice": {
+     "auto": {}
+    }
+   }
+  },
+  "inputTokenCount": 35750,
+  "cacheReadInputTokenCount": 0,
+  "cacheWriteInputTokenCount": 0
+ },
+ "output": {
+  "outputContentType": "application/json",
+  "outputBodyJson": {
+   "output": {
+    "message": {
+     "role": "assistant",
+     "content": [
+      {
+       "reasoningContent": {
+        "reasoningText": {
+         "text": "[redacted]",
+         "signature": "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"
+        }
+       }
+      },
+      {
+       "toolUse": {
+        "toolUseId": "tooluse_x4zkrqdmIFKywSUYwqYyRY",
+        "name": "browser",
+        "type": "tool_use",
+        "input": {
+         "browser_input": {
+          "action": {
+           "path": "/mnt/reports/screenshots/03-costs.png",
+           "session_name": "qa-tokenmonitor-pr84",
+           "type": "screenshot"
+          }
+         }
+        }
+       }
+      }
+     ]
+    }
+   },
+   "stopReason": "tool_use",
+   "metrics": {
+    "latencyMs": 15254
+   },
+   "usage": {
+    "inputTokens": 35750,
+    "outputTokens": 1998,
+    "totalTokens": 37748
+   }
+  },
+  "outputTokenCount": 1998
+ },
+ "identity": {
+  "arn": "arn:aws:sts::123456789012:assumed-role/AgentCore-uitestagent-def-ApplicationAgentUitestage-mzobm0YQRR1k/BedrockAgentCore-7cd64dc9-284c-407e-9d97-3453daad1e37"
+ },
+ "inferenceRegion": "us-east-2",
+ "schemaType": "ModelInvocationLog",
+ "schemaVersion": "1.0"
+}

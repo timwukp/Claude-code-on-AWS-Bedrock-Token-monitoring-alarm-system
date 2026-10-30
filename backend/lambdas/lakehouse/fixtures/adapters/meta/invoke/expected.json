@@ -1,0 +1,10 @@
+{
+ "vendor": "meta",
+ "api_family": "invoke",
+ "token_source": "envelope",
+ "input_tokens": 12,
+ "output_tokens": 30,
+ "finish_reason": "stop",
+ "latency_ms": 900,
+ "ttft_ms": 120
+}

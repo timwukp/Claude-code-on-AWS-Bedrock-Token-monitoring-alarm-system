@@ -1,0 +1,8 @@
+{
+ "vendor": "ai21",
+ "api_family": "invoke",
+ "token_source": "envelope",
+ "input_tokens": 21,
+ "output_tokens": 7,
+ "finish_reason": "stop"
+}

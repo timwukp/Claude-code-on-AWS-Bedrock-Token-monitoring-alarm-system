@@ -6,13 +6,14 @@
  * object in one Firehose record. If you aggregate and send multiple JSON objects inside a record,
  * Firehose throws an error and delivers data to the S3 error bucket" — Apache Iceberg destination,
  * Considerations and limitations). So:
- *  - the stream is configured with Firehose's own `Decompression` + `CloudWatchLogProcessing`
- *    (message extraction) processors ahead of this Lambda, which turns a CloudWatch Logs batch into
- *    one record per log event — the normal path is one-in, one-out;
- *  - if a record still carries several rows (a raw gzip CloudWatch payload with N events, or a
- *    Metric Streams record with N datapoints), the FIRST row answers the recordId and the rest are
- *    re-ingested into the same stream with `firehose:PutRecordBatch`, pre-routed as
- *    `{ "__tums_table": "<table>", "row": {...} }`, which this Lambda passes straight through;
+ *  - Iceberg destinations accept only the Lambda processor, so a CloudWatch Logs record arrives as the
+ *    gzip'd envelope with N events (bounded at 64 MiB on inflate); every event yields its bronze row
+ *    AND, for Bedrock records and GenAI spans, a silver.invocations row (plus silver.adapter_audit rows
+ *    when a vendor adapter disagreed with the envelope — see canonical.ts);
+ *  - the FIRST row answers the recordId and the rest are re-ingested into the same stream with
+ *    `firehose:PutRecordBatch`, pre-routed as `{ "__tums_table": "<db>.<table>", "row": {...} }`, which
+ *    this Lambda passes straight through — but only to tables the spec knows (bronze or silver); any
+ *    other name is ProcessingFailed, never routed;
  *  - if re-ingest is impossible (no STREAM_NAME, or PutRecordBatch fails) the record is returned as
  *    ProcessingFailed so the original payload lands in the error prefix — never silently lost.
  * A record that cannot be parsed at all is ProcessingFailed; a record that is recognisably not data
@@ -23,16 +24,34 @@ import { FirehoseClient, PutRecordBatchCommand } from '@aws-sdk/client-firehose'
 import { BronzeBedrockInvocationsRow } from './generated/row-types';
 import { isMetricDatapoint, parseMetricStreamRecord } from './metric-stream';
 import { isSpan, parseSpanRecord } from './otel-span';
+import { buildSilverRow, buildSilverRowFromSpan, isGenAiSpan, RawRecord } from './canonical';
+import { AttributionMaps } from '../ingestion/parse';
+import tablesJson from '../../../spec/lakehouse/generated/tables.json';
 
 export interface TransformEnv {
   BRONZE_DATABASE: string;
   TABLE_INVOCATIONS: string;
   TABLE_SPANS: string;
   TABLE_METRICS: string;
+  SILVER_DATABASE: string;
+  TABLE_SILVER_INVOCATIONS: string;
+  TABLE_ADAPTER_AUDIT: string;
   BEDROCK_LOG_GROUP?: string;
   SPANS_LOG_GROUP?: string;
   STREAM_NAME?: string;
+  /** Registry snapshot for best-effort attribution; absent → attribution_source 'none'. */
+  maps?: AttributionMaps;
 }
+
+/** Inflating a CloudWatch Logs envelope is bounded so a hostile or corrupt record cannot exhaust the Lambda. */
+export const MAX_INFLATED_BYTES = 64 * 1024 * 1024;
+
+/** `<database>.<table>` names a re-ingested row may be routed to: exactly the spec's bronze and silver tables. */
+export const ROUTABLE_TABLES: ReadonlySet<string> = new Set(
+  (tablesJson as { tables: Array<{ layer: string; table: string; storage: string }> }).tables
+    .filter((t) => (t.layer === 'bronze' || t.layer === 'silver') && t.storage === 's3tables')
+    .map((t) => `${t.layer}.${t.table}`),
+);
 
 export interface FirehoseInputRecord { recordId: string; data: string; approximateArrivalTimestamp?: number }
 
@@ -43,7 +62,8 @@ export interface FirehoseOutputRecord {
   metadata?: { otfMetadata: { destinationDatabaseName: string; destinationTableName: string; operation: 'insert' } };
 }
 
-export interface RoutedRow { table: string; row: Record<string, unknown> }
+/** `database` is the Iceberg namespace (bronze | silver). */
+export interface RoutedRow { database: string; table: string; row: Record<string, unknown> }
 
 export interface TransformResult {
   output: FirehoseOutputRecord;
@@ -55,9 +75,14 @@ const REINGEST_MARKER = '__tums_table';
 
 interface CwlPayload { messageType?: string; logGroup?: string; logEvents?: Array<{ id?: string; timestamp?: number; message?: string }> }
 
-function tryGunzip(buf: Buffer): string | null {
+/** null = not gzip; 'too-large' = gzip but inflates past MAX_INFLATED_BYTES (→ ProcessingFailed). */
+function tryGunzip(buf: Buffer): string | null | 'too-large' {
   if (buf.length < 2 || buf[0] !== 0x1f || buf[1] !== 0x8b) return null;
-  try { return gunzipSync(buf).toString('utf8'); } catch { return null; }
+  try { return gunzipSync(buf, { maxOutputLength: MAX_INFLATED_BYTES }).toString('utf8'); } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (err instanceof RangeError || code === 'ERR_BUFFER_TOO_LARGE') return 'too-large';
+    return null;
+  }
 }
 
 function tryJson(text: string): unknown {
@@ -88,24 +113,49 @@ export function invocationRow(rec: Record<string, any>, rawText: string, ingestT
 }
 
 /** Classify one text message (a log event or a direct-put record) into zero or more routed rows. */
-export function rowsFromMessage(text: string, env: TransformEnv, ingestTs: string): RoutedRow[] | 'drop' {
+export function rowsFromMessage(text: string, env: TransformEnv, ingestTs: string): RoutedRow[] | 'drop' | 'reject' {
   const t = text.trim();
   if (!t) return 'drop';
   const o = tryJson(t);
   if (o && typeof o === 'object') {
     const obj = o as Record<string, any>;
-    if (typeof obj[REINGEST_MARKER] === 'string' && obj.row && typeof obj.row === 'object') return [{ table: obj[REINGEST_MARKER], row: obj.row }];
-    if (obj.schemaType === 'ModelInvocationLog' || (obj.requestId && obj.modelId && obj.input)) {
-      const row = invocationRow(obj, t, ingestTs);
-      return row ? [{ table: env.TABLE_INVOCATIONS, row: row as unknown as Record<string, unknown> }] : 'drop';
+    if (typeof obj[REINGEST_MARKER] === 'string') {
+      const target = String(obj[REINGEST_MARKER]);
+      if (!ROUTABLE_TABLES.has(target) || !obj.row || typeof obj.row !== 'object') return 'reject';
+      const [database, table] = target.split('.');
+      return [{ database, table, row: obj.row }];
     }
-    if (isSpan(obj)) return parseSpanRecord(t, ingestTs).map((row) => ({ table: env.TABLE_SPANS, row: row as unknown as Record<string, unknown> }));
-    if (isMetricDatapoint(obj)) return parseMetricStreamRecord(t, ingestTs).map((row) => ({ table: env.TABLE_METRICS, row: row as unknown as Record<string, unknown> }));
+    if (obj.schemaType === 'ModelInvocationLog' || (obj.requestId && obj.modelId && obj.input)) {
+      const bronze = invocationRow(obj, t, ingestTs);
+      if (!bronze) return 'drop';
+      const rows: RoutedRow[] = [{ database: env.BRONZE_DATABASE, table: env.TABLE_INVOCATIONS, row: bronze as unknown as Record<string, unknown> }];
+      try {
+        const silver = buildSilverRow(obj as RawRecord, { ingestTs, maps: env.maps });
+        rows.push({ database: env.SILVER_DATABASE, table: env.TABLE_SILVER_INVOCATIONS, row: silver.row as unknown as Record<string, unknown> });
+        for (const a of silver.audit) rows.push({ database: env.SILVER_DATABASE, table: env.TABLE_ADAPTER_AUDIT, row: a as unknown as Record<string, unknown> });
+      } catch (err) {
+        console.error('lakehouse transform: silver row failed, bronze kept', (err as Error).message);
+      }
+      return rows;
+    }
+    if (isSpan(obj)) {
+      const rows: RoutedRow[] = parseSpanRecord(t, ingestTs).map((row) => ({ database: env.BRONZE_DATABASE, table: env.TABLE_SPANS, row: row as unknown as Record<string, unknown> }));
+      if (rows.length && isGenAiSpan(obj)) {
+        try {
+          const silver = buildSilverRowFromSpan(obj, { ingestTs, maps: env.maps });
+          if (silver) rows.push({ database: env.SILVER_DATABASE, table: env.TABLE_SILVER_INVOCATIONS, row: silver.row as unknown as Record<string, unknown> });
+        } catch (err) {
+          console.error('lakehouse transform: silver span row failed, bronze kept', (err as Error).message);
+        }
+      }
+      return rows;
+    }
+    if (isMetricDatapoint(obj)) return parseMetricStreamRecord(t, ingestTs).map((row) => ({ database: env.BRONZE_DATABASE, table: env.TABLE_METRICS, row: row as unknown as Record<string, unknown> }));
     return [];
   }
   // Not a single JSON object: maybe several newline-delimited metric datapoints.
   const metrics = parseMetricStreamRecord(t, ingestTs);
-  if (metrics.length) return metrics.map((row) => ({ table: env.TABLE_METRICS, row: row as unknown as Record<string, unknown> }));
+  if (metrics.length) return metrics.map((row) => ({ database: env.BRONZE_DATABASE, table: env.TABLE_METRICS, row: row as unknown as Record<string, unknown> }));
   return [];
 }
 
@@ -114,7 +164,7 @@ function outputFor(recordId: string, env: TransformEnv, routed: RoutedRow): Fire
     recordId,
     result: 'Ok',
     data: Buffer.from(JSON.stringify(routed.row), 'utf8').toString('base64'),
-    metadata: { otfMetadata: { destinationDatabaseName: env.BRONZE_DATABASE, destinationTableName: routed.table, operation: 'insert' } },
+    metadata: { otfMetadata: { destinationDatabaseName: routed.database, destinationTableName: routed.table, operation: 'insert' } },
   };
 }
 
@@ -123,8 +173,9 @@ export function transformRecord(recordId: string, data: Buffer, env: TransformEn
   const failed: TransformResult = { output: { recordId, result: 'ProcessingFailed', data: data.toString('base64') }, overflow: [] };
   const dropped: TransformResult = { output: { recordId, result: 'Dropped', data: data.toString('base64') }, overflow: [] };
   try {
-    let rows: RoutedRow[] | 'drop';
+    let rows: RoutedRow[] | 'drop' | 'reject';
     const unzipped = tryGunzip(data);
+    if (unzipped === 'too-large') return failed;
     if (unzipped !== null) {
       const payload = tryJson(unzipped) as CwlPayload | undefined;
       if (!payload || !Array.isArray(payload.logEvents)) return failed;
@@ -133,12 +184,14 @@ export function transformRecord(recordId: string, data: Buffer, env: TransformEn
       for (const ev of payload.logEvents) {
         if (typeof ev.message !== 'string') continue;
         const r = rowsFromMessage(ev.message, env, ingestTs);
+        if (r === 'reject') return failed;
         if (r !== 'drop') rows.push(...r);
       }
       if (payload.logEvents.length > 0 && rows.length === 0) return dropped;
     } else {
       rows = rowsFromMessage(data.toString('utf8'), env, ingestTs);
     }
+    if (rows === 'reject') return failed;
     if (rows === 'drop') return dropped;
     if (rows.length === 0) return failed;
     return { output: outputFor(recordId, env, rows[0]), overflow: rows.slice(1) };
@@ -153,6 +206,9 @@ export function envFromProcess(e: NodeJS.ProcessEnv = process.env): TransformEnv
     TABLE_INVOCATIONS: e.TABLE_INVOCATIONS ?? 'bedrock_invocations',
     TABLE_SPANS: e.TABLE_SPANS ?? 'otel_spans',
     TABLE_METRICS: e.TABLE_METRICS ?? 'cw_metrics',
+    SILVER_DATABASE: e.SILVER_DATABASE ?? 'silver',
+    TABLE_SILVER_INVOCATIONS: e.TABLE_SILVER_INVOCATIONS ?? 'invocations',
+    TABLE_ADAPTER_AUDIT: e.TABLE_ADAPTER_AUDIT ?? 'adapter_audit',
     BEDROCK_LOG_GROUP: e.BEDROCK_LOG_GROUP,
     SPANS_LOG_GROUP: e.SPANS_LOG_GROUP,
     STREAM_NAME: e.STREAM_NAME,
@@ -160,7 +216,7 @@ export function envFromProcess(e: NodeJS.ProcessEnv = process.env): TransformEnv
 }
 
 export function reingestRecords(rows: RoutedRow[]): Array<{ Data: Uint8Array }> {
-  return rows.map((r) => ({ Data: Buffer.from(JSON.stringify({ [REINGEST_MARKER]: r.table, row: r.row }), 'utf8') }));
+  return rows.map((r) => ({ Data: Buffer.from(JSON.stringify({ [REINGEST_MARKER]: `${r.database}.${r.table}`, row: r.row }), 'utf8') }));
 }
 
 export interface Reingester { put(records: Array<{ Data: Uint8Array }>): Promise<void> }
@@ -193,8 +249,25 @@ export async function processBatch(records: FirehoseInputRecord[], env: Transfor
   return results.map((x) => x.t.output);
 }
 
+/** Registry snapshot for best-effort attribution, refreshed at most every 5 minutes per Lambda instance. */
+const MAPS_TTL_MS = 5 * 60 * 1000;
+let mapsCache: { at: number; maps: AttributionMaps } | null = null;
+export async function attributionMaps(now = Date.now()): Promise<AttributionMaps | undefined> {
+  if (!process.env.TENANTS_TABLE) return undefined;
+  if (mapsCache && now - mapsCache.at < MAPS_TTL_MS) return mapsCache.maps;
+  try {
+    const { loadAttributionMaps } = await import('../shared/project-registry');
+    mapsCache = { at: now, maps: await loadAttributionMaps() };
+  } catch (err) {
+    console.error('lakehouse transform: registry unreadable, attribution degraded to none', (err as Error).message);
+    if (!mapsCache) return undefined;
+  }
+  return mapsCache.maps;
+}
+
 export const handler = async (event: { records: FirehoseInputRecord[] }): Promise<{ records: FirehoseOutputRecord[] }> => {
   const env = envFromProcess();
+  env.maps = await attributionMaps();
   const reingester = env.STREAM_NAME ? new FirehoseReingester(env.STREAM_NAME) : null;
   return { records: await processBatch(event.records ?? [], env, reingester) };
 };

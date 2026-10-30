@@ -1,0 +1,11 @@
+{
+ "vendor": "anthropic",
+ "api_family": "converse",
+ "token_source": "envelope",
+ "input_tokens": 35750,
+ "output_tokens": 1998,
+ "finish_reason": "tool_use",
+ "tool_calls": 1,
+ "latency_ms": 15254,
+ "route": "global"
+}

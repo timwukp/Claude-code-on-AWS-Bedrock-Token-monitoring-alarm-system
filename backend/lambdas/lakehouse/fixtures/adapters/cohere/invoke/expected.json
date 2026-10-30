@@ -1,0 +1,8 @@
+{
+ "vendor": "cohere",
+ "api_family": "invoke",
+ "token_source": "envelope",
+ "input_tokens": 33,
+ "output_tokens": 9,
+ "finish_reason": "COMPLETE"
+}

@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tums.local/lakehouse/silver.project_registry.schema.json",
+  "title": "silver.project_registry",
+  "description": "Hourly snapshot of the TUMS project registry (REGISTRY#PROJECT / PROFILE / IDENTITY) so attribution can be recomputed in SQL.",
+  "type": "object",
+  "properties": {
+    "snapshot_ts": {
+      "description": "snapshot time",
+      "type": "string",
+      "format": "date-time"
+    },
+    "project_id": {
+      "description": "project",
+      "type": "string"
+    },
+    "name": {
+      "description": "display name",
+      "type": "string"
+    },
+    "cost_center": {
+      "description": "cost centre",
+      "type": "string"
+    },
+    "repos": {
+      "description": "JSON array of owner/repo",
+      "type": "string"
+    },
+    "identity_arns": {
+      "description": "JSON array of registered caller ARNs (role or user)",
+      "type": "string"
+    },
+    "profile_arns": {
+      "description": "JSON array of application inference profile ARNs",
+      "type": "string"
+    },
+    "is_current": {
+      "description": "true for the latest snapshot",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "snapshot_ts",
+    "project_id",
+    "is_current"
+  ],
+  "additionalProperties": false,
+  "x-lakehouse": {
+    "layer": "silver",
+    "table": "project_registry",
+    "storage": "s3tables",
+    "partition": [],
+    "retention": "forever",
+    "pii": false
+  }
+}

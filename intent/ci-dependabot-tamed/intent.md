@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Date:** 2026-10-30
 - **Accepted-by:** Tim WU
-- **Status:** accepted
+- **Status:** shipped
 
 ## Problem
 feature-47 added `.github/dependabot.yml` with per-ecosystem weekly updates and `open-pull-requests-limit: 5`, ungrouped.

@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** 74c13a8007c3774af8298236ad7e285e0bb8c727
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #84 (hardening-1). Urgent, small chain between hardening-1 and hardening-2;
 the owner said "carry on" after the dependabot storm (2026-10-30).

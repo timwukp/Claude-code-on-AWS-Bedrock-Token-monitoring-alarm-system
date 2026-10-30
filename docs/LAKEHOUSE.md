@@ -95,19 +95,52 @@ privilege", the caller is missing Lake Formation grants on the catalog/namespace
   bronze is visible to the owner only.
 - Encryption: S3 Tables SSE-KMS with the `DataStack` key where supported; buckets KMS; Firehose encrypts in flight.
 
-## What silver and gold add (P2 / P3)
+## Silver (as built in P2)
 
-**Silver (P2)** — one vendor-neutral `silver.invocations` row per call, vocabulary from the OpenTelemetry
-GenAI semantic conventions (`gen_ai.*`) plus AWS extensions (cache read/write tokens and TTL, inference
-profile, route tier); bodies dropped; per-vendor adapters (Anthropic, OpenAI Responses/Chat, Converse, Meta,
-Mistral, Cohere, AI21, Titan embeddings, generic, OTel) fill what the Bedrock envelope lacks; tenant key
-normalised to the role/user (no session names); attribution (`project_id`, `attribution_source`) recomputed
-hourly from bronze + the registry; OTel spans and Bedrock records de-duplicated on request id;
-`silver.dim_model` lists every model the account can call with vendor/family/modality/price status.
+**One canonical row per call, vendor-neutral.** `silver.invocations` uses the OpenTelemetry GenAI semantic conventions as
+its vocabulary (`gen_ai.provider.name` → `vendor`, `gen_ai.request.model` → `model_key`, `gen_ai.usage.*` → token
+columns, `gen_ai.operation.name` → `operation`/`api_family`, `gen_ai.response.finish_reasons` → `finish_reason`) plus AWS
+extensions (`cache_read_tokens`, `cache_write_tokens`, `cache_write_ttl`, `aip_arn`, `route`, `reasoning_tokens`,
+`tool_calls`). It carries **no request or response body** — only `body_s3_path`, the pointer bronze keeps.
 
-**Gold (P3)** — daily cost by project×model, bill-vs-logged reconciliation (CUR × silver, Mantle included),
-latency by route, cache churn per project, DORA×cost per repo, unattributed callers; materialised to DynamoDB
-for the Overview tiles; the Full view and `/v1/queries` switch from the curated Parquet to silver/gold.
+**Three-layer value order, recorded per row in `token_source`.**
+1. The Bedrock envelope (`input.inputTokenCount`, cache counts, `output.outputTokenCount`, `modelId`, `identity.arn`,
+   `amazon-bedrock-invocationMetrics`) is authoritative for every vendor.
+2. A vendor adapter (`backend/lambdas/lakehouse/adapters/`: `anthropic`, `openai` (Responses / Chat Completions),
+   `converse`, `meta`, `mistral`, `cohere`, `ai21`, `titan-embeddings`, `generic`, `otel`) fills only what the envelope
+   lacks — TTL split, finish reason, tool calls, reasoning tokens. When an adapter disagrees with the envelope the envelope
+   wins and the pair is written to `silver.adapter_audit`.
+3. The registry and `silver.dim_model` supply `project_id` / `attribution_source` and `vendor` / `family` / `price_status`;
+   both are recomputed in SQL, so a registry change re-attributes history.
+
+**Tables** (specs in `spec/lakehouse/silver.*.schema.json`): `invocations`, `dim_model` (every model the account can
+call — foundation models, inference profiles, provisioned, custom, imported — with `price_status` ∈ priced /
+unpriced_public / unpriced_private), `bill_daily` (CUR 2.0 folded to day × usage type × kind × route; the dollar truth),
+`bedrock_metrics_hourly`, `project_registry` (hourly snapshot, `is_current`), `adapter_audit` (90-day retention).
+
+**Attribution = rule C** (`docs/GOVERNANCE-ATTRIBUTION.md`): application inference profile ▷ registered identity (the
+`tenant_key` is already the role or user — sessions are collapsed, so one hint covers every AgentCore session) ▷
+`requestMetadata.project_id` ▷ `untagged`. `spec/lakehouse/sql/silver_20_attribution_merge.sql` recomputes it hourly
+over the last two days and daily over 90.
+
+**OTel rows merge, never double-count.** A span and a Bedrock record for the same `request_id` become one row
+(`source='both'`): tokens from the envelope, `session_id` / `conversation_id` / `trace_id` / `service_name` from the
+span. Spans with no Bedrock record stay as `source='otel'` — that is the only per-call view of bedrock-mantle and of
+non-Bedrock providers behind a gateway.
+
+**Schedule and gates.** `LakehouseSilverSfn` runs the files in `spec/lakehouse/sql/` in order every hour (the 90-day
+attribution pass daily); five `quality_6x` statements must return zero rows or the run fails and alarms. The
+`RegistrySnapshotFn` refreshes `silver.project_registry` hourly and `DimModelRefreshFn` rebuilds `silver.dim_model` daily.
+
+**Dual-run check.** `cd scripts && npm install && ENV=dev npx ts-node verify-lakehouse.ts` recomputes attribution for a
+sample of rows with the TypeScript rules and compares; it also reports tenant cardinality (target < 50) and the
+`price_status` distribution.
+
+## What gold adds (P3)
+
+Daily cost by project×model, bill-vs-logged reconciliation (CUR × silver, Mantle included), latency by route, cache
+churn per project, DORA×cost per repo, unattributed callers; materialised to DynamoDB for the Overview tiles; the Full
+view and `/v1/queries` switch from the curated Parquet to silver/gold; QuickSight on gold.
 
 ## Runbooks
 

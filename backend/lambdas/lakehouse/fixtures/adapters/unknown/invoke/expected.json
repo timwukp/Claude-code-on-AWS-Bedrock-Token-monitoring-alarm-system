@@ -1,0 +1,9 @@
+{
+ "vendor": "unknown",
+ "api_family": "invoke",
+ "token_source": "envelope",
+ "input_tokens": 5,
+ "output_tokens": 5,
+ "route": "marketplace",
+ "price_status": "unpriced_public"
+}
