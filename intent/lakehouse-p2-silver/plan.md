@@ -3,10 +3,10 @@
 - **Spec:** ./spec.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Accepted-for:** ef912c9da3e0be050934048894b3eca8623c3e23
+- **Accepted-for:** a7f6ff78c5ce082e9c2ed99e14451bf1dac25bc1
 - **Status:** accepted
 
-`Accepted-for` is the tip of `main` after PR #108 (ci-dependabot-tamed). Nothing else is in flight.
+`Accepted-for` is the tip of `main` after PR #111 (dependabot minors; #108 ci-dependabot-tamed before it). Nothing else is in flight.
 
 ## Files changed
 1. `spec/lakehouse/silver.invocations.schema.json`, `silver.dim_model.schema.json`, `silver.bill_daily.schema.json`, `silver.bedrock_metrics_hourly.schema.json`, `silver.project_registry.schema.json`, `silver.adapter_audit.schema.json` — the silver specs.
