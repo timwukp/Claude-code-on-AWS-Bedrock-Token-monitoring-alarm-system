@@ -18,7 +18,7 @@ are grouped by development milestone rather than strict semver releases.
 - `scripts/verify-lakehouse.ts` dual-run check; `docs/GOVERNANCE-ATTRIBUTION.md` (rule C in plain words; the
   workspace-hint tier stays off without owner consent).
 - Logging: the fake `AWS::Bedrock::ModelInvocationLoggingConfiguration` resource becomes a CDK custom resource; the
-  Bedrock-logs role ARN loses its `:*`. (PR TBD)
+  Bedrock-logs role ARN loses its `:*`. (PR #112)
 
 ### Changed — dependency updates tamed (feature-48)
 - `dependabot.yml`: one grouped PR per ecosystem per week, minor/patch only, majors never proposed automatically (the

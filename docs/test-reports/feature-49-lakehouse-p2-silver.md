@@ -1,6 +1,6 @@
 # Feature 49 — Lakehouse P2: silver layer (vendor-neutral invocations, attribution recompute, bill/metrics folds)
 
-- **Chain:** `intent/lakehouse-p2-silver/` · **Branch:** `feat/lakehouse-p2-silver` off `main@ef912c9` (#108) · **PR:** TBD
+- **Chain:** `intent/lakehouse-p2-silver/` · **Branch:** `feat/lakehouse-p2-silver` off `main@ef912c9` (#108) · **PR:** #112
 - **Date:** 2026-10-30 · **Verdict:** PASS on gates; deploy (Lakehouse, Logging) + `verify-lakehouse.ts` pending the owner.
 
 ## What this report has to say plainly
