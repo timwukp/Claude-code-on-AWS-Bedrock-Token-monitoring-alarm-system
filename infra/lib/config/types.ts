@@ -67,7 +67,13 @@ export interface EnvConfig {
    */
   readonly enforcement?: {
     readonly budgetActionThresholdPct?: number;
+    /** Roles the deny policy may be attached to (Budget Action and auto-containment targets). Never your admin. */
     readonly budgetActionRoleArns?: string[];
+    /** Principals auto-containment must never touch (admins, operators). Role or session ARNs (feature-49). */
+    readonly neverContainArns?: string[];
+    /** AccessDenied events from one principal inside `containmentWindowMinutes` before it is contained (default 3). */
+    readonly containmentMinEvents?: number;
+    readonly containmentWindowMinutes?: number;
   };
 
   /**

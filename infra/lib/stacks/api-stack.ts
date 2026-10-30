@@ -1,5 +1,9 @@
 import * as cdk from 'aws-cdk-lib';
 import * as apigw from 'aws-cdk-lib/aws-apigateway';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cwActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
@@ -20,6 +24,8 @@ interface Props extends cdk.StackProps {
   rawLogBucket: s3.Bucket;
   curatedBucket: s3.Bucket;
   dataKey: kms.Key;
+  /** Alarms (API 5XX) notify here (feature-49). */
+  alertTopic: sns.ITopic;
   /** From the Dora stack: the collector the API invokes on demand + the GitHub token secret. */
   dora: { collectorFn: lambda.IFunction; githubSecret: secretsmanager.ISecret };
 }
@@ -34,7 +40,7 @@ export class ApiStack extends cdk.Stack {
 
   constructor(scope: Construct, id: string, props: Props) {
     super(scope, id, props);
-    const { cfg, userPool, tables, athena, rawLogBucket, curatedBucket, dataKey, dora } = props;
+    const { cfg, userPool, tables, athena, rawLogBucket, curatedBucket, dataKey, dora, alertTopic } = props;
 
     // CORS: restrict to the configured origins. "*" is a dev-only convenience (feature-47): any other
     // environment must name its frontend origin(s) or synth refuses.
@@ -70,6 +76,8 @@ export class ApiStack extends cdk.Stack {
         tracing: lambda.Tracing.ACTIVE, // X-Ray (Operational Excellence pillar)
         environment: commonEnv,
         bundling: { minify: true, sourceMap: true },
+        // Logs carry caller ARNs and error bodies; they do not need to live forever (feature-49, audit #15).
+        logGroup: new logs.LogGroup(this, `${name}Logs`, { retention: logs.RetentionDays.THREE_MONTHS, removalPolicy: cdk.RemovalPolicy.DESTROY }),
       });
 
     const usageFn = fn('UsageFn', 'usage.ts');
@@ -90,6 +98,7 @@ export class ApiStack extends cdk.Stack {
       tracing: lambda.Tracing.ACTIVE,
       environment: commonEnv,
       bundling: { minify: true, sourceMap: true },
+      logGroup: new logs.LogGroup(this, `ProjectsFnLogs`, { retention: logs.RetentionDays.THREE_MONTHS, removalPolicy: cdk.RemovalPolicy.DESTROY }),
     });
     const quotasFn = fn('QuotasFn', 'quotas.ts');
 
@@ -112,6 +121,7 @@ export class ApiStack extends cdk.Stack {
           ? String(cfg.enforcement.budgetActionThresholdPct) : '',
       },
       bundling: { minify: true, sourceMap: true },
+      logGroup: new logs.LogGroup(this, `GovernanceFnLogs`, { retention: logs.RetentionDays.THREE_MONTHS, removalPolicy: cdk.RemovalPolicy.DESTROY }),
     });
     governanceFn.addToRolePolicy(new iam.PolicyStatement({
       actions: ['budgets:ViewBudget', 'budgets:DescribeBudget'],
@@ -137,6 +147,7 @@ export class ApiStack extends cdk.Stack {
         DORA_BACKFILL_DAYS: String(cfg.dora?.backfillDays ?? 180),
       },
       bundling: { minify: true, sourceMap: true },
+      logGroup: new logs.LogGroup(this, `DoraFnLogs`, { retention: logs.RetentionDays.THREE_MONTHS, removalPolicy: cdk.RemovalPolicy.DESTROY }),
     });
     tables.dora.grantReadWriteData(doraFn);
     dora.collectorFn.grantInvoke(doraFn);
@@ -160,6 +171,7 @@ export class ApiStack extends cdk.Stack {
         PROJECTS_SEED_JSON: JSON.stringify(cfg.projects?.seedProjects ?? []),
       },
       bundling: { minify: true, sourceMap: true },
+      logGroup: new logs.LogGroup(this, `ProjectRegistryFnLogs`, { retention: logs.RetentionDays.THREE_MONTHS, removalPolicy: cdk.RemovalPolicy.DESTROY }),
     });
     tables.tenants.grantReadWriteData(projectRegistryFn);
 
@@ -175,6 +187,7 @@ export class ApiStack extends cdk.Stack {
       tracing: lambda.Tracing.ACTIVE,
       environment: commonEnv,
       bundling: { minify: true, sourceMap: true },
+      logGroup: new logs.LogGroup(this, `RoiFnLogs`, { retention: logs.RetentionDays.THREE_MONTHS, removalPolicy: cdk.RemovalPolicy.DESTROY }),
     });
     tables.tenants.grantReadData(roiFn);
     tables.aggregates.grantReadData(roiFn);
@@ -193,6 +206,7 @@ export class ApiStack extends cdk.Stack {
       tracing: lambda.Tracing.ACTIVE,
       environment: commonEnv,
       bundling: { minify: true, sourceMap: true },
+      logGroup: new logs.LogGroup(this, `LatencyFnLogs`, { retention: logs.RetentionDays.THREE_MONTHS, removalPolicy: cdk.RemovalPolicy.DESTROY }),
     });
     // Phase 1b: the per-project section reads the tenant's PROJDAY latency rollups and the registry
     // for names. Read-only, same two tables the DORA and ROI functions read. The fleet section
@@ -225,6 +239,7 @@ export class ApiStack extends cdk.Stack {
       tracing: lambda.Tracing.ACTIVE,
       environment: commonEnv,
       bundling: { minify: true, sourceMap: true },
+      logGroup: new logs.LogGroup(this, `OverviewFnLogs`, { retention: logs.RetentionDays.THREE_MONTHS, removalPolicy: cdk.RemovalPolicy.DESTROY }),
     });
     tables.tenants.grantReadData(overviewFn);
     tables.aggregates.grantReadData(overviewFn);
@@ -283,12 +298,33 @@ export class ApiStack extends cdk.Stack {
 
     this.restApi = new apigw.RestApi(this, 'Api', {
       restApiName: `tums-${cfg.env}`,
-      deployOptions: { tracingEnabled: true, stageName: cfg.env },
+      deployOptions: {
+        tracingEnabled: true, stageName: cfg.env,
+        // Stage-wide ceiling (feature-49, audit #6): a viewer in a loop cannot turn the API into an Athena bill.
+        throttlingRateLimit: 20, throttlingBurstLimit: 40,
+        // Access log per request (who, what, status, latency) — the audit found no request-level audit trail.
+        accessLogDestination: new apigw.LogGroupLogDestination(new logs.LogGroup(this, 'ApiAccessLogs', {
+          retention: logs.RetentionDays.THREE_MONTHS, removalPolicy: cdk.RemovalPolicy.DESTROY,
+        })),
+        accessLogFormat: apigw.AccessLogFormat.jsonWithStandardFields({
+          caller: true, httpMethod: true, ip: true, protocol: true, requestTime: true, resourcePath: true, responseLength: true, status: true, user: true,
+        }),
+        // Athena-starting routes get their own, lower, ceiling.
+        methodOptions: {
+          '/v1/queries/POST': { throttlingRateLimit: 2, throttlingBurstLimit: 5 },
+          '/v1/projects/GET': { throttlingRateLimit: 5, throttlingBurstLimit: 10 },
+        },
+      },
       defaultCorsPreflightOptions: {
         allowOrigins: allowedOrigins ?? apigw.Cors.ALL_ORIGINS, // production: set cfg.api.allowedOrigins
         allowMethods: apigw.Cors.ALL_METHODS,
       },
     });
+
+    // Five or more 5XX in five minutes = something is broken for real users; one page, not a dashboard refresh.
+    this.restApi.metricServerError({ period: cdk.Duration.minutes(5), statistic: 'Sum' })
+      .createAlarm(this, 'Api5xxAlarm', { threshold: 5, evaluationPeriods: 1, alarmDescription: `TUMS ${cfg.env}: API 5XX ≥ 5 in 5 min`, treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING })
+      .addAlarmAction(new cwActions.SnsAction(alertTopic));
 
     const authorizer = new apigw.CognitoUserPoolsAuthorizer(this, 'Authorizer', {
       cognitoUserPools: [userPool],

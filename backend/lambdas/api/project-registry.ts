@@ -37,17 +37,21 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
 async function list(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   await registry.seedIfNeeded();
+  const admin = isAdmin(event);
   const [projects, profiles] = await Promise.all([registry.listProjects(), registry.listProfiles()]);
+  // The registry is account-wide (single-organisation deployment). Identity ARNs, profile ARNs (which carry the
+  // account id) and the e-mail of whoever added a project are administration detail: every signed-in user needs
+  // the names and ids for attribution, only admins need the rest (feature-49, audit #9).
   return ok({
-    projects: projects.map(toProjectView),
+    projects: projects.map((p) => toProjectView(p, admin)),
     profiles: profiles.map((p) => ({
-      arn: p.arn,
+      ...(admin ? { arn: p.arn } : {}),
       projectId: p.projectId,
       underlyingModelId: p.underlyingModelId,
-      profileName: p.profileName ?? null,
+      profileName: p.profileName ?? (admin ? null : p.arn.split('/').pop() ?? null),
       resolvedAt: p.resolvedAt,
     })),
-    isAdmin: isAdmin(event),
+    isAdmin: admin,
   });
 }
 
@@ -88,14 +92,15 @@ async function remove(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResul
   return ok({ deleted: true, projectId: id, items });
 }
 
-function toProjectView(p: registry.RegistryProject) {
+export function toProjectView(p: registry.RegistryProject, admin = true) {
   return {
     projectId: p.projectId,
     name: p.name,
     costCenter: p.costCenter ?? null,
     repos: p.repos,
-    identityArns: p.identityArns,
-    addedBy: p.addedBy,
+    identityArns: admin ? p.identityArns : [],
+    identityArnCount: p.identityArns.length,
+    addedBy: admin ? p.addedBy : null,
     addedAt: p.addedAt,
     seeded: p.seededBy === 'config',
     roi: p.roi ?? null,

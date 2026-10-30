@@ -87,6 +87,12 @@ export interface SeedProject {
 
 export const PROJECT_ID_RE = /^[a-z0-9][a-z0-9-]{1,63}$/;
 const REPO_RE = /^[\w.-]+\/[\w.-]+$/;
+/** `owner/name` segments of only dots would be path traversal once the name is put in a GitHub API URL. */
+export const hasDotSegment = (repo: string): boolean => repo.split('/').some((seg) => /^\.+$/.test(seg));
+/** IAM user/role/root or STS assumed-role/federated-user principals — the shapes `identity.arn` in the logs can take. */
+export const IDENTITY_ARN_RE = /^arn:aws[a-z-]*:(iam::\d{12}:(user|role|root)(\/[\w+=,.@\/-]*)?|sts::\d{12}:(assumed-role|federated-user)\/[\w+=,.@\/-]+)$/;
+export const MAX_TEXT = 120;
+export const MAX_LIST = 50;
 
 export interface ProjectInput {
   id?: unknown;
@@ -156,17 +162,24 @@ export function validateProject(
   if (!PROJECT_ID_RE.test(id)) return { error: 'id must match ^[a-z0-9][a-z0-9-]{1,63}$' };
   const name = String(input.name ?? '').trim();
   if (!name) return { error: 'name is required' };
+  if (name.length > MAX_TEXT) return { error: `name must be at most ${MAX_TEXT} characters` };
   const rawRepos = Array.isArray(input.repos) ? input.repos : [];
+  if (rawRepos.length > MAX_LIST) return { error: `at most ${MAX_LIST} repos per project` };
   const repos: string[] = [];
   for (const r of rawRepos) {
     const repo = String(r).trim().toLowerCase();
     if (!repo) continue;
-    if (!REPO_RE.test(repo)) return { error: `repo "${repo}" must look like "owner/name"` };
+    if (!REPO_RE.test(repo) || hasDotSegment(repo)) return { error: `repo "${repo}" must look like "owner/name"` };
     if (!repos.includes(repo)) repos.push(repo);
   }
   const rawIds = Array.isArray(input.identityArns) ? input.identityArns : [];
+  if (rawIds.length > MAX_LIST) return { error: `at most ${MAX_LIST} identity ARNs per project` };
   const identityArns = [...new Set(rawIds.map((a) => String(a).trim().toLowerCase()).filter(Boolean))];
+  for (const arn of identityArns) {
+    if (!IDENTITY_ARN_RE.test(arn)) return { error: `identity ARN "${arn.slice(0, 80)}" must be an IAM or STS principal ARN` };
+  }
   const costCenter = String(input.costCenter ?? '').trim() || undefined;
+  if (costCenter && costCenter.length > MAX_TEXT) return { error: `costCenter must be at most ${MAX_TEXT} characters` };
   const { roi, error: roiError } = validateRoiConfig(input.roi);
   if (roiError) return { error: roiError };
   return {

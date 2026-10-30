@@ -39,11 +39,11 @@ export function synthApp(overrideCfg: EnvConfig = cfg, lakehouseOverrides: { sql
     env, cfg, rawLogBucket: data.rawLogBucket,
     bedrockLogGroup: lakehouse.bedrockLogGroup, bedrockLogsRole: lakehouse.bedrockLogsRole, bodiesBucket: lakehouse.bodiesBucket,
   });
-  const auth = new AuthStack(app, 'T-Auth', { env, cfg });
+  const auth = new AuthStack(app, 'T-Auth', { env, cfg, alertTopic: automation.alertTopic });
   const dora = new DoraStack(app, 'T-Dora', { env, cfg, tables: data.tables });
   const api = new ApiStack(app, 'T-Api', {
     env, cfg, userPool: auth.userPool, tables: data.tables, athena: data.athena,
-    rawLogBucket: data.rawLogBucket, curatedBucket: data.curatedBucket, dataKey: data.dataKey,
+    rawLogBucket: data.rawLogBucket, curatedBucket: data.curatedBucket, dataKey: data.dataKey, alertTopic: automation.alertTopic,
     dora: { collectorFn: dora.collectorFn, githubSecret: dora.githubSecret },
   });
   const frontend = new FrontendStack(app, 'T-Frontend', { env, cfg, api: api.restApi, userPool: auth.userPool });

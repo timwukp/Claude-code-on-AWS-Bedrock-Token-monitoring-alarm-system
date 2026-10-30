@@ -3,10 +3,10 @@
 - **Spec:** ./spec.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Accepted-for:** 2b99397b421ab25b32b448bfebad7c083b3dc073
+- **Accepted-for:** e6f1de647f0a362a330aa273efcd2cd47022f940
 - **Status:** accepted
 
-`Accepted-for` is the tip of `main` after PR #112. #113 (peer, hardening-2) is open and rebases after this.
+`Accepted-for` is the tip of `main` after PR #113 (hardening-2). Nothing else is in flight.
 
 ## Files changed
 1. `infra/lib/stacks/lakehouse-silver.ts` — workgroup; jobs/SFN/Lambdas use it.
@@ -20,7 +20,7 @@
 - `scripts/verify-lakehouse.ts`
 - `scripts/lakehouse-smoke.ts`
 
-Non-source riders: `.sdlc/active` (handover from `lakehouse-p2-silver`), `intent/lakehouse-p2-silver/*` → shipped,
+Non-source riders: `.sdlc/active` (handover from `hardening-2-limits-and-visibility`), `intent/hardening-2-limits-and-visibility/*` → shipped,
 `intent/lakehouse-p2-athena-workgroup/*`, `docs/LAKEHOUSE.md` (runbook item), CHANGELOG line.
 
 ## Verification

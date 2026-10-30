@@ -39,6 +39,11 @@ completion text**. Treat all deployments as handling sensitive data.
   Content-Security-Policy (report-only until `frontend.cspEnforce` is set); Cognito tokens live in `sessionStorage`
   with a 1-hour id token and a 1-day refresh token; CORS origins must be configured outside `dev`.
 
+- **Ceilings and alarms (feature-49):** API stage throttling with access logs; Athena 10 GB per-query cutoff; alarms on API
+  5XX, pipeline Lambda errors and Cognito sign-in throttling to the alert topic; 90-day Lambda log retention; CloudFront
+  viewer logs; non-current S3 versions expire after a day. Auto-containment (off by default) acts only on
+  `enforcement.budgetActionRoleArns`, never on `enforcement.neverContainArns`, and only after repeated `AccessDenied`.
+
 ### Operator responsibilities
 
 - **Model Invocation Logging captures request/response bodies.** If you only need token/metadata

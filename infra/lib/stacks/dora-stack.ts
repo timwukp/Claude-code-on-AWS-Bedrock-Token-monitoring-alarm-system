@@ -1,4 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as events from 'aws-cdk-lib/aws-events';
@@ -60,6 +61,7 @@ export class DoraStack extends cdk.Stack {
         DORA_BACKFILL_DAYS: String(cfg.dora?.backfillDays ?? 180),
       },
       bundling: { minify: true, sourceMap: true },
+      logGroup: new logs.LogGroup(this, 'CollectorFnLogs', { retention: logs.RetentionDays.THREE_MONTHS, removalPolicy: cdk.RemovalPolicy.DESTROY }),
     });
     tables.dora.grantReadWriteData(this.collectorFn);
     this.githubSecret.grantRead(this.collectorFn);
