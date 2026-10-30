@@ -168,12 +168,14 @@ Tables bucket name stays "in a transitional state" for ~10–15 minutes, so a fa
 immediately; and a failed first create leaves the RETAIN resources (three buckets, the Bedrock log group) behind —
 delete them (they are empty) before retrying, or CloudFormation will report the names as already taken.
 
-**Athena writes to S3 Tables need an SSE_S3 workgroup.** `INSERT`/`MERGE` into the federated catalog fail with
-`INTERNAL_ERROR_QUERY_ENGINE` when the workgroup enforces SSE_KMS result encryption (controlled experiment, 2026-10-30:
-same statement, SSE_S3 → SUCCEEDED, SSE_KMS → internal error; reads and no-op UPDATE/DELETE pass either way). The jobs
-therefore run in `tums-lakehouse-<env>` (SSE_S3, enforced configuration so a job cannot redirect its output, 50 GiB
-bytes-scanned cutoff per query); SSE_S3 is acceptable there because silver rows and the job results carry no request or
-response bodies. Do not point them at the dashboard's KMS workgroup.
+**Athena writes to a KMS-encrypted S3 Tables bucket need a workgroup with NO explicit result encryption.** `INSERT`/`MERGE`
+into the federated catalog fail with `INTERNAL_ERROR_QUERY_ENGINE` whenever the workgroup sets an `EncryptionConfiguration`
+(SSE_S3 or SSE_KMS); with none set the same statements succeed and the result objects inherit the results bucket's default
+KMS encryption (controlled experiments, 2026-10-30: plain table bucket × SSE_S3 → ok; KMS table bucket × SSE_S3 → fail;
+KMS table bucket × `primary` → ok; KMS table bucket × enforced workgroup without encryption config → ok). The jobs run in
+`tums-lakehouse-<env>` (enforced configuration, 50 GiB bytes-scanned cutoff, no encryption setting); the dashboard's
+KMS workgroup is untouched. Reads and no-op UPDATE/DELETE pass under every configuration, which is why the first P2 deploy
+looked healthy until a job wrote rows.
 
 **First deploy order** (cross-stack references): `Tums-<env>-Automation` → `Data` → `Lakehouse` → `Logging`
 (adds the CloudWatch destination; needs the log group and bodies bucket from Lakehouse) → `Etl` → `Api`.
