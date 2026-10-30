@@ -20,7 +20,7 @@ export const cfg: EnvConfig = JSON.parse(fs.readFileSync(path.join(__dirname, '.
  * Builds the stacks under test. Lambda bundling is skipped (`aws:cdk:bundling-stacks: []`) so a
  * test run does not shell out to esbuild; Docker image assets are only staged, never built.
  */
-export function synthApp(overrideCfg: EnvConfig = cfg) {
+export function synthApp(overrideCfg: EnvConfig = cfg, lakehouseOverrides: { sqlDir?: string } = {}) {
   const cfg = overrideCfg;
   const app = new cdk.App({ context: { 'aws:cdk:bundling-stacks': [] } });
   const env = { account: cfg.account, region: cfg.region };
@@ -33,6 +33,7 @@ export function synthApp(overrideCfg: EnvConfig = cfg) {
   });
   const lakehouse = new LakehouseStack(app, 'T-Lakehouse', {
     env, cfg, dataKey: data.dataKey, tables: data.tables, alertTopic: automation.alertTopic, curatedBucket: data.curatedBucket,
+    athena: data.athena, ...lakehouseOverrides,
   });
   const logging = new LoggingStack(app, 'T-Logging', {
     env, cfg, rawLogBucket: data.rawLogBucket,

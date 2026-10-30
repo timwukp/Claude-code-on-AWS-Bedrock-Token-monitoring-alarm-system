@@ -8,7 +8,7 @@ describe('LakehouseStack (bronze)', () => {
   const { lakehouse } = synthApp();
   const template = Template.fromStack(lakehouse);
   const specs = loadLakehouseSpecs();
-  const s3tables = specs.filter((s) => s.lakehouse.storage === 's3tables');
+  const s3tables = specs.filter((s) => s.lakehouse.storage === 's3tables' && s.lakehouse.layer === 'bronze');
 
   it('creates one table bucket with bronze, silver and gold namespaces', () => {
     template.hasResourceProperties('AWS::S3Tables::TableBucket', { TableBucketName: `tums-lakehouse-${cfg.env}` });
@@ -138,7 +138,7 @@ describe('LakehouseStack (bronze)', () => {
 
   it('grants the Firehose role and the owner principal on the bronze tables through Lake Formation', () => {
     const perms = Object.values(template.findResources('AWS::LakeFormation::PrincipalPermissions')).map((r: any) => r.Properties);
-    const owner = perms.filter((p) => p.Principal.DataLakePrincipalIdentifier === cfg.lakehouse!.ownerPrincipalArn);
+    const owner = perms.filter((p) => p.Principal.DataLakePrincipalIdentifier === cfg.lakehouse!.ownerPrincipalArn && JSON.stringify(p.Resource).includes('"bronze"'));
     expect(owner.filter((p) => p.Resource.Table).length).toBe(3);
     for (const p of owner.filter((p) => p.Resource.Table)) expect(p.Permissions).toEqual(expect.arrayContaining(['SELECT']));
     expect(owner.find((p) => p.Resource.Database)!.Permissions).toEqual(['DESCRIBE']);
@@ -153,7 +153,7 @@ describe('LakehouseStack (bronze)', () => {
     const alarms = Object.values(template.findResources('AWS::CloudWatch::Alarm')).map((r: any) => r.Properties);
     expect(alarms.filter((a) => a.MetricName === 'DeliveryToIceberg.Success')).toHaveLength(2);
     expect(alarms.filter((a) => a.MetricName === 'ThrottledRecords')).toHaveLength(2);
-    expect(alarms.filter((a) => a.MetricName === 'Errors' && a.Namespace === 'AWS/Lambda')).toHaveLength(2);
+    expect(alarms.filter((a) => a.MetricName === 'Errors' && a.Namespace === 'AWS/Lambda')).toHaveLength(5); // 2 transforms + dim_model + registry + quality gate
     for (const a of alarms) expect(JSON.stringify(a.AlarmActions)).toMatch(/AlertTopic/);
   });
 
@@ -210,5 +210,145 @@ describe('LakehouseStack (bronze)', () => {
     const subs = template.findResources('AWS::Logs::SubscriptionFilter');
     expect(Object.keys(subs)).toHaveLength(2);
     for (const sub of Object.values(subs)) expect(((sub as any).DependsOn as string[]).some((d) => /LogsToFirehoseRole/.test(d))).toBe(true);
+  });
+});
+
+// Lakehouse P2 — silver. Same spec-first rule: six silver tables from spec/lakehouse/silver.*.schema.json,
+// written by the transform (invocations, adapter_audit) and by hourly Athena jobs (the rest).
+describe('LakehouseStack (silver)', () => {
+  const { lakehouse } = synthApp();
+  const template = Template.fromStack(lakehouse);
+  const specs = loadLakehouseSpecs();
+  const silver = specs.filter((s) => s.lakehouse.layer === 'silver');
+  const perms = () => Object.values(template.findResources('AWS::LakeFormation::PrincipalPermissions')).map((r: any) => r.Properties);
+
+  it('defines every silver table from the spec in the silver namespace; 90-day retention becomes 2160 h', () => {
+    expect(silver.map((s) => s.lakehouse.table).sort()).toEqual(['adapter_audit', 'bedrock_metrics_hourly', 'bill_daily', 'dim_model', 'invocations', 'project_registry']);
+    for (const spec of silver) {
+      const hours = spec.lakehouse.retention === '90d' ? 2160 : 876000;
+      template.hasResourceProperties('AWS::S3Tables::Table', {
+        TableName: spec.lakehouse.table,
+        Namespace: 'silver',
+        IcebergMetadata: Match.objectLike({
+          IcebergSchema: { SchemaFieldList: icebergFields(spec).map((f) => ({ Name: f.name, Type: f.type, Required: f.required })) },
+        }),
+        SnapshotManagement: { Status: 'enabled', MinSnapshotsToKeep: 1, MaxSnapshotAgeHours: hours },
+      });
+    }
+    template.resourceCountIs('AWS::S3Tables::Table', 9);
+  });
+
+  it('routes silver.invocations and silver.adapter_audit through the bedrock Firehose stream and tells the transforms about them', () => {
+    template.hasResourceProperties('AWS::KinesisFirehose::DeliveryStream', {
+      DeliveryStreamName: `tums-lakehouse-${cfg.env}-bedrock`,
+      IcebergDestinationConfiguration: Match.objectLike({
+        DestinationTableConfigurationList: Match.arrayWith([
+          Match.objectLike({ DestinationDatabaseName: 'silver', DestinationTableName: 'invocations' }),
+          Match.objectLike({ DestinationDatabaseName: 'silver', DestinationTableName: 'adapter_audit' }),
+        ]),
+      }),
+    });
+    const fns = Object.values(template.findResources('AWS::Lambda::Function')).map((f: any) => f.Properties.Environment?.Variables ?? {});
+    const transforms = fns.filter((v) => v.TABLE_INVOCATIONS === 'bedrock_invocations');
+    expect(transforms).toHaveLength(2);
+    for (const v of transforms) {
+      expect(v.SILVER_DATABASE).toBe('silver');
+      expect(v.TABLE_SILVER_INVOCATIONS).toBe('invocations');
+      expect(v.TABLE_ADAPTER_AUDIT).toBe('adapter_audit');
+      expect(v.TENANTS_TABLE).toBeDefined();
+    }
+  });
+
+  it('grants: Firehose ALL on silver.invocations + adapter_audit; owner SELECT on every silver table; the jobs and state-machine roles get ALL silver / SELECT bronze / DESCRIBE both', () => {
+    const p = perms();
+    const silverTbl = (x: any) => x.Resource.Table && x.Resource.Table.DatabaseName === 'silver';
+    const firehose = p.filter((x) => JSON.stringify(x.Principal).includes('FirehoseRole') && silverTbl(x));
+    expect(firehose.map((x) => x.Resource.Table.Name).sort()).toEqual(['adapter_audit', 'invocations']);
+    for (const x of firehose) expect(x.Permissions).toEqual(['ALL']);
+    const owner = p.filter((x) => x.Principal.DataLakePrincipalIdentifier === cfg.lakehouse!.ownerPrincipalArn && silverTbl(x));
+    expect(owner.length).toBe(6);
+    for (const tag of ['SilverJobsRole', 'SilverSfnRole']) {
+      const jobs = p.filter((x) => JSON.stringify(x.Principal).includes(tag));
+      expect(jobs.filter(silverTbl).length).toBe(6);
+      for (const x of jobs.filter(silverTbl)) expect(x.Permissions).toEqual(['ALL']);
+      const jobsBronze = jobs.filter((x) => x.Resource.Table && x.Resource.Table.DatabaseName === 'bronze');
+      expect(jobsBronze.length).toBe(3);
+      for (const x of jobsBronze) expect(x.Permissions).toEqual(expect.arrayContaining(['SELECT']));
+      expect(jobs.filter((x) => x.Resource.Database).map((x) => x.Resource.Database.Name).sort()).toEqual(['bronze', 'silver']);
+    }
+    // Lambdas and the state machine use separate roles (a shared one is a CloudFormation cycle); both are granted above.
+    const roles = template.findResources('AWS::IAM::Role');
+    const trust = (re: RegExp) => JSON.stringify((Object.entries(roles).find(([id]) => re.test(id))![1] as any).Properties.AssumeRolePolicyDocument);
+    expect(trust(/SilverJobsRole/)).toContain('lambda.amazonaws.com');
+    expect(trust(/SilverSfnRole/)).toContain('states.amazonaws.com');
+  });
+
+  it('refreshes dim_model daily and snapshots the registry hourly from Lambdas that may list Bedrock models and query Athena', () => {
+    template.hasResourceProperties('AWS::Events::Rule', { ScheduleExpression: 'cron(0 5 * * ? *)' });
+    template.hasResourceProperties('AWS::Events::Rule', { ScheduleExpression: 'cron(5 * * * ? *)' });
+    const fns = Object.values(template.findResources('AWS::Lambda::Function')).map((f: any) => f.Properties);
+    const dim = fns.find((f) => f.Environment?.Variables?.CATALOG && f.Environment?.Variables?.TABLE_BUCKET && !f.Environment?.Variables?.TENANTS_TABLE);
+    expect(dim).toBeDefined();
+    expect(dim!.Environment.Variables.CATALOG).toBe(`s3tablescatalog/tums-lakehouse-${cfg.env}`);
+    expect(dim!.Environment.Variables.ATHENA_WORKGROUP).toBeDefined();
+    expect(dim!.Runtime).toBe('nodejs22.x');
+    const policies = JSON.stringify(Object.values(template.findResources('AWS::IAM::Policy')).map((p: any) => p.Properties.PolicyDocument.Statement));
+    for (const a of ['bedrock:ListFoundationModels', 'bedrock:ListInferenceProfiles', 'bedrock:ListProvisionedModelThroughputs', 'bedrock:ListCustomModels', 'bedrock:ListImportedModels', 'pricing:GetProducts', 'athena:StartQueryExecution', 'lakeformation:GetDataAccess']) {
+      expect(policies).toContain(a);
+    }
+    const reg = fns.find((f) => f.Environment?.Variables?.TENANTS_TABLE && f.Environment?.Variables?.CATALOG);
+    expect(reg).toBeDefined();
+  });
+
+  it('runs the silver SQL hourly as Athena tasks in a state machine, with a quality gate Lambda, and alarms on failure', () => {
+    template.hasResourceProperties('AWS::Events::Rule', { ScheduleExpression: 'cron(15 * * * ? *)' });
+    const sms = Object.values(template.findResources('AWS::StepFunctions::StateMachine'));
+    expect(sms).toHaveLength(1);
+    const alarms = Object.values(template.findResources('AWS::CloudWatch::Alarm')).map((r: any) => r.Properties);
+    expect(alarms.filter((a) => a.Namespace === 'AWS/States' && a.MetricName === 'ExecutionsFailed')).toHaveLength(1);
+    const fns = Object.values(template.findResources('AWS::Lambda::Function')).map((f: any) => f.Properties);
+    expect(fns.some((f) => f.Environment?.Variables?.QUALITY_GATE === 'true')).toBe(true);
+  });
+
+  it('builds one Athena task per silver_*.sql then quality_*.sql when the sql directory has files, substituting the catalog placeholders', () => {
+    const fs = require('fs') as typeof import('fs');
+    const os = require('os') as typeof import('os');
+    const path = require('path') as typeof import('path');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lh-sql-'));
+    fs.writeFileSync(path.join(dir, 'silver_10_invocations.sql'), 'MERGE INTO ${CATALOG}.silver.invocations t USING ${CATALOG}.bronze.bedrock_invocations b ON t.request_id = b.request_id WHEN NOT MATCHED THEN INSERT *');
+    fs.writeFileSync(path.join(dir, 'silver_20_bill.sql'), 'INSERT INTO ${CATALOG}.silver.bill_daily SELECT * FROM ${GLUE_DB}.cur_raw');
+    fs.writeFileSync(path.join(dir, 'quality_10_nulls.sql'), 'SELECT count(*) FROM ${CATALOG}.silver.invocations WHERE model_key IS NULL HAVING count(*) > 0');
+    const { lakehouse: withSql } = synthApp(cfg, { sqlDir: dir });
+    const sm: any = Object.values(Template.fromStack(withSql).findResources('AWS::StepFunctions::StateMachine'))[0];
+    const def = JSON.stringify(sm.Properties.DefinitionString);
+    expect(def).toContain('athena:startQueryExecution.sync');
+    expect(def.replace(/\\+/g, '')).toContain(`"s3tablescatalog/tums-lakehouse-${cfg.env}".silver.invocations`);
+    expect(def).toContain(`token_monitoring_${cfg.env}.cur_raw`);
+    expect(def).not.toContain('${CATALOG}');
+    expect(def.indexOf('silver_10_invocations')).toBeLessThan(def.indexOf('silver_20_bill'));
+    expect(def.indexOf('silver_20_bill')).toBeLessThan(def.indexOf('quality_10_nulls'));
+    expect(def).toContain('lambda:invoke'); // the quality gate follows each quality query
+  });
+
+  it('registers silver with the SMUS project only when lakehouse.enableSmusPublish is set', () => {
+    template.resourceCountIs('AWS::DataZone::DataSource', 0);
+    const { lakehouse: published } = synthApp({ ...cfg, lakehouse: { ...cfg.lakehouse!, enableSmusPublish: true } });
+    const t2 = Template.fromStack(published);
+    t2.resourceCountIs('AWS::DataZone::DataSource', 1);
+    t2.hasResourceProperties('AWS::DataZone::DataSource', {
+      Type: 'GLUE',
+      DomainIdentifier: cfg.lakehouse!.smusDomainId,
+      ProjectIdentifier: cfg.lakehouse!.smusProjectId,
+      PublishOnImport: true,
+      Configuration: Match.objectLike({ GlueRunConfiguration: Match.objectLike({ RelationalFilterConfigurations: [Match.objectLike({ DatabaseName: 'silver' })] }) }),
+    });
+  });
+
+  it('gives the Bedrock logs role a well-formed log-stream resource (no `:*` from the log group ARN)', () => {
+    const policies = Object.values(template.findResources('AWS::IAM::Policy')).map((p: any) => JSON.stringify(p.Properties.PolicyDocument.Statement));
+    const stmt = policies.find((s) => s.includes('aws/bedrock/modelinvocations'))!;
+    expect(stmt).toBeDefined();
+    expect(stmt).not.toContain(':*:log-stream');
+    expect(stmt).not.toContain(':*\",\":log-stream');
   });
 });

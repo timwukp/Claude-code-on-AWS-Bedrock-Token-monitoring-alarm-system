@@ -1,0 +1,33 @@
+{
+ "schemaType": "ModelInvocationLog",
+ "schemaVersion": "1.0",
+ "timestamp": "2026-10-28T10:00:00Z",
+ "accountId": "123456789012",
+ "region": "us-east-1",
+ "requestId": "req-1",
+ "operation": "InvokeModel",
+ "modelId": "arn:aws:sagemaker:us-east-1:123456789012:endpoint/some-marketplace-model",
+ "identity": {
+  "arn": "arn:aws:iam::123456789012:user/demo"
+ },
+ "input": {
+  "inputContentType": "application/json",
+  "inputBodyJson": {
+   "foo": "bar"
+  },
+  "inputTokenCount": 5,
+  "cacheReadInputTokenCount": 0,
+  "cacheWriteInputTokenCount": 0
+ },
+ "output": {
+  "outputContentType": "application/json",
+  "outputBodyJson": {
+   "weird": [
+    1,
+    2,
+    3
+   ]
+  },
+  "outputTokenCount": 5
+ }
+}

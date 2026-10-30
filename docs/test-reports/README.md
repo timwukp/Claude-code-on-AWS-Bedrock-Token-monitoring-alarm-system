@@ -56,6 +56,7 @@ results. One report per feature (mapped to a GitHub issue / PR).
 | Mantle counts persisted per model per day; row-level inconsistency flag; 30m cache-write usage type; loading ≠ failed footer | — | #80 | [feature-46](./feature-46-mantle-counts-persisted.md) | PASS (gates + dry run: opus 5,816 by name, sum == fleet) |
 | Hardening 1: idempotent aggregator + per-tenant index + userSet cap + safeCount; tenant-bound query polling; CI trust boundary (no PR code with creds, derived verdict, confined diffs, SHA pins); CloudFront headers, Cognito hardening, sessionStorage tokens, Node 22 | — | #84 | [feature-47](./feature-47-hardening-1-pipeline-and-isolation.md) | PASS (gates + 14 infra invariants; live after deploys) |
 | Dependabot tamed: grouped weekly minor/patch PRs, no automatic majors; QA agent skips dependabot PRs | — | #108 | [feature-48](./feature-48-ci-dependabot-tamed.md) | PASS (actionlint + gate; behaviour verified on the next weekly run) |
+| Lakehouse P2 silver: canonical `silver.invocations` (OTel GenAI vocabulary, no bodies), per-vendor adapters + fixtures, attribution/tenant recompute SQL, `dim_model`, `bill_daily` from CUR, OTel dedupe, quality gates, registry snapshot; Logging custom resource | — | TBD | [feature-49](./feature-49-lakehouse-p2-silver.md) | PASS (gates) |
 Each report records: scope, unit-test results, build/synth gates, real-AWS validation evidence,
 any defect found+fixed during validation, and a verdict. Reports are written before opening the
 PR; a feature is only PR-ready when all gates are green.

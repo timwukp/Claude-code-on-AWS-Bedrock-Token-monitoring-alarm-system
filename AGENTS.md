@@ -15,10 +15,10 @@ deployable into any AWS account. See `README.md` and `docs/ARCHITECTURE.md`.
 |---|---|
 | `infra/` | AWS CDK v2 app (TypeScript). Stacks in `infra/lib/stacks`. Entry: `infra/bin/infra.ts`. |
 | `backend/` | Lambda handlers (`lambdas/api`, `lambdas/ingestion`, `lambdas/anomaly-response`, `lambdas/dora` = GitHub collector + DORA math, `lambdas/lakehouse` = Firehose transform + model-id/tenant/metric/span parsers), shared libs (incl. `shared/project-registry` = project↔repo↔cost mapping), Fargate ETL (`analysis/`). |
-| `spec/` | Lakehouse table specs (`spec/lakehouse/*.schema.json`) — single source of truth; `backend/scripts/gen-lakehouse-ddl.ts` generates CDK columns + row types from them. |
+| `spec/` | Lakehouse table specs (`spec/lakehouse/*.schema.json`) — single source of truth; `backend/scripts/gen-lakehouse-ddl.ts` generates CDK columns + row types from them. `spec/lakehouse/sql/` holds the Athena statements that derive silver (aliases `t_<table>` are contract-tested against the specs). |
 | `frontend/` | React + Vite SPA (the dashboard). |
 | `docs/` | Architecture, Well-Architected review, monitoring approach, attribution, ADRs. |
-| `scripts/` | Deploy/setup helpers (`deploy-frontend.sh`, `create-project-aip.sh`, `lakehouse-smoke.ts` with its own `package.json`). |
+| `scripts/` | Deploy/setup helpers (`deploy-frontend.sh`, `create-project-aip.sh`, `lakehouse-smoke.ts`, `verify-lakehouse.ts` with their own `package.json`). |
 
 ## Setup, build, test (do this first)
 

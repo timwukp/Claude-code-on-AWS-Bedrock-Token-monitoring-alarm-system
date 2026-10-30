@@ -1,0 +1,8 @@
+{
+ "vendor": "anthropic",
+ "api_family": "invoke",
+ "token_source": "adapter",
+ "input_tokens": 15,
+ "output_tokens": 4,
+ "finish_reason": "end_turn"
+}

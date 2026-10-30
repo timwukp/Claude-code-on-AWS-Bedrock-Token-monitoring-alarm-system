@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tums.local/lakehouse/silver.dim_model.schema.json",
+  "title": "silver.dim_model",
+  "description": "Every model id the account can call, refreshed daily from bedrock list-foundation-models / list-inference-profiles / provisioned / custom / imported plus the rate card and Price List.",
+  "type": "object",
+  "properties": {
+    "model_key": {
+      "description": "normalised key",
+      "type": "string"
+    },
+    "vendor": {
+      "description": "vendor",
+      "type": "string"
+    },
+    "family": {
+      "description": "family",
+      "type": "string"
+    },
+    "version": {
+      "description": "version",
+      "type": "string"
+    },
+    "modality": {
+      "description": "primary modality",
+      "type": "string"
+    },
+    "input_modalities": {
+      "description": "JSON array",
+      "type": "string"
+    },
+    "output_modalities": {
+      "description": "JSON array",
+      "type": "string"
+    },
+    "lifecycle": {
+      "description": "ACTIVE | LEGACY | \u2026",
+      "type": "string"
+    },
+    "price_status": {
+      "description": "priced | unpriced_public | unpriced_private",
+      "type": "string"
+    },
+    "rate_card_key": {
+      "description": "matching RATE_CARD key when priced",
+      "type": "string"
+    },
+    "refreshed_at": {
+      "description": "snapshot time",
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "model_key",
+    "vendor",
+    "price_status",
+    "refreshed_at"
+  ],
+  "additionalProperties": false,
+  "x-lakehouse": {
+    "layer": "silver",
+    "table": "dim_model",
+    "storage": "s3tables",
+    "partition": [],
+    "retention": "forever",
+    "pii": false
+  }
+}

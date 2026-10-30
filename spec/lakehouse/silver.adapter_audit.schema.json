@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tums.local/lakehouse/silver.adapter_audit.schema.json",
+  "title": "silver.adapter_audit",
+  "description": "Rows where a vendor adapter disagreed with the Bedrock envelope; the envelope won.",
+  "type": "object",
+  "properties": {
+    "event_ts": {
+      "description": "call time",
+      "type": "string",
+      "format": "date-time"
+    },
+    "event_day": {
+      "description": "UTC day (partition)",
+      "type": "string"
+    },
+    "request_id": {
+      "description": "request",
+      "type": "string"
+    },
+    "vendor": {
+      "description": "vendor",
+      "type": "string"
+    },
+    "api_family": {
+      "description": "api family",
+      "type": "string"
+    },
+    "field": {
+      "description": "which field",
+      "type": "string"
+    },
+    "envelope_value": {
+      "description": "value kept",
+      "type": "string"
+    },
+    "adapter_value": {
+      "description": "value discarded",
+      "type": "string"
+    }
+  },
+  "required": [
+    "event_ts",
+    "event_day",
+    "request_id",
+    "field"
+  ],
+  "additionalProperties": false,
+  "x-lakehouse": {
+    "layer": "silver",
+    "table": "adapter_audit",
+    "storage": "s3tables",
+    "partition": [
+      "event_day"
+    ],
+    "retention": "90d",
+    "pii": false
+  }
+}

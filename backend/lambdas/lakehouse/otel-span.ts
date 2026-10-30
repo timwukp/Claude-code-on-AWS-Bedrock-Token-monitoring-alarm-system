@@ -15,7 +15,7 @@ export function isSpan(o: unknown): boolean {
 
 type Attr = { key: string; value: Record<string, unknown> };
 
-function flattenAttributes(a: unknown): Record<string, unknown> {
+export function flattenAttributes(a: unknown): Record<string, unknown> {
   if (Array.isArray(a)) {
     const out: Record<string, unknown> = {};
     for (const kv of a as Attr[]) {

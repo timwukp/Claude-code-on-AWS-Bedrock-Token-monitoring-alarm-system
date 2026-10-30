@@ -30,6 +30,7 @@ const automation = new AutomationStack(app, `${prefix}-Automation`, { env, cfg, 
 // Logs destination and the large-body bucket live here.
 const lakehouse = new LakehouseStack(app, `${prefix}-Lakehouse`, {
   env, cfg, dataKey: data.dataKey, tables: data.tables, alertTopic: automation.alertTopic, curatedBucket: data.curatedBucket,
+  athena: data.athena,
 });
 const logging = new LoggingStack(app, `${prefix}-Logging`, {
   env, cfg, rawLogBucket: data.rawLogBucket,

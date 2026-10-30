@@ -1,0 +1,37 @@
+{
+ "schemaType": "ModelInvocationLog",
+ "schemaVersion": "1.0",
+ "timestamp": "2026-10-28T10:00:00Z",
+ "accountId": "123456789012",
+ "region": "us-east-1",
+ "requestId": "req-1",
+ "operation": "InvokeModel",
+ "modelId": "cohere.command-r-plus-v1:0",
+ "identity": {
+  "arn": "arn:aws:iam::123456789012:user/demo"
+ },
+ "input": {
+  "inputContentType": "application/json",
+  "inputBodyJson": {
+   "message": "[redacted]"
+  },
+  "inputTokenCount": 33,
+  "cacheReadInputTokenCount": 0,
+  "cacheWriteInputTokenCount": 0
+ },
+ "output": {
+  "outputContentType": "application/json",
+  "outputBodyJson": {
+   "response_id": "r",
+   "text": "[redacted]",
+   "finish_reason": "COMPLETE",
+   "meta": {
+    "billed_units": {
+     "input_tokens": 33,
+     "output_tokens": 9
+    }
+   }
+  },
+  "outputTokenCount": 9
+ }
+}

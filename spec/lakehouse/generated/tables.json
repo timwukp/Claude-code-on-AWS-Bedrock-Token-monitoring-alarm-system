@@ -382,6 +382,608 @@
           "description": "span JSON text"
         }
       ]
+    },
+    {
+      "layer": "silver",
+      "table": "adapter_audit",
+      "storage": "s3tables",
+      "partition": [
+        "event_day"
+      ],
+      "retention": "90d",
+      "pii": false,
+      "description": "Rows where a vendor adapter disagreed with the Bedrock envelope; the envelope won.",
+      "columns": [
+        {
+          "name": "event_ts",
+          "icebergType": "timestamp",
+          "required": true,
+          "description": "call time"
+        },
+        {
+          "name": "event_day",
+          "icebergType": "string",
+          "required": true,
+          "description": "UTC day (partition)"
+        },
+        {
+          "name": "request_id",
+          "icebergType": "string",
+          "required": true,
+          "description": "request"
+        },
+        {
+          "name": "vendor",
+          "icebergType": "string",
+          "required": false,
+          "description": "vendor"
+        },
+        {
+          "name": "api_family",
+          "icebergType": "string",
+          "required": false,
+          "description": "api family"
+        },
+        {
+          "name": "field",
+          "icebergType": "string",
+          "required": true,
+          "description": "which field"
+        },
+        {
+          "name": "envelope_value",
+          "icebergType": "string",
+          "required": false,
+          "description": "value kept"
+        },
+        {
+          "name": "adapter_value",
+          "icebergType": "string",
+          "required": false,
+          "description": "value discarded"
+        }
+      ]
+    },
+    {
+      "layer": "silver",
+      "table": "bedrock_metrics_hourly",
+      "storage": "s3tables",
+      "partition": [
+        "hour_day"
+      ],
+      "retention": "forever",
+      "pii": false,
+      "description": "bronze.cw_metrics folded to the hour per namespace, metric, model and project dimension.",
+      "columns": [
+        {
+          "name": "hour_ts",
+          "icebergType": "timestamp",
+          "required": true,
+          "description": "hour start"
+        },
+        {
+          "name": "hour_day",
+          "icebergType": "string",
+          "required": true,
+          "description": "UTC day (partition)"
+        },
+        {
+          "name": "namespace",
+          "icebergType": "string",
+          "required": true,
+          "description": "AWS/Bedrock | AWS/BedrockMantle"
+        },
+        {
+          "name": "metric_name",
+          "icebergType": "string",
+          "required": true,
+          "description": "metric"
+        },
+        {
+          "name": "model_id",
+          "icebergType": "string",
+          "required": false,
+          "description": "ModelId or Model dimension"
+        },
+        {
+          "name": "project",
+          "icebergType": "string",
+          "required": false,
+          "description": "Project dimension (Mantle) or null"
+        },
+        {
+          "name": "sum",
+          "icebergType": "double",
+          "required": true,
+          "description": "sum"
+        },
+        {
+          "name": "count",
+          "icebergType": "double",
+          "required": true,
+          "description": "count"
+        },
+        {
+          "name": "min",
+          "icebergType": "double",
+          "required": false,
+          "description": "min"
+        },
+        {
+          "name": "max",
+          "icebergType": "double",
+          "required": false,
+          "description": "max"
+        }
+      ]
+    },
+    {
+      "layer": "silver",
+      "table": "bill_daily",
+      "storage": "s3tables",
+      "partition": [
+        "day"
+      ],
+      "retention": "forever",
+      "pii": false,
+      "description": "CUR 2.0 lines folded to day × usage type × model × kind × route. Source of truth for dollars.",
+      "columns": [
+        {
+          "name": "day",
+          "icebergType": "string",
+          "required": true,
+          "description": "usage day YYYY-MM-DD (partition)"
+        },
+        {
+          "name": "usage_type",
+          "icebergType": "string",
+          "required": true,
+          "description": "line_item_usage_type"
+        },
+        {
+          "name": "model_key",
+          "icebergType": "string",
+          "required": false,
+          "description": "parsed from usage type when possible"
+        },
+        {
+          "name": "kind",
+          "icebergType": "string",
+          "required": true,
+          "description": "input | output | cache_read | cache_write_5m | cache_write_1h | provisioned_hour | guardrail | other"
+        },
+        {
+          "name": "route",
+          "icebergType": "string",
+          "required": false,
+          "description": "global | standard | mantle | other"
+        },
+        {
+          "name": "region",
+          "icebergType": "string",
+          "required": false,
+          "description": "product_region_code"
+        },
+        {
+          "name": "line_item_type",
+          "icebergType": "string",
+          "required": false,
+          "description": "Usage | Tax | Credit | …"
+        },
+        {
+          "name": "usd",
+          "icebergType": "double",
+          "required": true,
+          "description": "sum unblended cost"
+        },
+        {
+          "name": "qty",
+          "icebergType": "double",
+          "required": false,
+          "description": "sum usage amount"
+        },
+        {
+          "name": "source",
+          "icebergType": "string",
+          "required": true,
+          "description": "cur"
+        },
+        {
+          "name": "refreshed_at",
+          "icebergType": "timestamp",
+          "required": true,
+          "description": "fold time"
+        }
+      ]
+    },
+    {
+      "layer": "silver",
+      "table": "dim_model",
+      "storage": "s3tables",
+      "partition": [],
+      "retention": "forever",
+      "pii": false,
+      "description": "Every model id the account can call, refreshed daily from bedrock list-foundation-models / list-inference-profiles / provisioned / custom / imported plus the rate card and Price List.",
+      "columns": [
+        {
+          "name": "model_key",
+          "icebergType": "string",
+          "required": true,
+          "description": "normalised key"
+        },
+        {
+          "name": "vendor",
+          "icebergType": "string",
+          "required": true,
+          "description": "vendor"
+        },
+        {
+          "name": "family",
+          "icebergType": "string",
+          "required": false,
+          "description": "family"
+        },
+        {
+          "name": "version",
+          "icebergType": "string",
+          "required": false,
+          "description": "version"
+        },
+        {
+          "name": "modality",
+          "icebergType": "string",
+          "required": false,
+          "description": "primary modality"
+        },
+        {
+          "name": "input_modalities",
+          "icebergType": "string",
+          "required": false,
+          "description": "JSON array"
+        },
+        {
+          "name": "output_modalities",
+          "icebergType": "string",
+          "required": false,
+          "description": "JSON array"
+        },
+        {
+          "name": "lifecycle",
+          "icebergType": "string",
+          "required": false,
+          "description": "ACTIVE | LEGACY | …"
+        },
+        {
+          "name": "price_status",
+          "icebergType": "string",
+          "required": true,
+          "description": "priced | unpriced_public | unpriced_private"
+        },
+        {
+          "name": "rate_card_key",
+          "icebergType": "string",
+          "required": false,
+          "description": "matching RATE_CARD key when priced"
+        },
+        {
+          "name": "refreshed_at",
+          "icebergType": "timestamp",
+          "required": true,
+          "description": "snapshot time"
+        }
+      ]
+    },
+    {
+      "layer": "silver",
+      "table": "invocations",
+      "storage": "s3tables",
+      "partition": [
+        "event_day"
+      ],
+      "retention": "forever",
+      "pii": false,
+      "description": "One row per model invocation, vendor-neutral. Vocabulary follows the OpenTelemetry GenAI semantic conventions (gen_ai.*) plus AWS extensions; a Bedrock log record and an OTel span for the same request_id merge into one row. No request/response bodies.",
+      "columns": [
+        {
+          "name": "event_ts",
+          "icebergType": "timestamp",
+          "required": true,
+          "description": "call time (Bedrock record timestamp, else span start)"
+        },
+        {
+          "name": "event_day",
+          "icebergType": "string",
+          "required": true,
+          "description": "UTC day (partition)"
+        },
+        {
+          "name": "request_id",
+          "icebergType": "string",
+          "required": true,
+          "description": "Bedrock requestId == OTel aws.request_id / gen_ai.response.id; dedupe key"
+        },
+        {
+          "name": "source",
+          "icebergType": "string",
+          "required": true,
+          "description": "bedrock | otel | both"
+        },
+        {
+          "name": "operation",
+          "icebergType": "string",
+          "required": false,
+          "description": "Bedrock operation (InvokeModel, Converse, …) or gen_ai.operation.name"
+        },
+        {
+          "name": "api_family",
+          "icebergType": "string",
+          "required": false,
+          "description": "invoke | converse | openai_responses | openai_chat | embeddings | image | other"
+        },
+        {
+          "name": "model_id_raw",
+          "icebergType": "string",
+          "required": true,
+          "description": "modelId exactly as logged"
+        },
+        {
+          "name": "model_key",
+          "icebergType": "string",
+          "required": true,
+          "description": "normalised model key (parseModelId)"
+        },
+        {
+          "name": "vendor",
+          "icebergType": "string",
+          "required": true,
+          "description": "gen_ai.provider.name-style vendor: anthropic, openai, amazon, meta, mistral, cohere, ai21, deepseek, moonshot, qwen, … or unknown"
+        },
+        {
+          "name": "family",
+          "icebergType": "string",
+          "required": false,
+          "description": "model family"
+        },
+        {
+          "name": "version",
+          "icebergType": "string",
+          "required": false,
+          "description": "model version/date, null if none"
+        },
+        {
+          "name": "modality",
+          "icebergType": "string",
+          "required": false,
+          "description": "text | embedding | image | video | speech | unknown"
+        },
+        {
+          "name": "route",
+          "icebergType": "string",
+          "required": false,
+          "description": "global | us | eu | apac | profile | provisioned | custom | imported | marketplace | direct"
+        },
+        {
+          "name": "aip_arn",
+          "icebergType": "string",
+          "required": false,
+          "description": "application inference profile ARN when routed through one"
+        },
+        {
+          "name": "underlying_model_id",
+          "icebergType": "string",
+          "required": false,
+          "description": "model behind a profile (registry), else model_key"
+        },
+        {
+          "name": "identity_arn",
+          "icebergType": "string",
+          "required": false,
+          "description": "caller ARN as logged"
+        },
+        {
+          "name": "tenant_key",
+          "icebergType": "string",
+          "required": true,
+          "description": "normalised tenant: user/<name> or role/<Role> (sessions collapsed)"
+        },
+        {
+          "name": "caller_type",
+          "icebergType": "string",
+          "required": false,
+          "description": "user | role | api_key_user | service | unknown"
+        },
+        {
+          "name": "project_id",
+          "icebergType": "string",
+          "required": true,
+          "description": "attributed project or untagged"
+        },
+        {
+          "name": "attribution_source",
+          "icebergType": "string",
+          "required": true,
+          "description": "aip | identity | metadata | workspace | none"
+        },
+        {
+          "name": "input_tokens",
+          "icebergType": "long",
+          "required": true,
+          "description": "gen_ai.usage.input_tokens (Bedrock envelope authoritative)"
+        },
+        {
+          "name": "output_tokens",
+          "icebergType": "long",
+          "required": true,
+          "description": "gen_ai.usage.output_tokens"
+        },
+        {
+          "name": "cache_read_tokens",
+          "icebergType": "long",
+          "required": false,
+          "description": "aws.bedrock.cache_read_tokens"
+        },
+        {
+          "name": "cache_write_tokens",
+          "icebergType": "long",
+          "required": false,
+          "description": "aws.bedrock.cache_write_tokens"
+        },
+        {
+          "name": "cache_write_ttl",
+          "icebergType": "string",
+          "required": false,
+          "description": "5m | 1h | 30m | unknown"
+        },
+        {
+          "name": "reasoning_tokens",
+          "icebergType": "long",
+          "required": false,
+          "description": "adapter: reasoning/thinking output tokens when reported"
+        },
+        {
+          "name": "tool_calls",
+          "icebergType": "long",
+          "required": false,
+          "description": "adapter: number of tool/function calls in the response"
+        },
+        {
+          "name": "finish_reason",
+          "icebergType": "string",
+          "required": false,
+          "description": "gen_ai.response.finish_reasons (first)"
+        },
+        {
+          "name": "latency_ms",
+          "icebergType": "double",
+          "required": false,
+          "description": "amazon-bedrock-invocationMetrics.invocationLatency or span duration"
+        },
+        {
+          "name": "ttft_ms",
+          "icebergType": "double",
+          "required": false,
+          "description": "first-byte latency when reported"
+        },
+        {
+          "name": "body_s3_path",
+          "icebergType": "string",
+          "required": false,
+          "description": "input body object when > 100 KB (bronze keeps the pointer; silver never reads it)"
+        },
+        {
+          "name": "token_source",
+          "icebergType": "string",
+          "required": true,
+          "description": "envelope | adapter | otel"
+        },
+        {
+          "name": "adapter_discrepancy",
+          "icebergType": "boolean",
+          "required": false,
+          "description": "true when the adapter disagreed with the envelope (see silver.adapter_audit)"
+        },
+        {
+          "name": "price_status",
+          "icebergType": "string",
+          "required": false,
+          "description": "priced | unpriced_public | unpriced_private (from dim_model)"
+        },
+        {
+          "name": "session_id",
+          "icebergType": "string",
+          "required": false,
+          "description": "OTel session.id when present"
+        },
+        {
+          "name": "conversation_id",
+          "icebergType": "string",
+          "required": false,
+          "description": "OTel gen_ai.conversation.id when present"
+        },
+        {
+          "name": "trace_id",
+          "icebergType": "string",
+          "required": false,
+          "description": "OTel trace id"
+        },
+        {
+          "name": "span_id",
+          "icebergType": "string",
+          "required": false,
+          "description": "OTel span id"
+        },
+        {
+          "name": "service_name",
+          "icebergType": "string",
+          "required": false,
+          "description": "OTel service.name (gateway / app)"
+        },
+        {
+          "name": "ingest_ts",
+          "icebergType": "timestamp",
+          "required": true,
+          "description": "emit time"
+        }
+      ]
+    },
+    {
+      "layer": "silver",
+      "table": "project_registry",
+      "storage": "s3tables",
+      "partition": [],
+      "retention": "forever",
+      "pii": false,
+      "description": "Hourly snapshot of the TUMS project registry (REGISTRY#PROJECT / PROFILE / IDENTITY) so attribution can be recomputed in SQL.",
+      "columns": [
+        {
+          "name": "snapshot_ts",
+          "icebergType": "timestamp",
+          "required": true,
+          "description": "snapshot time"
+        },
+        {
+          "name": "project_id",
+          "icebergType": "string",
+          "required": true,
+          "description": "project"
+        },
+        {
+          "name": "name",
+          "icebergType": "string",
+          "required": false,
+          "description": "display name"
+        },
+        {
+          "name": "cost_center",
+          "icebergType": "string",
+          "required": false,
+          "description": "cost centre"
+        },
+        {
+          "name": "repos",
+          "icebergType": "string",
+          "required": false,
+          "description": "JSON array of owner/repo"
+        },
+        {
+          "name": "identity_arns",
+          "icebergType": "string",
+          "required": false,
+          "description": "JSON array of registered caller ARNs (role or user)"
+        },
+        {
+          "name": "profile_arns",
+          "icebergType": "string",
+          "required": false,
+          "description": "JSON array of application inference profile ARNs"
+        },
+        {
+          "name": "is_current",
+          "icebergType": "boolean",
+          "required": true,
+          "description": "true for the latest snapshot"
+        }
+      ]
     }
   ]
 }

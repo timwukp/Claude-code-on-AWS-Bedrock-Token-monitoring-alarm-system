@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tums.local/lakehouse/silver.bedrock_metrics_hourly.schema.json",
+  "title": "silver.bedrock_metrics_hourly",
+  "description": "bronze.cw_metrics folded to the hour per namespace, metric, model and project dimension.",
+  "type": "object",
+  "properties": {
+    "hour_ts": {
+      "description": "hour start",
+      "type": "string",
+      "format": "date-time"
+    },
+    "hour_day": {
+      "description": "UTC day (partition)",
+      "type": "string"
+    },
+    "namespace": {
+      "description": "AWS/Bedrock | AWS/BedrockMantle",
+      "type": "string"
+    },
+    "metric_name": {
+      "description": "metric",
+      "type": "string"
+    },
+    "model_id": {
+      "description": "ModelId or Model dimension",
+      "type": "string"
+    },
+    "project": {
+      "description": "Project dimension (Mantle) or null",
+      "type": "string"
+    },
+    "sum": {
+      "description": "sum",
+      "type": "number"
+    },
+    "count": {
+      "description": "count",
+      "type": "number"
+    },
+    "min": {
+      "description": "min",
+      "type": "number"
+    },
+    "max": {
+      "description": "max",
+      "type": "number"
+    }
+  },
+  "required": [
+    "hour_ts",
+    "hour_day",
+    "namespace",
+    "metric_name",
+    "sum",
+    "count"
+  ],
+  "additionalProperties": false,
+  "x-lakehouse": {
+    "layer": "silver",
+    "table": "bedrock_metrics_hourly",
+    "storage": "s3tables",
+    "partition": [
+      "hour_day"
+    ],
+    "retention": "forever",
+    "pii": false
+  }
+}
