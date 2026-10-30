@@ -50,11 +50,11 @@ are grouped by development milestone rather than strict semver releases.
 
 ### Fixed — Firehose → Iceberg streams (lakehouse-p1-firehose-fixes)
 - Iceberg destinations accept only the Lambda processor; the transform Lambda unpacks CloudWatch Logs envelopes itself. The
-  Firehose role can now resolve destination tables through every level of the S3 Tables federated catalog. (PR TBD)
+  Firehose role can now resolve destination tables through every level of the S3 Tables federated catalog. (PR #83)
 
 ### Changed — zero-ETL mirrors behind a flag (lakehouse-p1-zero-etl-flag)
 - `lakehouse.enableZeroEtl` (default off): the Glue zero-ETL integrations for the DORA and registry tables are created only
-  when set. Glue rejected the DynamoDB-source resource property on the fourth dev deploy; the bronze core ships first. (PR TBD)
+  when set. Glue rejected the DynamoDB-source resource property on the fourth dev deploy; the bronze core ships first. (PR #82)
 
 ### Fixed — the first Lakehouse deploy (lakehouse-p1-deploy-fixes)
 - CUR export bucket: SSE-S3, both Data Exports principals with their own `aws:SourceArn` shapes, and the export waits for
