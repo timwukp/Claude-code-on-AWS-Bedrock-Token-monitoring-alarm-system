@@ -1,0 +1,49 @@
+{
+ "schemaType": "ModelInvocationLog",
+ "schemaVersion": "1.0",
+ "timestamp": "2026-10-28T10:00:00Z",
+ "accountId": "123456789012",
+ "region": "us-east-1",
+ "requestId": "req-1",
+ "operation": "InvokeModel",
+ "modelId": "mistral.mistral-large-2407-v1:0",
+ "identity": {
+  "arn": "arn:aws:iam::123456789012:user/demo"
+ },
+ "input": {
+  "inputContentType": "application/json",
+  "inputBodyJson": {
+   "messages": [
+    {
+     "role": "user",
+     "content": "[redacted]"
+    }
+   ]
+  },
+  "inputTokenCount": 40,
+  "cacheReadInputTokenCount": 0,
+  "cacheWriteInputTokenCount": 0
+ },
+ "output": {
+  "outputContentType": "application/json",
+  "outputBodyJson": {
+   "id": "x",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "[redacted]"
+     },
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 40,
+    "completion_tokens": 8,
+    "total_tokens": 48
+   }
+  },
+  "outputTokenCount": 8
+ }
+}

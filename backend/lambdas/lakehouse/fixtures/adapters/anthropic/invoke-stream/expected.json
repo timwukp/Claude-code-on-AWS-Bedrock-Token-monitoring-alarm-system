@@ -1,0 +1,9 @@
+{
+ "vendor": "anthropic",
+ "api_family": "invoke",
+ "token_source": "envelope",
+ "input_tokens": 2,
+ "output_tokens": 130,
+ "latency_ms": 1934,
+ "ttft_ms": 1202
+}

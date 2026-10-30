@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tums.local/lakehouse/silver.bill_daily.schema.json",
+  "title": "silver.bill_daily",
+  "description": "CUR 2.0 lines folded to day \u00d7 usage type \u00d7 model \u00d7 kind \u00d7 route. Source of truth for dollars.",
+  "type": "object",
+  "properties": {
+    "day": {
+      "description": "usage day YYYY-MM-DD (partition)",
+      "type": "string"
+    },
+    "usage_type": {
+      "description": "line_item_usage_type",
+      "type": "string"
+    },
+    "model_key": {
+      "description": "parsed from usage type when possible",
+      "type": "string"
+    },
+    "kind": {
+      "description": "input | output | cache_read | cache_write_5m | cache_write_1h | provisioned_hour | guardrail | other",
+      "type": "string"
+    },
+    "route": {
+      "description": "global | standard | mantle | other",
+      "type": "string"
+    },
+    "region": {
+      "description": "product_region_code",
+      "type": "string"
+    },
+    "line_item_type": {
+      "description": "Usage | Tax | Credit | \u2026",
+      "type": "string"
+    },
+    "usd": {
+      "description": "sum unblended cost",
+      "type": "number"
+    },
+    "qty": {
+      "description": "sum usage amount",
+      "type": "number"
+    },
+    "source": {
+      "description": "cur",
+      "type": "string"
+    },
+    "refreshed_at": {
+      "description": "fold time",
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "day",
+    "usage_type",
+    "kind",
+    "usd",
+    "source",
+    "refreshed_at"
+  ],
+  "additionalProperties": false,
+  "x-lakehouse": {
+    "layer": "silver",
+    "table": "bill_daily",
+    "storage": "s3tables",
+    "partition": [
+      "day"
+    ],
+    "retention": "forever",
+    "pii": false
+  }
+}

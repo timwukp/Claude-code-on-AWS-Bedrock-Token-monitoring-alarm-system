@@ -1,0 +1,13 @@
+{
+ "vendor": "anthropic",
+ "api_family": "invoke",
+ "source": "bedrock",
+ "token_source": "envelope",
+ "input_tokens": 686,
+ "output_tokens": 112,
+ "cache_write_tokens": 4511,
+ "cache_write_ttl": "5m",
+ "finish_reason": "end_turn",
+ "route": "profile",
+ "adapter_discrepancy": false
+}

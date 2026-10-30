@@ -1,0 +1,39 @@
+{
+ "schemaType": "ModelInvocationLog",
+ "schemaVersion": "1.0",
+ "timestamp": "2026-10-28T10:00:00Z",
+ "accountId": "123456789012",
+ "region": "us-east-1",
+ "requestId": "req-1",
+ "operation": "InvokeModel",
+ "modelId": "meta.llama3-70b-instruct-v1:0",
+ "identity": {
+  "arn": "arn:aws:iam::123456789012:user/demo"
+ },
+ "input": {
+  "inputContentType": "application/json",
+  "inputBodyJson": {
+   "prompt": "[redacted]",
+   "max_gen_len": 64
+  },
+  "inputTokenCount": 12,
+  "cacheReadInputTokenCount": 0,
+  "cacheWriteInputTokenCount": 0
+ },
+ "output": {
+  "outputContentType": "application/json",
+  "outputBodyJson": {
+   "generation": "[redacted]",
+   "prompt_token_count": 12,
+   "generation_token_count": 30,
+   "stop_reason": "stop",
+   "amazon-bedrock-invocationMetrics": {
+    "inputTokenCount": 12,
+    "outputTokenCount": 30,
+    "invocationLatency": 900,
+    "firstByteLatency": 120
+   }
+  },
+  "outputTokenCount": 30
+ }
+}

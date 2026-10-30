@@ -19,6 +19,19 @@ are grouped by development milestone rather than strict semver releases.
   their role before comparison, action requires a configured target and ≥ 3 AccessDenied events in 10 minutes; synth refuses
   a target that is also never-contain or not a role.
 
+### Added — lakehouse silver: one vendor-neutral row per call, attribution recomputed from the registry (lakehouse-p2-silver)
+- `silver.invocations` (OpenTelemetry GenAI vocabulary + AWS cache/profile/route extensions, no bodies) is written by the
+  transform Lambda through per-vendor adapters (Anthropic, OpenAI Responses/Chat, Converse, Meta, Mistral, Cohere, AI21,
+  Titan embeddings, generic, OTel) and recomputed hourly by Athena SQL (`spec/lakehouse/sql/`): rule C attribution
+  (AIP ▷ identity ▷ metadata) from an hourly registry snapshot, tenants collapsed to the role/user, OTel spans merged
+  with Bedrock records on request id, five quality gates that fail the run.
+- `silver.dim_model` (every callable model with `price_status`), `silver.bill_daily` (CUR 2.0 folded per `bill-parse.ts`
+  rules plus guardrail/provisioned/third-party names), `silver.bedrock_metrics_hourly`, `silver.project_registry`,
+  `silver.adapter_audit`.
+- `scripts/verify-lakehouse.ts` dual-run check; `docs/GOVERNANCE-ATTRIBUTION.md` (rule C in plain words; the
+  workspace-hint tier stays off without owner consent).
+- Logging: the fake `AWS::Bedrock::ModelInvocationLoggingConfiguration` resource becomes a CDK custom resource; the
+  Bedrock-logs role ARN loses its `:*`. (PR #112)
 
 ### Changed — dependency updates tamed (feature-48)
 - `dependabot.yml`: one grouped PR per ecosystem per week, minor/patch only, majors never proposed automatically (the
@@ -50,11 +63,11 @@ are grouped by development milestone rather than strict semver releases.
 
 ### Fixed — Firehose → Iceberg streams (lakehouse-p1-firehose-fixes)
 - Iceberg destinations accept only the Lambda processor; the transform Lambda unpacks CloudWatch Logs envelopes itself. The
-  Firehose role can now resolve destination tables through every level of the S3 Tables federated catalog. (PR TBD)
+  Firehose role can now resolve destination tables through every level of the S3 Tables federated catalog. (PR #83)
 
 ### Changed — zero-ETL mirrors behind a flag (lakehouse-p1-zero-etl-flag)
 - `lakehouse.enableZeroEtl` (default off): the Glue zero-ETL integrations for the DORA and registry tables are created only
-  when set. Glue rejected the DynamoDB-source resource property on the fourth dev deploy; the bronze core ships first. (PR TBD)
+  when set. Glue rejected the DynamoDB-source resource property on the fourth dev deploy; the bronze core ships first. (PR #82)
 
 ### Fixed — the first Lakehouse deploy (lakehouse-p1-deploy-fixes)
 - CUR export bucket: SSE-S3, both Data Exports principals with their own `aws:SourceArn` shapes, and the export waits for

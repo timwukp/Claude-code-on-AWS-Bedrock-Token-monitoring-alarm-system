@@ -3,10 +3,10 @@
 - **Spec:** ./spec.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Accepted-for:** a7f6ff78c5ce082e9c2ed99e14451bf1dac25bc1
+- **Accepted-for:** 2b99397b421ab25b32b448bfebad7c083b3dc073
 - **Status:** accepted
 
-`Accepted-for` is the tip of `main` after PR #111 (dependabot frontend group). Chain 2 of the owner-approved hardening
+`Accepted-for` is the tip of `main` after PR #112 (lakehouse-p2-silver). Chain 2 of the owner-approved hardening
 programme (plan-mode approval 2026-10-28). Opened after the peer's P2 PR per the one-chain rule; rebased if P2 merges first.
 
 ## Files changed
@@ -23,8 +23,8 @@ programme (plan-mode approval 2026-10-28). Opened after the peer's P2 PR per the
 5. Docs: `CHANGELOG.md`, `docs/test-reports/feature-49-hardening-2-limits-and-visibility.md` (new), `docs/test-reports/README.md`,
    `SECURITY.md`
 6. SDLC: `intent/hardening-2-limits-and-visibility/intent.md`, `intent/hardening-2-limits-and-visibility/spec.md`,
-   `intent/hardening-2-limits-and-visibility/plan.md`, `.sdlc/active`, `intent/ci-dependabot-tamed/intent.md`,
-   `intent/ci-dependabot-tamed/spec.md`, `intent/ci-dependabot-tamed/plan.md` (→ shipped)
+   `intent/hardening-2-limits-and-visibility/plan.md`, `.sdlc/active`, `intent/lakehouse-p2-silver/intent.md`,
+   `intent/lakehouse-p2-silver/spec.md`, `intent/lakehouse-p2-silver/plan.md` (→ shipped; #112 already shipped `ci-dependabot-tamed`)
 
 ## Order
 limits (API/Athena/usage) → registry redaction + caps → retention/log groups/alarms/CloudFront logs → gate from base →

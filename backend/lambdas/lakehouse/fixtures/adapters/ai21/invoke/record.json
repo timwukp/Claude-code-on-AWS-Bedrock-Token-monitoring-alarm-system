@@ -1,0 +1,49 @@
+{
+ "schemaType": "ModelInvocationLog",
+ "schemaVersion": "1.0",
+ "timestamp": "2026-10-28T10:00:00Z",
+ "accountId": "123456789012",
+ "region": "us-east-1",
+ "requestId": "req-1",
+ "operation": "InvokeModel",
+ "modelId": "ai21.jamba-1-5-large-v1:0",
+ "identity": {
+  "arn": "arn:aws:iam::123456789012:user/demo"
+ },
+ "input": {
+  "inputContentType": "application/json",
+  "inputBodyJson": {
+   "messages": [
+    {
+     "role": "user",
+     "content": "[redacted]"
+    }
+   ]
+  },
+  "inputTokenCount": 21,
+  "cacheReadInputTokenCount": 0,
+  "cacheWriteInputTokenCount": 0
+ },
+ "output": {
+  "outputContentType": "application/json",
+  "outputBodyJson": {
+   "id": "j",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "[redacted]"
+     },
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 21,
+    "completion_tokens": 7,
+    "total_tokens": 28
+   }
+  },
+  "outputTokenCount": 7
+ }
+}

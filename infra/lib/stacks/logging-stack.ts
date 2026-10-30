@@ -3,6 +3,7 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
+import * as cr from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
 import { EnvConfig } from '../config';
 
@@ -31,24 +32,39 @@ export class LoggingStack extends cdk.Stack {
     // Bedrock model invocation logging to S3 AND CloudWatch Logs. Field schema & path verified in docs.
     // The S3 destination stays until the aggregator reads from the lakehouse; the CloudWatch destination
     // feeds Firehose → bronze and routes large bodies away from any table prefix (qa F-PR75-001).
-    new cdk.CfnResource(this, 'ModelInvocationLogging', {
-      type: 'AWS::Bedrock::ModelInvocationLoggingConfiguration',
-      // NOTE: as of writing, enabling logging is commonly done via
-      // `aws bedrock put-model-invocation-logging-configuration` (see docs/MONITORING_APPROACH.md).
-      // If the L1 resource is unavailable in your CDK version, run the CLI step in scripts/.
-      properties: {
-        LoggingConfig: {
-          S3Config: { BucketName: rawLogBucket.bucketName, KeyPrefix: 'model-logs/' },
-          CloudWatchConfig: {
-            LogGroupName: bedrockLogGroup.logGroupName,
-            RoleArn: bedrockLogsRole.roleArn,
-            LargeDataDeliveryS3Config: { BucketName: bodiesBucket.bucketName, KeyPrefix: 'bodies/' },
-          },
-          TextDataDeliveryEnabled: true,
-          EmbeddingDataDeliveryEnabled: false,
-          ImageDataDeliveryEnabled: false,
-        },
+    // There is NO CloudFormation type for this ("AWS::Bedrock::ModelInvocationLoggingConfiguration" is
+    // rejected as unrecognised — the reason this stack had never deployed), so the account-level
+    // setting is applied through the API on create and update. Deliberately no onDelete: tearing a
+    // stack down must never switch invocation logging off.
+    const loggingConfig = {
+      s3Config: { bucketName: rawLogBucket.bucketName, keyPrefix: 'model-logs/' },
+      cloudWatchConfig: {
+        logGroupName: bedrockLogGroup.logGroupName,
+        roleArn: bedrockLogsRole.roleArn,
+        largeDataDeliveryS3Config: { bucketName: bodiesBucket.bucketName, keyPrefix: 'bodies/' },
       },
+      textDataDeliveryEnabled: true,
+      imageDataDeliveryEnabled: false,
+      embeddingDataDeliveryEnabled: false,
+      videoDataDeliveryEnabled: true,
+    };
+    const putLogging = {
+      service: 'Bedrock',
+      action: 'putModelInvocationLoggingConfiguration',
+      parameters: { loggingConfig },
+      physicalResourceId: cr.PhysicalResourceId.of(`bedrock-invocation-logging-${cfg.env}`),
+    };
+    new cr.AwsCustomResource(this, 'ModelInvocationLogging', {
+      resourceType: 'Custom::AWS',
+      onCreate: putLogging,
+      onUpdate: putLogging,
+      installLatestAwsSdk: false,
+      policy: cr.AwsCustomResourcePolicy.fromStatements([
+        new iam.PolicyStatement({ actions: ['bedrock:PutModelInvocationLoggingConfiguration', 'bedrock:GetModelInvocationLoggingConfiguration'], resources: ['*'] }),
+        // Bedrock validates the CloudWatch role at PUT time and attaches bucket policies on the caller's behalf.
+        new iam.PolicyStatement({ actions: ['iam:PassRole'], resources: [bedrockLogsRole.roleArn] }),
+        new iam.PolicyStatement({ actions: ['s3:GetBucketPolicy', 's3:PutBucketPolicy'], resources: [rawLogBucket.bucketArn, bodiesBucket.bucketArn] }),
+      ]),
     });
 
     // CloudTrail — management events captured by default; trail persists them to S3. Accounts that

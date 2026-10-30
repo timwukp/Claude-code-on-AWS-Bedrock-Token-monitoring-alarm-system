@@ -1,0 +1,8 @@
+{
+ "vendor": "amazon",
+ "api_family": "embeddings",
+ "token_source": "envelope",
+ "input_tokens": 6,
+ "output_tokens": 0,
+ "modality": "embedding"
+}

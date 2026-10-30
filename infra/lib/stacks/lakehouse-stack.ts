@@ -19,6 +19,7 @@ import { EnvConfig } from '../config';
 import { DataTables } from './data-stack';
 import { BACKEND_ROOT, BACKEND_LOCK, lambdaEntry } from './paths';
 import { glueType, icebergFields, loadLakehouseSpecs } from '../lakehouse/spec';
+import { LakehouseSilver } from './lakehouse-silver';
 
 interface Props extends cdk.StackProps {
   cfg: EnvConfig;
@@ -26,6 +27,9 @@ interface Props extends cdk.StackProps {
   tables: DataTables;
   alertTopic: sns.ITopic;
   curatedBucket: s3.Bucket;
+  athena: { workgroupName: string; resultsBucket: s3.IBucket };
+  /** Override for tests: directory of silver_*.sql / quality_*.sql (default spec/lakehouse/sql). */
+  sqlDir?: string;
 }
 
 /**
@@ -49,7 +53,7 @@ export class LakehouseStack extends cdk.Stack {
 
   constructor(scope: Construct, id: string, props: Props) {
     super(scope, id, props);
-    const { cfg, dataKey, tables, alertTopic, curatedBucket } = props;
+    const { cfg, dataKey, tables, alertTopic, curatedBucket, athena } = props;
     const lh = cfg.lakehouse ?? { smusDomainId: '', smusProjectId: '', ownerPrincipalArn: '' };
     const specs = loadLakehouseSpecs();
     const tableBucketName = `tums-lakehouse-${cfg.env}`;
@@ -131,7 +135,7 @@ export class LakehouseStack extends cdk.Stack {
     }));
 
     const bronzeTables: Record<string, s3tables.CfnTable> = {};
-    for (const spec of specs.filter((s) => s.lakehouse.storage === 's3tables')) {
+    for (const spec of specs.filter((s) => s.lakehouse.storage === 's3tables' && s.lakehouse.layer === 'bronze')) {
       const fields = icebergFields(spec);
       const partitionCol = spec.lakehouse.partition[0];
       const sourceId = fields.findIndex((f) => f.name === partitionCol) + 1; // Iceberg field ids are 1-based, in schema order
@@ -166,9 +170,12 @@ export class LakehouseStack extends cdk.Stack {
         },
       }),
     });
+    // LogGroup.logGroupArn ends in ':*'; the stream ARN must be built from the bare group ARN or the
+    // resource reads '…:*:log-stream:…' and Bedrock rejects the role (dev was hand-fixed on 2026-10-29).
+    const bedrockLogGroupBareArn = cdk.Fn.select(0, cdk.Fn.split(':*', this.bedrockLogGroup.logGroupArn));
     this.bedrockLogsRole.addToPolicy(new iam.PolicyStatement({
       actions: ['logs:CreateLogStream', 'logs:PutLogEvents'],
-      resources: [`${this.bedrockLogGroup.logGroupArn}:log-stream:aws/bedrock/modelinvocations`],
+      resources: [`${bedrockLogGroupBareArn}:log-stream:aws/bedrock/modelinvocations`],
     }));
 
     // --- Transform Lambdas (Firehose processors): envelope → typed bronze rows + routing ---------
@@ -190,6 +197,9 @@ export class LakehouseStack extends cdk.Stack {
           TABLE_INVOCATIONS: 'bedrock_invocations',
           TABLE_SPANS: 'otel_spans',
           TABLE_METRICS: 'cw_metrics',
+          SILVER_DATABASE: 'silver',
+          TABLE_SILVER_INVOCATIONS: 'invocations',
+          TABLE_ADAPTER_AUDIT: 'adapter_audit',
           STREAM_NAME: streamName,
           BEDROCK_LOG_GROUP: this.bedrockLogGroup.logGroupName,
           SPANS_LOG_GROUP: 'aws/spans',
@@ -211,18 +221,19 @@ export class LakehouseStack extends cdk.Stack {
     dataKey.grantEncryptDecrypt(firehoseRole);
     bedrockTransformFn.grantInvoke(firehoseRole);
     metricsTransformFn.grantInvoke(firehoseRole);
+    // The S3 Tables federated catalog is addressed at three levels (root catalog, `s3tablescatalog`,
+    // `s3tablescatalog/<bucket>`); Firehose and the silver jobs resolve tables through all of them.
+    const glueCatalogResources = [
+      `arn:aws:glue:${cfg.region}:${cfg.account}:catalog`,
+      `arn:aws:glue:${cfg.region}:${cfg.account}:catalog/s3tablescatalog`,
+      catalogArn,
+      `${catalogArn}/*`,
+      `arn:aws:glue:${cfg.region}:${cfg.account}:database/s3tablescatalog/${tableBucketName}/*`,
+      `arn:aws:glue:${cfg.region}:${cfg.account}:table/s3tablescatalog/${tableBucketName}/*/*`,
+    ];
     firehoseRole.addToPolicy(new iam.PolicyStatement({
       actions: ['glue:GetTable', 'glue:GetTables', 'glue:GetDatabase', 'glue:GetDatabases', 'glue:UpdateTable', 'glue:GetCatalog', 'glue:GetCatalogs'],
-      // The S3 Tables federated catalog is addressed at three levels (root catalog, `s3tablescatalog`,
-      // `s3tablescatalog/<bucket>`); Firehose resolves the table through all of them.
-      resources: [
-        `arn:aws:glue:${cfg.region}:${cfg.account}:catalog`,
-        `arn:aws:glue:${cfg.region}:${cfg.account}:catalog/s3tablescatalog`,
-        catalogArn,
-        `${catalogArn}/*`,
-        `arn:aws:glue:${cfg.region}:${cfg.account}:database/s3tablescatalog/${tableBucketName}/*`,
-        `arn:aws:glue:${cfg.region}:${cfg.account}:table/s3tablescatalog/${tableBucketName}/*/*`,
-      ],
+      resources: glueCatalogResources,
     }));
     firehoseRole.addToPolicy(new iam.PolicyStatement({
       actions: [
@@ -237,19 +248,20 @@ export class LakehouseStack extends cdk.Stack {
 
     // Lake Formation: the Firehose role writes bronze; the owner may read it; nobody else.
     const lfGrants: lakeformation.CfnPrincipalPermissions[] = [];
-    const grant = (idName: string, principal: string, table: string | null, permissions: string[]) => {
+    const grantIn = (idName: string, principal: string, db: string, table: string | null, permissions: string[]) => {
       const p = new lakeformation.CfnPrincipalPermissions(this, idName, {
         principal: { dataLakePrincipalIdentifier: principal },
         permissions,
         permissionsWithGrantOption: [],
         resource: table
-          ? { table: { catalogId: lfCatalogId, databaseName: 'bronze', name: table } }
-          : { database: { catalogId: lfCatalogId, name: 'bronze' } },
+          ? { table: { catalogId: lfCatalogId, databaseName: db, name: table } }
+          : { database: { catalogId: lfCatalogId, name: db } },
       });
       for (const t of Object.values(bronzeTables)) p.addDependency(t);
       lfGrants.push(p);
       return p;
     };
+    const grant = (idName: string, principal: string, table: string | null, permissions: string[]) => grantIn(idName, principal, 'bronze', table, permissions);
     grant('LfFirehoseBronzeDb', firehoseRole.roleArn, null, ['DESCRIBE']);
     for (const name of Object.keys(bronzeTables)) {
       const pascal = name.split('_').map((w) => w[0].toUpperCase() + w.slice(1)).join('');
@@ -258,11 +270,33 @@ export class LakehouseStack extends cdk.Stack {
     }
     if (lh.ownerPrincipalArn) grant('LfOwnerBronzeDb', lh.ownerPrincipalArn, null, ['DESCRIBE']);
 
+    // --- Silver (P2): tables, jobs role, Lambdas, hourly Step Functions, optional SMUS publish ------
+    const silver = new LakehouseSilver(this, 'Silver', {
+      cfg, dataKey, tableBucket, tableBucketName, catalogArn, lfCatalogId, bronzeTables,
+      silverNamespace: namespaces.silver,
+      silverSpecs: specs.filter((s) => s.lakehouse.storage === 's3tables' && s.lakehouse.layer === 'silver'),
+      tenantsTable: tables.tenants, athena, glueCatalogResources, sqlDir: props.sqlDir, grant: grantIn,
+    });
+    const silverDeps = [...Object.values(silver.silverTables)];
+    // The transform also writes silver.invocations / silver.adapter_audit; the owner reads all silver.
+    grantIn('LfFirehoseSilverDb', firehoseRole.roleArn, 'silver', null, ['DESCRIBE']);
+    for (const name of ['invocations', 'adapter_audit']) {
+      const g = grantIn(`LfFirehoseSilver${name.split('_').map((w) => w[0].toUpperCase() + w.slice(1)).join('')}`, firehoseRole.roleArn, 'silver', name, ['ALL']);
+      for (const t of silverDeps) g.addDependency(t);
+    }
+    if (lh.ownerPrincipalArn) {
+      grantIn('LfOwnerSilverDb', lh.ownerPrincipalArn, 'silver', null, ['DESCRIBE']);
+      for (const name of Object.keys(silver.silverTables)) {
+        const g = grantIn(`LfOwnerSilver${name.split('_').map((w) => w[0].toUpperCase() + w.slice(1)).join('')}`, lh.ownerPrincipalArn, 'silver', name, ['SELECT', 'DESCRIBE']);
+        for (const t of silverDeps) g.addDependency(t);
+      }
+    }
+
     // Firehose's Iceberg destination wants ONE JSON object per record and accepts ONLY the Lambda
     // processor ("DecompressionProcessor is currently only supported for destination type S3, Splunk
     // and Snowflake" — dev deploy 2026-10-28). The transform Lambda therefore unpacks the gzip'd
     // CloudWatch Logs envelope itself and re-ingests the overflow rows (see transform.ts).
-    const stream = (idName: string, name: string, destinations: string[], fn: lambda.IFunction) => {
+    const stream = (idName: string, name: string, destinations: Array<[string, string]>, fn: lambda.IFunction) => {
       const processors = [{
         type: 'Lambda',
         parameters: [
@@ -277,8 +311,8 @@ export class LakehouseStack extends cdk.Stack {
         icebergDestinationConfiguration: {
           roleArn: firehoseRole.roleArn,
           catalogConfiguration: { catalogArn },
-          destinationTableConfigurationList: destinations.map((t) => ({
-            destinationDatabaseName: 'bronze', destinationTableName: t, s3ErrorOutputPrefix: `errors/${cfg.env}/${t}/`,
+          destinationTableConfigurationList: destinations.map(([db, t]) => ({
+            destinationDatabaseName: db, destinationTableName: t, s3ErrorOutputPrefix: `errors/${cfg.env}/${db}/${t}/`,
           })),
           appendOnly: true,
           bufferingHints: { intervalInSeconds: 60, sizeInMBs: 5 },
@@ -297,11 +331,14 @@ export class LakehouseStack extends cdk.Stack {
         },
       });
       for (const g of lfGrants) s.addDependency(g);
+      for (const g of silver.lfGrants) s.addDependency(g);
+      for (const t of silverDeps) s.addDependency(t);
       s.node.addDependency(firehoseRole);
       return s;
     };
-    const bedrockStream = stream('BedrockStream', bedrockStreamName, ['bedrock_invocations', 'otel_spans'], bedrockTransformFn);
-    const metricsStream = stream('MetricsStream', metricsStreamName, ['cw_metrics'], metricsTransformFn);
+    const bedrockStream = stream('BedrockStream', bedrockStreamName,
+      [['bronze', 'bedrock_invocations'], ['bronze', 'otel_spans'], ['silver', 'invocations'], ['silver', 'adapter_audit']], bedrockTransformFn);
+    const metricsStream = stream('MetricsStream', metricsStreamName, [['bronze', 'cw_metrics']], metricsTransformFn);
 
     // --- CloudWatch Logs → Firehose subscriptions -----------------------------------------------
     // CloudWatch Logs test-delivers to the stream while creating the filter, so the role's permission
@@ -472,6 +509,12 @@ export class LakehouseStack extends cdk.Stack {
       alarm(`${label}TransformErrorsAlarm`, fn.metricErrors({ period: cdk.Duration.minutes(5), statistic: 'Sum' }),
         0, cw.ComparisonOperator.GREATER_THAN_THRESHOLD, `Lakehouse ${label} transform Lambda (${cfg.env}) raised errors — records are landing in the Firehose error prefix.`);
     }
+    for (const [label, fn] of [['DimModelRefresh', silver.dimModelRefreshFn], ['RegistrySnapshot', silver.registrySnapshotFn], ['QualityGate', silver.qualityGateFn]] as const) {
+      alarm(`${label}ErrorsAlarm`, fn.metricErrors({ period: cdk.Duration.hours(1), statistic: 'Sum' }),
+        0, cw.ComparisonOperator.GREATER_THAN_THRESHOLD, `Lakehouse ${label} Lambda (${cfg.env}) failed — silver is stale or a quality gate tripped.`);
+    }
+    alarm('SilverSfnFailedAlarm', silver.stateMachine.metricFailed({ period: cdk.Duration.hours(1), statistic: 'Sum' }),
+      0, cw.ComparisonOperator.GREATER_THAN_THRESHOLD, `Lakehouse silver run (${cfg.env}) failed — a transform or quality gate did not pass; silver tables are not refreshed.`);
 
     new cdk.CfnOutput(this, 'TableBucketArn', { value: tableBucket.attrTableBucketArn });
     new cdk.CfnOutput(this, 'BedrockLogGroupName', { value: this.bedrockLogGroup.logGroupName });

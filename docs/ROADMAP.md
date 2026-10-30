@@ -67,8 +67,8 @@ Ordered by impact on a cost-governance rollout.
 |---|---|---|---|
 | 14 | **P0 — stabilise** (Full view on curated Parquet, ETL platform + alarm + incremental) | ✅ | #76 / #77; `docs/incidents/2026-10-athena-body-collision.md` |
 | 15 | **P1 — bronze** (S3 Tables, Firehose from the CloudWatch Logs destination, Metric Streams, OTel spans via Transaction Search, CUR 2.0, Lake Formation, SMUS data source) | ✅ | `intent/lakehouse-p1-bronze`; `docs/LAKEHOUSE.md` |
-| 16 | **P2 — silver** (OTel GenAI-semconv canonical `silver.invocations`, per-vendor adapters, attribution recompute, tenant normalisation, `dim_model`, OTel de-dup, Data Quality) | ⏳ | next chain |
-| 17 | **P3 — gold** (cost by project×model, bill-vs-logged incl. Mantle, latency by route, cache churn, DORA×cost, unattributed callers; Full view + `/v1/queries` on silver/gold; QuickSight) | ⏳ | after P2 |
+| 16 | **P2 — silver** (OTel GenAI-semconv canonical `silver.invocations`, per-vendor adapters, attribution recompute, tenant normalisation, `dim_model`, OTel de-dup, quality gates) | ✅ | `intent/lakehouse-p2-silver`; `docs/LAKEHOUSE.md`, `docs/GOVERNANCE-ATTRIBUTION.md` |
+| 17 | **P3 — gold** (cost by project×model, bill-vs-logged incl. Mantle, latency by route, cache churn, DORA×cost, unattributed callers; Full view + `/v1/queries` on silver/gold; QuickSight) | ⏳ | next chain |
 | 18 | **ProjectDirectoryProvider** (optional Jira etc. as the source of project keys/owners; issue-key parser on DORA PRs) | 🔲 | [issue #78](https://github.com/timwukp/Claude-code-on-AWS-Bedrock-Token-monitoring-alarm-system/issues/78) — deferred until the lakehouse ships |
 
 ## Planned validation (by design — not defects)

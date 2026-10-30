@@ -14,10 +14,26 @@ describe('lakehouse spec → generated artefacts', () => {
     expect(fs.readFileSync(ROW_TYPES_TS, 'utf8')).toBe(renderRowTypes(tables));
   });
 
-  it('covers the four bronze tables', () => {
+  it('covers the four bronze and six silver tables', () => {
     expect(tables.map((t) => `${t.layer}.${t.table}`)).toEqual([
       'bronze.bedrock_invocations', 'bronze.cur_raw', 'bronze.cw_metrics', 'bronze.otel_spans',
+      'silver.adapter_audit', 'silver.bedrock_metrics_hourly', 'silver.bill_daily', 'silver.dim_model', 'silver.invocations', 'silver.project_registry',
     ]);
+  });
+
+  it('every silver table says when it was written, and silver.invocations carries no body or raw payload', () => {
+    for (const t of tables.filter((x) => x.layer === 'silver')) {
+      const names = new Set(t.columns.map((c) => c.name));
+      expect(names.has('ingest_ts') || names.has('refreshed_at') || names.has('snapshot_ts') || names.has('event_ts') || names.has('hour_ts')).toBe(true);
+      expect(t.storage).toBe('s3tables');
+    }
+    const inv = tables.find((t) => t.layer === 'silver' && t.table === 'invocations')!;
+    const names = inv.columns.map((c) => c.name);
+    for (const forbidden of ['raw', 'input_body_json', 'output_body_json', 'messages', 'prompt']) expect(names).not.toContain(forbidden);
+    expect(names).toContain('body_s3_path'); // the pointer is allowed; the body is not
+    for (const req of ['request_id', 'model_key', 'vendor', 'tenant_key', 'project_id', 'attribution_source', 'input_tokens', 'output_tokens', 'token_source']) {
+      expect(inv.columns.find((c) => c.name === req)!.required).toBe(true);
+    }
   });
 
   it('every S3 Tables bronze table keeps the producer record verbatim and says where/when it came from', () => {

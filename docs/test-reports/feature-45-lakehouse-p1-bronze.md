@@ -39,7 +39,25 @@
 | SDLC gate | PASS |
 | `cdk diff` dev | Data: KMS grant for S3 Tables maintenance + Glue DB `LocationUri`; **Lakehouse: new stack** (1 table bucket, 3 namespaces, 3 tables, 4 buckets, 2 Firehose, 2 Lambda, metric stream, CUR export, cur_raw, 2 zero-ETL, 8 LF grants, 6 alarms); Logging: new in dev (logging config with CloudWatch destination; no trail); Etl: env only |
 
-## Live — after the owner's deploy (to fill)
-- `cd scripts && npm install && ENV=dev npx ts-node lakehouse-smoke.ts` → 7 invocation rows + ≥1 metric row in bronze, errors bucket unchanged.
-- Real traffic: bronze.bedrock_invocations row count grows within minutes of a Bedrock call; `aws/spans` rows appear for OTel-instrumented callers.
-- CUR export: first Parquet under `cur2/tums-cur2-dev/data/BILLING_PERIOD=2026-10/` within 24 h; `SELECT count(*) FROM cur_raw`.
+## Live — deployed 2026-10-27 → 2026-10-29 (seven attempts, owner-authorised, run by the agent)
+| Attempt | Wall | Fix |
+|---|---|---|
+| 1 | `AWS::BCMDataExports::Export` "S3 bucket permission validation failed" — one Data Exports principal's SourceArn shape missing, no dependency on the bucket policy, KMS bucket | #81: both principals/patterns, export depends on the policy, SSE-S3 |
+| 2 | S3 Tables bucket name "in a transitional state" ~15 min after the rollback deleted it; RETAIN orphans (3 buckets, log group) | wait + delete the empty orphans (runbook) |
+| 3 | Lake Formation grants: "requester is not authorized" — the CDK exec role was not a data-lake admin | owner bootstrap: cfn-exec role added to the LF admins (runbook) |
+| 4 | Glue zero-ETL `IntegrationResourceProperty`: "glue connection ARN … is invalid" for a DynamoDB source | #82: zero-ETL behind `lakehouse.enableZeroEtl` (default off) |
+| 5 | Firehose: Iceberg destination accepts only the Lambda processor; role could not `glue:GetTable` through the federated catalog | #83: Lambda-only; Glue resources at every catalog level + `glue:GetCatalog` |
+| 6 | `AWS::Logs::SubscriptionFilter` test delivery: role policy not yet attached (IAM race) | #85: inline policies + explicit dependency |
+| 7 | **CREATE_COMPLETE** (main `fbeec40`, 2026-10-29) | — |
+
+Logging: `AWS::Bedrock::ModelInvocationLoggingConfiguration` is **not a CloudFormation type** ("Unrecognized resource
+types") — the reason `Tums-dev-Logging` had never deployed. The CloudWatch destination (log group + large-body bucket)
+was applied with the documented CLI (`put-model-invocation-logging-configuration`, S3 destination kept); the P2 chain
+replaces the fake resource with a CDK custom resource and fixes the Bedrock-logs role ARN (`logGroupArn` ends in `:*`).
+
+| Live check | Result |
+|---|---|
+| Smoke (`scripts/lakehouse-smoke.ts`) | **PASS** — 7/7 invocation rows (incl. the Responses-API array body that killed the Athena table), 1/1 metric, 0 error objects |
+| Real traffic within minutes | 21 invocation rows, 119 `AWS/Bedrock` datapoints, 571 OTel spans (`aws/spans`) |
+| Alarms | 6 / 6 OK |
+| CUR export | created (`tums-cur2-dev`); first Parquet expected within 24 h |

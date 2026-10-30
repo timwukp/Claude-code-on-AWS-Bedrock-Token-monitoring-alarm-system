@@ -70,9 +70,127 @@ export interface BronzeOtelSpansRow {
   raw: string;
 }
 
+/** silver.adapter_audit — Rows where a vendor adapter disagreed with the Bedrock envelope; the envelope won. */
+export interface SilverAdapterAuditRow {
+  event_ts: string;
+  event_day: string;
+  request_id: string;
+  vendor?: string | null;
+  api_family?: string | null;
+  field: string;
+  envelope_value?: string | null;
+  adapter_value?: string | null;
+}
+
+/** silver.bedrock_metrics_hourly — bronze.cw_metrics folded to the hour per namespace, metric, model and project dimension. */
+export interface SilverBedrockMetricsHourlyRow {
+  hour_ts: string;
+  hour_day: string;
+  namespace: string;
+  metric_name: string;
+  model_id?: string | null;
+  project?: string | null;
+  sum: number;
+  count: number;
+  min?: number | null;
+  max?: number | null;
+}
+
+/** silver.bill_daily — CUR 2.0 lines folded to day × usage type × model × kind × route. Source of truth for dollars. */
+export interface SilverBillDailyRow {
+  day: string;
+  usage_type: string;
+  model_key?: string | null;
+  kind: string;
+  route?: string | null;
+  region?: string | null;
+  line_item_type?: string | null;
+  usd: number;
+  qty?: number | null;
+  source: string;
+  refreshed_at: string;
+}
+
+/** silver.dim_model — Every model id the account can call, refreshed daily from bedrock list-foundation-models / list-inference-profiles / provisioned / custom / imported plus the rate card and Price List. */
+export interface SilverDimModelRow {
+  model_key: string;
+  vendor: string;
+  family?: string | null;
+  version?: string | null;
+  modality?: string | null;
+  input_modalities?: string | null;
+  output_modalities?: string | null;
+  lifecycle?: string | null;
+  price_status: string;
+  rate_card_key?: string | null;
+  refreshed_at: string;
+}
+
+/** silver.invocations — One row per model invocation, vendor-neutral. Vocabulary follows the OpenTelemetry GenAI semantic conventions (gen_ai.*) plus AWS extensions; a Bedrock log record and an OTel span for the same request_id merge into one row. No request/response bodies. */
+export interface SilverInvocationsRow {
+  event_ts: string;
+  event_day: string;
+  request_id: string;
+  source: string;
+  operation?: string | null;
+  api_family?: string | null;
+  model_id_raw: string;
+  model_key: string;
+  vendor: string;
+  family?: string | null;
+  version?: string | null;
+  modality?: string | null;
+  route?: string | null;
+  aip_arn?: string | null;
+  underlying_model_id?: string | null;
+  identity_arn?: string | null;
+  tenant_key: string;
+  caller_type?: string | null;
+  project_id: string;
+  attribution_source: string;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens?: number | null;
+  cache_write_tokens?: number | null;
+  cache_write_ttl?: string | null;
+  reasoning_tokens?: number | null;
+  tool_calls?: number | null;
+  finish_reason?: string | null;
+  latency_ms?: number | null;
+  ttft_ms?: number | null;
+  body_s3_path?: string | null;
+  token_source: string;
+  adapter_discrepancy?: boolean | null;
+  price_status?: string | null;
+  session_id?: string | null;
+  conversation_id?: string | null;
+  trace_id?: string | null;
+  span_id?: string | null;
+  service_name?: string | null;
+  ingest_ts: string;
+}
+
+/** silver.project_registry — Hourly snapshot of the TUMS project registry (REGISTRY#PROJECT / PROFILE / IDENTITY) so attribution can be recomputed in SQL. */
+export interface SilverProjectRegistryRow {
+  snapshot_ts: string;
+  project_id: string;
+  name?: string | null;
+  cost_center?: string | null;
+  repos?: string | null;
+  identity_arns?: string | null;
+  profile_arns?: string | null;
+  is_current: boolean;
+}
+
 export const LAKEHOUSE_TABLES = {
   BRONZE_BEDROCK_INVOCATIONS: { layer: 'bronze', table: 'bedrock_invocations' },
   BRONZE_CUR_RAW: { layer: 'bronze', table: 'cur_raw' },
   BRONZE_CW_METRICS: { layer: 'bronze', table: 'cw_metrics' },
   BRONZE_OTEL_SPANS: { layer: 'bronze', table: 'otel_spans' },
+  SILVER_ADAPTER_AUDIT: { layer: 'silver', table: 'adapter_audit' },
+  SILVER_BEDROCK_METRICS_HOURLY: { layer: 'silver', table: 'bedrock_metrics_hourly' },
+  SILVER_BILL_DAILY: { layer: 'silver', table: 'bill_daily' },
+  SILVER_DIM_MODEL: { layer: 'silver', table: 'dim_model' },
+  SILVER_INVOCATIONS: { layer: 'silver', table: 'invocations' },
+  SILVER_PROJECT_REGISTRY: { layer: 'silver', table: 'project_registry' },
 } as const;

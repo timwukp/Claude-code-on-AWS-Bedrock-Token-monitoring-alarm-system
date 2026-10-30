@@ -138,6 +138,8 @@ export interface EnvConfig {
     readonly enableTransactionSearch?: boolean;
     /** Glue zero-ETL mirrors of the DORA and registry tables (default off; see LakehouseStack). */
     readonly enableZeroEtl?: boolean;
+    /** Register the silver namespace as a DataZone/SMUS data source in the project (default off until proven on dev). */
+    readonly enableSmusPublish?: boolean;
   };
   readonly logging?: {
     /** Create the CloudTrail trail + bucket (default true). Set false in accounts that already run an organisation trail. */
