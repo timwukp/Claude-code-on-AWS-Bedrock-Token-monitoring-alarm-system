@@ -1,6 +1,6 @@
 # Feature 48 — Dependency updates tamed
 
-- **Chain:** `intent/ci-dependabot-tamed/` · **Branch:** `feat/ci-dependabot-tamed` off `main@74c13a8` (post-#84) · **PR:** TBD
+- **Chain:** `intent/ci-dependabot-tamed/` · **Branch:** `feat/ci-dependabot-tamed` off `main@74c13a8` (post-#84) · **PR:** #108
 - **Origin:** feature-47's `dependabot.yml` opened 22 PRs in its first run (#86–#107), eleven majors; five UI-QA-agent
   runs for `dependabot/**` branches were in flight within the hour and were cancelled by hand (2026-10-30).
 - **Verdict:** PASS on gates; behaviour verified on the next weekly run.
