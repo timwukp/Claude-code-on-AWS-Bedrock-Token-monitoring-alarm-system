@@ -36,7 +36,7 @@ const logging = new LoggingStack(app, `${prefix}-Logging`, {
   env, cfg, rawLogBucket: data.rawLogBucket,
   bedrockLogGroup: lakehouse.bedrockLogGroup, bedrockLogsRole: lakehouse.bedrockLogsRole, bodiesBucket: lakehouse.bodiesBucket,
 });
-const auth = new AuthStack(app, `${prefix}-Auth`, { env, cfg });
+const auth = new AuthStack(app, `${prefix}-Auth`, { env, cfg, alertTopic: automation.alertTopic });
 
 // Project cost attribution: tagged application inference profiles + opt-in enforcement (#13).
 new ProjectsStack(app, `${prefix}-Projects`, { env, cfg });
@@ -46,7 +46,7 @@ const dora = new DoraStack(app, `${prefix}-Dora`, { env, cfg, tables: data.table
 
 const api = new ApiStack(app, `${prefix}-Api`, {
   env, cfg, userPool: auth.userPool, tables: data.tables, athena: data.athena,
-  rawLogBucket: data.rawLogBucket, curatedBucket: data.curatedBucket, dataKey: data.dataKey,
+  rawLogBucket: data.rawLogBucket, curatedBucket: data.curatedBucket, dataKey: data.dataKey, alertTopic: automation.alertTopic,
   dora: { collectorFn: dora.collectorFn, githubSecret: dora.githubSecret },
 });
 

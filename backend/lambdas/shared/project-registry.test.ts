@@ -8,7 +8,7 @@ describe('validateProject', () => {
         name: ' Token Usage Monitoring ',
         costCenter: 'CC-1',
         repos: ['TimWukp/Repo-One', 'timwukp/repo-one', 'o/b'],
-        identityArns: ['arn:aws:iam::1:user/Alice', 'ARN:AWS:IAM::1:USER/ALICE'],
+        identityArns: ['arn:aws:iam::111122223333:user/Alice', 'ARN:AWS:IAM::111122223333:USER/ALICE'],
       },
       'admin@example.com',
     );
@@ -18,7 +18,7 @@ describe('validateProject', () => {
       sk: 'token-monitoring',
       name: 'Token Usage Monitoring',
       repos: ['timwukp/repo-one', 'o/b'],
-      identityArns: ['arn:aws:iam::1:user/alice'],
+      identityArns: ['arn:aws:iam::111122223333:user/alice'],
       addedBy: 'admin@example.com',
     });
   });
@@ -27,6 +27,15 @@ describe('validateProject', () => {
     expect(validateProject({ id: '-leading', name: 'x' }, 't').error).toMatch(/id must match/);
     expect(validateProject({ id: 'ok', name: '' }, 't').error).toBe('name is required');
     expect(validateProject({ id: 'ok', name: 'x', repos: ['not a repo'] }, 't').error).toMatch(/owner\/name/);
+    // feature-49: dot segments would be normalised away inside a GitHub API URL (`repos/../user`)
+    expect(validateProject({ id: 'ok', name: 'x', repos: ['../user'] }, 't').error).toMatch(/owner\/name/);
+    expect(validateProject({ id: 'ok', name: 'x', repos: ['owner/..'] }, 't').error).toMatch(/owner\/name/);
+    // caps and ARN shape
+    expect(validateProject({ id: 'ok', name: 'x'.repeat(121) }, 't').error).toMatch(/at most 120/);
+    expect(validateProject({ id: 'ok', name: 'x', repos: Array.from({ length: 51 }, (_, i) => `o/r${i}`) }, 't').error).toMatch(/at most 50 repos/);
+    expect(validateProject({ id: 'ok', name: 'x', identityArns: ['not-an-arn'] }, 't').error).toMatch(/IAM or STS principal/);
+    expect(validateProject({ id: 'ok', name: 'x', identityArns: ['arn:aws:iam::111122223333:role/CiRunner', 'arn:aws:sts::111122223333:assumed-role/Agent/session-1', 'arn:aws:iam::111122223333:user/alice'] }, 't').project!.identityArns).toHaveLength(3);
+    expect(validateProject({ id: 'ok', name: 'x', identityArns: ['arn:aws:s3:::bucket'] }, 't').error).toMatch(/IAM or STS principal/);
   });
 });
 

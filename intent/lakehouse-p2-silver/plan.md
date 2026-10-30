@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** a7f6ff78c5ce082e9c2ed99e14451bf1dac25bc1
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #111 (dependabot minors; #108 ci-dependabot-tamed before it). Nothing else is in flight.
 

@@ -112,7 +112,7 @@ export type ProjectRoiConfig = Record<string, unknown>;
 export type DoraWindow = 7 | 30 | 90;
 export interface RegistryProject {
   projectId: string; name: string; costCenter: string | null; repos: string[];
-  identityArns: string[]; addedBy: string; addedAt: string; seeded: boolean;
+  identityArns: string[]; identityArnCount?: number; addedBy: string | null; addedAt: string; seeded: boolean;
   roi?: ProjectRoiConfig | null;
 }
 export interface DoraProjectRow {

@@ -104,6 +104,66 @@ describe('security invariants', () => {
     });
   });
 
+  describe('limits, retention and alarms (audit #6/#15, feature-49)', () => {
+    it('the API stage is throttled, access-logged, and the Athena-starting routes are throttled harder', () => {
+      t('api').hasResourceProperties('AWS::ApiGateway::Stage', Match.objectLike({
+        MethodSettings: Match.arrayWith([
+          Match.objectLike({ HttpMethod: '*', ResourcePath: '/*', ThrottlingRateLimit: 20, ThrottlingBurstLimit: 40 }),
+          Match.objectLike({ HttpMethod: 'POST', ResourcePath: '/~1v1~1queries', ThrottlingRateLimit: 2, ThrottlingBurstLimit: 5 }),
+        ]),
+        AccessLogSetting: Match.objectLike({ DestinationArn: Match.anyValue() }),
+      }));
+    });
+    it('a single Athena query cannot scan more than 10 GB', () => {
+      t('data').hasResourceProperties('AWS::Athena::WorkGroup', Match.objectLike({
+        WorkGroupConfiguration: Match.objectLike({ BytesScannedCutoffPerQuery: 10 * 1024 ** 3, EnforceWorkGroupConfiguration: true }),
+      }));
+    });
+    it('every versioned bucket expires non-current versions and aborts stale multipart uploads', () => {
+      const buckets = Object.values(t('data').findResources('AWS::S3::Bucket')) as Array<{ Properties: any }>; // eslint-disable-line @typescript-eslint/no-explicit-any -- CloudFormation JSON
+      for (const b of buckets) {
+        const rules = b.Properties.LifecycleConfiguration?.Rules ?? [];
+        expect(rules.some((r: any) => r.NoncurrentVersionExpiration?.NoncurrentDays === 1 && r.AbortIncompleteMultipartUpload?.DaysAfterInitiation === 7)).toBe(true); // eslint-disable-line @typescript-eslint/no-explicit-any
+      }
+    });
+    it('every Lambda in the API/Etl/Automation/Dora stacks writes to a log group with finite retention', () => {
+      for (const s of ['api', 'etl', 'automation', 'dora'] as const) {
+        const tpl = t(s);
+        const fns = Object.values(tpl.findResources('AWS::Lambda::Function')) as Array<{ Properties: any }>; // eslint-disable-line @typescript-eslint/no-explicit-any
+        const groups = Object.values(tpl.findResources('AWS::Logs::LogGroup')) as Array<{ Properties: any }>; // eslint-disable-line @typescript-eslint/no-explicit-any
+        // Our own functions use `index.handler`; CDK's custom-resource providers (framework.onEvent, auto-delete) are exempt.
+        const appFns = Object.entries(tpl.findResources('AWS::Lambda::Function')).filter(([, f]: any) => f.Properties.Runtime?.startsWith('nodejs') && f.Properties.Handler === 'index.handler'); // eslint-disable-line @typescript-eslint/no-explicit-any
+        const missing = appFns.filter(([, f]: any) => !f.Properties.LoggingConfig?.LogGroup).map(([id]) => id); // eslint-disable-line @typescript-eslint/no-explicit-any
+        expect(missing).toEqual([]);
+        // …and the group each function points at has a finite retention.
+        const allGroups = tpl.findResources('AWS::Logs::LogGroup') as Record<string, { Properties: any }>; // eslint-disable-line @typescript-eslint/no-explicit-any
+        for (const [id, f] of appFns as Array<[string, any]>) { // eslint-disable-line @typescript-eslint/no-explicit-any
+          const ref = f.Properties.LoggingConfig.LogGroup?.Ref;
+          expect(ref && allGroups[ref]?.Properties.RetentionInDays).toBeTruthy();
+          void id;
+        }
+        void fns; void groups;
+      }
+    });
+    it('alarms exist for API 5XX, the two Etl jobs, the anomaly responder and Cognito sign-in throttles', () => {
+      const names = (s: 'api' | 'etl' | 'automation' | 'auth') => Object.keys(t(s).findResources('AWS::CloudWatch::Alarm'));
+      expect(names('api').some((n) => n.startsWith('Api5xxAlarm'))).toBe(true);
+      expect(names('etl').some((n) => n.startsWith('AggregatorErrors'))).toBe(true);
+      expect(names('etl').some((n) => n.startsWith('BillCollectorErrors'))).toBe(true);
+      expect(names('automation').some((n) => n.startsWith('AnomalyResponseErrors'))).toBe(true);
+      expect(names('auth').some((n) => n.startsWith('SignInThrottlesAlarm'))).toBe(true);
+    });
+    it('CloudFront writes viewer logs', () => {
+      t('frontend').hasResourceProperties('AWS::CloudFront::Distribution', { DistributionConfig: Match.objectLike({ Logging: Match.objectLike({ Prefix: 'cloudfront/' }) }) });
+    });
+    it('containment refuses a config where a target is also never-contain, or is not a role', () => {
+      const base = { ...cfg, enableAutoContainment: true, enforcement: { budgetActionThresholdPct: 90, budgetActionRoleArns: ['arn:aws:iam::111122223333:role/Target'], neverContainArns: ['arn:aws:sts::111122223333:assumed-role/Target/s'] } } as typeof cfg;
+      expect(() => synthApp(base).app.synth()).toThrow(/both a containment target and in neverContainArns/);
+      const user = { ...cfg, enableAutoContainment: true, enforcement: { budgetActionThresholdPct: 90, budgetActionRoleArns: ['arn:aws:iam::111122223333:user/alice'] } } as typeof cfg;
+      expect(() => synthApp(user).app.synth()).toThrow(/not an IAM role ARN/);
+    });
+  });
+
   describe('IAM wildcards are confined to actions that cannot be scoped', () => {
     // Actions AWS documents as not resource-scopable, plus ecs:StopTask which CDK's EcsRunTask(.sync) integration emits on `*`. Anything else on `*` fails.
     const SCOPELESS = /^(cloudwatch:(GetMetricData|ListMetrics|GetMetricStatistics)|ce:GetCostAndUsage|servicequotas:ListServiceQuotas|bedrock:(ListInferenceProfiles|ListFoundationModels)|xray:(Put.*|GetSamplingRules|GetSamplingTargets)|ecr:GetAuthorizationToken|lakeformation:GetDataAccess|ecs:(DescribeTasks|StopTask)|sts:GetCallerIdentity|pricing:GetProducts)$/;

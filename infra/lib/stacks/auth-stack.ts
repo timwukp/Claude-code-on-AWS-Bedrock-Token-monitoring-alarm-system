@@ -1,10 +1,15 @@
 import * as cdk from 'aws-cdk-lib';
+import * as cwActions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import { Construct } from 'constructs';
 import { EnvConfig } from '../config';
 
 interface Props extends cdk.StackProps {
   cfg: EnvConfig;
+  /** Sign-in throttling (credential stuffing / brute force) alarms here (feature-49). */
+  alertTopic?: sns.ITopic;
 }
 
 /**
@@ -48,6 +53,14 @@ export class AuthStack extends cdk.Stack {
       preventUserExistenceErrors: true, // no username enumeration through error messages
       disableOAuth: true,
     });
+
+    if (props.alertTopic) {
+      new cloudwatch.Metric({
+        namespace: 'AWS/Cognito', metricName: 'SignInThrottles', statistic: 'Sum', period: cdk.Duration.minutes(5),
+        dimensionsMap: { UserPool: this.userPool.userPoolId, UserPoolClient: this.userPoolClient.userPoolClientId },
+      }).createAlarm(this, 'SignInThrottlesAlarm', { threshold: 10, evaluationPeriods: 1, alarmDescription: `TUMS ${cfg.env}: ≥ 10 throttled sign-ins in 5 min`, treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING })
+        .addAlarmAction(new cwActions.SnsAction(props.alertTopic));
+    }
 
     // Members of this group may manage DORA target repos (POST/DELETE /v1/dora/repos…). The API
     // checks the `cognito:groups` claim server-side; the UI merely hides the admin controls.

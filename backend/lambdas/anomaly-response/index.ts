@@ -1,8 +1,8 @@
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { IAMClient, AttachRolePolicyCommand, AttachUserPolicyCommand } from '@aws-sdk/client-iam';
-import { decideContainment } from './containment';
+import { decideContainment, normalizePrincipal } from './containment';
 import { anomalyPk, anomalySk } from '../shared/anomaly-key';
 
 const sns = new SNSClient({});
@@ -15,6 +15,10 @@ const AUTO_CONTAINMENT = process.env.ENABLE_AUTO_CONTAINMENT === 'true';
 const DENY_POLICY_ARN = process.env.DENY_POLICY_ARN;
 // Principals that must never be contained (admins, this Lambda's own role). Comma-separated ARNs.
 const CONTAINMENT_ALLOWLIST = (process.env.CONTAINMENT_ALLOWLIST ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+// The roles the deny policy may be attached to (the stack grants iam:Attach*Policy on exactly these).
+const CONTAINMENT_TARGETS = (process.env.CONTAINMENT_TARGETS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+const CONTAINMENT_MIN_EVENTS = Math.max(1, Number(process.env.CONTAINMENT_MIN_EVENTS ?? '3') || 3);
+const CONTAINMENT_WINDOW_MIN = Math.max(1, Number(process.env.CONTAINMENT_WINDOW_MIN ?? '10') || 10);
 
 type Severity = 'CRITICAL' | 'WARNING' | 'INFO';
 
@@ -60,11 +64,32 @@ export const handler = async (event: any): Promise<void> => {
  * enabled, parseable, not allow-listed, and a deny policy is configured. Conservative by design
  * to avoid self-lockout; failures are logged + alerted, never thrown (best-effort containment).
  */
+/** Count this principal's AccessDenied events in the rolling window (counter item with TTL in the anomalies table). */
+async function countRecentDenials(principalArn: string): Promise<number> {
+  const key = normalizePrincipal(principalArn);
+  const res = await ddb.send(new UpdateCommand({
+    TableName: ANOMALIES_TABLE,
+    Key: { pk: `CONTAIN#${key}`, sk: 'window' },
+    UpdateExpression: 'SET expiresAt = if_not_exists(expiresAt, :x), lastAt = :t ADD #n :one',
+    ExpressionAttributeNames: { '#n': 'count' },
+    ExpressionAttributeValues: { ':x': Math.floor(Date.now() / 1000) + CONTAINMENT_WINDOW_MIN * 60, ':t': new Date().toISOString(), ':one': 1 },
+    ReturnValues: 'ALL_NEW',
+  }));
+  const expiresAt = Number(res.Attributes?.expiresAt ?? 0);
+  // TTL deletion lags; a stale window counts as fresh.
+  return expiresAt < Math.floor(Date.now() / 1000) ? 1 : Number(res.Attributes?.count ?? 1);
+}
+
 async function maybeContain(principalArn: string, eventTime: string): Promise<void> {
+  const enabled = AUTO_CONTAINMENT && !!DENY_POLICY_ARN;
+  const recentEvents = enabled ? await countRecentDenials(principalArn).catch(() => 1) : 1;
   const decision = decideContainment({
-    enabled: AUTO_CONTAINMENT && !!DENY_POLICY_ARN,
+    enabled,
     principalArn,
     allowList: CONTAINMENT_ALLOWLIST,
+    targets: CONTAINMENT_TARGETS,
+    recentEvents,
+    minEvents: CONTAINMENT_MIN_EVENTS,
   });
   if (!decision.act || !decision.target) {
     console.log(`Containment skipped: ${decision.reason}`);

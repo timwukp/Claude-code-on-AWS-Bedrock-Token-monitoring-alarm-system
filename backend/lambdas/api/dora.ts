@@ -36,6 +36,8 @@ const AGGREGATES_TABLE = process.env.AGGREGATES_TABLE;
 const COLLECTOR = process.env.DORA_COLLECTOR_FUNCTION_NAME;
 const WINDOWS = [7, 30, 90] as const;
 const REPO_RE = /^[\w.-]+\/[\w.-]+$/;
+/** `..`/`.` segments pass REPO_RE but would be normalised away inside a GitHub API URL (`repos/../user`). */
+const validRepo = (r: string): boolean => REPO_RE.test(r) && !r.split('/').some((seg) => /^\.+$/.test(seg));
 const DAY = 86_400_000;
 
 export interface RepoSummary {
@@ -171,7 +173,7 @@ async function addRepo(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResu
   let body: { repo?: unknown } = {};
   try { body = JSON.parse(event.body ?? '{}'); } catch { return badRequest('Body must be JSON'); }
   const repo = String(body.repo ?? '').trim().replace(/^https?:\/\/github\.com\//i, '').replace(/\.git$/, '').replace(/\/+$/, '');
-  if (!REPO_RE.test(repo)) return badRequest('repo must look like "owner/name"');
+  if (!validRepo(repo)) return badRequest('repo must look like "owner/name"');
 
   // Confirm the repo exists (and learn its default branch) when a token is available.
   let gh: GhRepo | { full_name: string; default_branch?: string } = { full_name: repo };
@@ -198,7 +200,7 @@ function repoFromPath(event: APIGatewayProxyEvent): string | null {
   const name = event.pathParameters?.name;
   if (!owner || !name) return null;
   const repo = `${decodeURIComponent(owner)}/${decodeURIComponent(name)}`;
-  return REPO_RE.test(repo) ? repo : null;
+  return validRepo(repo) ? repo : null;
 }
 
 async function deleteRepo(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
@@ -241,7 +243,7 @@ async function metrics(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResu
   const windowDays = parseWindow(q.window ?? undefined);
   if (windowDays == null) return badRequest(`window must be one of ${WINDOWS.join(', ')}`);
   const repoParam = (q.repo ?? '').trim();
-  if (!REPO_RE.test(repoParam)) return badRequest('repo query parameter must look like "owner/name"');
+  if (!validRepo(repoParam)) return badRequest('repo query parameter must look like "owner/name"');
   const repo = await store.getRepo(repoParam);
   if (!repo) return notFound(`${repoParam} is not tracked`);
 

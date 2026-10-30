@@ -61,9 +61,14 @@ export class DataStack extends cdk.Stack {
         enforceSSL: true,
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
         versioned: true,
-        lifecycleRules: expireDays
-          ? [{ expiration: cdk.Duration.days(expireDays), transitions: [] }]
-          : undefined,
+        // Versioned buckets keep deleted/overwritten objects as non-current versions forever unless told
+        // otherwise — the raw-log retention promise was only true for current versions (feature-49, audit #15).
+        lifecycleRules: [{
+          ...(expireDays ? { expiration: cdk.Duration.days(expireDays) } : {}),
+          noncurrentVersionExpiration: cdk.Duration.days(1),
+          abortIncompleteMultipartUploadAfter: cdk.Duration.days(7),
+          transitions: [],
+        }],
         removalPolicy: cdk.RemovalPolicy.RETAIN, // protect audit data
       });
 
@@ -133,6 +138,9 @@ export class DataStack extends cdk.Stack {
       recursiveDeleteOption: true,
       workGroupConfiguration: {
         enforceWorkGroupConfiguration: true,
+        // A single query may scan at most 10 GB (≈ $0.05): the curated table is ~1 GB/month, so legitimate
+        // all-time queries fit and a runaway one is cut off (feature-49, audit #6).
+        bytesScannedCutoffPerQuery: 10 * 1024 ** 3,
         resultConfiguration: {
           outputLocation: `s3://${resultsBucket.bucketName}/results/`,
           encryptionConfiguration: { encryptionOption: 'SSE_KMS', kmsKey: key.keyArn },

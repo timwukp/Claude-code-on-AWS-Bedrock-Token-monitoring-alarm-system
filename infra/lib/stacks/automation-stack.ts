@@ -1,4 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
+import * as cwActions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -66,16 +69,33 @@ export class AutomationStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(30),
       tracing: lambda.Tracing.ACTIVE,
       deadLetterQueue: dlq,
+      logGroup: new logs.LogGroup(this, 'AnomalyResponseFnLogs', { retention: logs.RetentionDays.THREE_MONTHS, removalPolicy: cdk.RemovalPolicy.DESTROY }),
       environment: {
         ALERT_TOPIC_ARN: this.alertTopic.topicArn,
         ANOMALIES_TABLE: tables.anomalies.tableName,
         ENABLE_AUTO_CONTAINMENT: String(cfg.enableAutoContainment), // default false
         DENY_POLICY_ARN: denyPolicy?.managedPolicyArn ?? '',
-        // Never contain these principals (admins, this Lambda's own role) — avoids self-lockout.
-        CONTAINMENT_ALLOWLIST: (enf?.budgetActionRoleArns ?? []).join(','),
+        // Never contain these principals (admins, operators). Before feature-49 this was the SAME list as the
+        // targets below, so the only roles the Lambda could contain were the ones marked "never contain".
+        CONTAINMENT_ALLOWLIST: (enf?.neverContainArns ?? []).join(','),
+        // The roles the deny policy may be attached to — exactly the resources granted below.
+        CONTAINMENT_TARGETS: (enf?.budgetActionRoleArns ?? []).join(','),
+        CONTAINMENT_MIN_EVENTS: String(enf?.containmentMinEvents ?? 3),
+        CONTAINMENT_WINDOW_MIN: String(enf?.containmentWindowMinutes ?? 10),
       },
     });
+    // A target that is also never-contain is a misconfiguration (it would silently neutralise the hard-stop);
+    // a target that is not a role ARN can never be attached to. Fail at synth, not at the first incident.
+    const norm = (a: string) => a.replace(/^arn:(aws[a-z-]*):sts::(\d{12}):assumed-role\/([^/]+)\/[^/]+$/i, 'arn:$1:iam::$2:role/$3').toLowerCase();
+    const never = new Set((enf?.neverContainArns ?? []).map(norm));
+    for (const t of enf?.budgetActionRoleArns ?? []) {
+      if (never.has(norm(t))) throw new Error(`enforcement: ${t} is both a containment target and in neverContainArns`);
+      if (!/^arn:aws[a-z-]*:iam::\d{12}:role\//.test(t)) throw new Error(`enforcement.budgetActionRoleArns: ${t} is not an IAM role ARN (users cannot be Budget Action targets)`);
+    }
     this.alertTopic.grantPublish(responseFn);
+    responseFn.metricErrors({ period: cdk.Duration.minutes(15), statistic: 'Sum' })
+      .createAlarm(this, 'AnomalyResponseErrors', { threshold: 1, evaluationPeriods: 1, alarmDescription: `TUMS ${cfg.env}: AnomalyResponseFn errors`, treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING })
+      .addAlarmAction(new cwActions.SnsAction(this.alertTopic));
     tables.anomalies.grantWriteData(responseFn); // persist alerts for the dashboard feed
 
     // #5: allow the Lambda to attach the deny policy to a contained principal (scoped to the

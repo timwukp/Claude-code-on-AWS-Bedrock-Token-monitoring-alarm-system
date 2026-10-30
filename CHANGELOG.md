@@ -6,6 +6,19 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Security — hardening 2: limits that bound cost, visibility that catches failure, a hard-stop that targets the right role (feature-49)
+- API Gateway stage throttled (20 rps / 40 burst; `POST /v1/queries` 2/5, `GET /v1/projects` 5/10) with JSON access logs;
+  Athena workgroup `bytesScannedCutoffPerQuery` 10 GB; `/v1/usage` rejects non-ISO or > 90-day windows with 400.
+- Registry GET redacts for non-admins (`identityArnCount` instead of ARNs, no `addedBy`, profile names not ARNs); inputs capped
+  (120-char text, 50 repos, 50 identity ARNs of IAM/STS principal shape); `.`/`..` repo segments rejected on registry and DORA APIs.
+- Every versioned bucket expires non-current versions (1 d) and aborts stale multipart uploads (7 d); every application Lambda
+  writes to a 90-day log group; alarms on API 5XX, Aggregator / BillCollector / AnomalyResponse errors and Cognito sign-in
+  throttles; CloudFront viewer logs (90 d).
+- SDLC gate runs the base branch's script, not the PR's copy.
+- Auto-containment: `neverContainArns` is its own setting (it used to be the target list), session ARNs are normalised to
+  their role before comparison, action requires a configured target and ≥ 3 AccessDenied events in 10 minutes; synth refuses
+  a target that is also never-contain or not a role.
+
 ### Added — lakehouse silver: one vendor-neutral row per call, attribution recomputed from the registry (lakehouse-p2-silver)
 - `silver.invocations` (OpenTelemetry GenAI vocabulary + AWS cache/profile/route extensions, no bodies) is written by the
   transform Lambda through per-vendor adapters (Anthropic, OpenAI Responses/Chat, Converse, Meta, Mistral, Cohere, AI21,

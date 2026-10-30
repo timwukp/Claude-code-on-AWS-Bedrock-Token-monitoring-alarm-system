@@ -87,8 +87,17 @@ export class FrontendStack extends cdk.Stack {
       },
     });
 
+    // Viewer access logs (who fetched what, from where) — none existed (feature-49, audit #15). Standard logging needs ACLs.
+    const logBucket = new s3.Bucket(this, 'CfLogs', {
+      encryption: s3.BucketEncryption.S3_MANAGED, enforceSSL: true, blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_PREFERRED, accessControl: s3.BucketAccessControl.LOG_DELIVERY_WRITE,
+      lifecycleRules: [{ expiration: cdk.Duration.days(90), abortIncompleteMultipartUploadAfter: cdk.Duration.days(7) }],
+      removalPolicy: cdk.RemovalPolicy.DESTROY, autoDeleteObjects: true,
+    });
+
     const distribution = new cloudfront.Distribution(this, 'Distribution', {
       defaultRootObject: 'index.html',
+      enableLogging: true, logBucket, logFilePrefix: 'cloudfront/',
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(siteBucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
