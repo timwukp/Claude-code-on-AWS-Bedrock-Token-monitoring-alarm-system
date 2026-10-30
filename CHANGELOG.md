@@ -6,6 +6,12 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Changed — dependency updates tamed (feature-48)
+- `dependabot.yml`: one grouped PR per ecosystem per week, minor/patch only, majors never proposed automatically (the
+  first ungrouped run opened 22 PRs at once, eleven of them majors). The UI QA agent pipeline skips `dependabot[bot]`
+  PRs — a dependency bump must not redeploy the shared dev site or spend harness minutes.
+
+
 ### Security — hardening 1: the pipeline cannot be wedged or poisoned; CI runs no PR code with credentials (feature-47)
 - **Aggregator is idempotent per S3 object** (`SYSTEM#PROCESSED` markers, watermark per object, 1-minute re-list overlap);
   the tenant index is one `SYSTEM#TENANT` item per tenant (the single-item list had reached ~341 KB of DynamoDB's 400 KB

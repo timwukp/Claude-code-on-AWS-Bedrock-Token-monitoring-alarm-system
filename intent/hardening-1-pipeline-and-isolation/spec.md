@@ -3,7 +3,7 @@
 - **Intent:** ./intent.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Status:** signed-off
+- **Status:** shipped
 
 ## Behaviour
 1. `backend/lambdas/ingestion/parse.ts` — `safeCount(v)` (non-negative safe integer else 0); `sanitizeCounts(record)` applied in

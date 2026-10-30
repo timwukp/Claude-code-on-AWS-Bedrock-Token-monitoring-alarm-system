@@ -1,24 +1,54 @@
-# Keeps the SHA-pinned actions, the three npm trees, pip and the ETL base image current (feature-47).
+# Dependency updates, tamed (feature-48): one grouped PR per ecosystem per week, minor/patch only. The first
+# ungrouped run opened 22 PRs at once, eleven of them major bumps (vite 5→8, TypeScript 5→7, pandas 2→3 …), and
+# every frontend one triggered the UI QA agent against the shared dev site. Majors are reviewed by hand when wanted.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
-    schedule: { interval: weekly }
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 1
+    groups:
+      actions: { patterns: ["*"], update-types: [minor, patch] }
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
   - package-ecosystem: npm
     directory: /backend
-    schedule: { interval: weekly }
-    open-pull-requests-limit: 5
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 1
+    groups:
+      backend: { patterns: ["*"], update-types: [minor, patch] }
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
   - package-ecosystem: npm
     directory: /frontend
-    schedule: { interval: weekly }
-    open-pull-requests-limit: 5
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 1
+    groups:
+      frontend: { patterns: ["*"], update-types: [minor, patch] }
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
   - package-ecosystem: npm
     directory: /infra
-    schedule: { interval: weekly }
-    open-pull-requests-limit: 5
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 1
+    groups:
+      infra: { patterns: ["*"], update-types: [minor, patch] }
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
   - package-ecosystem: pip
     directory: /backend/analysis
-    schedule: { interval: weekly }
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 1
+    groups:
+      etl: { patterns: ["*"], update-types: [minor, patch] }
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
   - package-ecosystem: docker
     directory: /backend/analysis
-    schedule: { interval: weekly }
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 1
