@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** fbeec402877d830a8080a8bd3036eeb3e8e08374
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #82 (lakehouse-p1-zero-etl-flag); the only chain in flight. Plan approved by the
 owner on 2026-10-28 (plan-mode review of the two-chain hardening programme; this is chain 1 of 2).
