@@ -1,6 +1,6 @@
 # Feature 49 — Hardening 2: limits, visibility, and a hard-stop that targets the right role
 
-- **Chain:** `intent/hardening-2-limits-and-visibility/` · **Branch:** `feat/hardening-2-limits-and-visibility` · **PR:** TBD
+- **Chain:** `intent/hardening-2-limits-and-visibility/` · **Branch:** `feat/hardening-2-limits-and-visibility` · **PR:** #113
 - **Origin:** chain 2 of the 2026-10-28 security audit's hardening programme (owner-approved plan); items #6, #8, #9, #15, #16 and
   the audit's "limits" tail.
 - **Date:** 2026-10-30
