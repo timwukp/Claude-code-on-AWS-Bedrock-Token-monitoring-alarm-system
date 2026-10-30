@@ -22,7 +22,7 @@ const ENV = process.env.ENV ?? 'dev';
 const REGION = process.env.AWS_REGION ?? 'us-east-1';
 const RUN_ID = `${Date.now().toString(36)}`;
 const BUCKET = `tums-lakehouse-${ENV}`;
-const WORKGROUP = `token-monitoring-${ENV}`;
+const WORKGROUP = `tums-lakehouse-${ENV}`;
 // Athena addresses an S3 table bucket through the Glue federated catalog named "s3tablescatalog/<bucket>".
 // AWS docs (Querying Amazon S3 tables with Athena): "the Catalog field should be populated with
 // s3tablescatalog/ followed by the name of your table bucket, for example, s3tablescatalog/amzn-s3-demo-bucket.

@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** 2b99397b421ab25b32b448bfebad7c083b3dc073
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #112 (lakehouse-p2-silver). Chain 2 of the owner-approved hardening
 programme (plan-mode approval 2026-10-28). Opened after the peer's P2 PR per the one-chain rule; rebased if P2 merges first.

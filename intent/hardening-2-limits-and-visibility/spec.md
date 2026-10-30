@@ -3,7 +3,7 @@
 - **Intent:** ./intent.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Status:** signed-off
+- **Status:** shipped
 
 ## Behaviour
 1. `infra/lib/stacks/api-stack.ts` — `deployOptions`: `throttlingRateLimit 20`, `throttlingBurstLimit 40`, `accessLogDestination`

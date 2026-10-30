@@ -351,4 +351,21 @@ describe('LakehouseStack (silver)', () => {
     expect(stmt).not.toContain(':*:log-stream');
     expect(stmt).not.toContain(':*\",\":log-stream');
   });
+
+  it('runs lakehouse Athena jobs in a dedicated SSE_S3 workgroup (INSERT/MERGE into S3 Tables fails under SSE_KMS)', () => {
+    template.hasResourceProperties('AWS::Athena::WorkGroup', {
+      Name: `tums-lakehouse-${cfg.env}`,
+      WorkGroupConfiguration: Match.objectLike({
+        EnforceWorkGroupConfiguration: true,
+        BytesScannedCutoffPerQuery: 50 * 1024 * 1024 * 1024,
+        ResultConfiguration: Match.objectLike({ EncryptionConfiguration: { EncryptionOption: 'SSE_S3' } }),
+      }),
+    });
+    const sm = Object.values(template.findResources('AWS::StepFunctions::StateMachine'))[0] as any;
+    expect(JSON.stringify(sm.Properties.DefinitionString)).toContain(`tums-lakehouse-${cfg.env}`);
+    expect(JSON.stringify(sm.Properties.DefinitionString)).not.toContain(`token-monitoring-${cfg.env}`);
+    const fns = template.findResources('AWS::Lambda::Function');
+    const envs = Object.values(fns).map((f: any) => JSON.stringify(f.Properties.Environment ?? {}));
+    expect(envs.filter((e) => e.includes('ATHENA_WORKGROUP')).every((e) => e.includes(`tums-lakehouse-${cfg.env}`))).toBe(true);
+  });
 });

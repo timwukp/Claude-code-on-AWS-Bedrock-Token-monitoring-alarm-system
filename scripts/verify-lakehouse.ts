@@ -22,7 +22,7 @@ import { loadAttributionMaps } from '../backend/lambdas/shared/project-registry'
 
 const ENV = process.env.ENV ?? 'dev';
 const REGION = process.env.AWS_REGION ?? 'us-east-1';
-const WORKGROUP = process.env.ATHENA_WORKGROUP ?? `token-monitoring-${ENV}`;
+const WORKGROUP = process.env.ATHENA_WORKGROUP ?? `tums-lakehouse-${ENV}`;
 const CATALOG = `"s3tablescatalog/tums-lakehouse-${ENV}"`;
 const SAMPLE = Number(process.env.SAMPLE ?? 1000);
 const WINDOW_DAYS = Number(process.env.WINDOW_DAYS ?? 7);

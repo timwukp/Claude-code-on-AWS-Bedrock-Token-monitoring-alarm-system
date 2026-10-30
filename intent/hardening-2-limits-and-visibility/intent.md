@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Date:** 2026-10-30
 - **Accepted-by:** Tim WU
-- **Status:** accepted
+- **Status:** shipped
 
 ## Problem
 The 2026-10-28 security audit left, after chain 1, a set of Medium/High items that share a theme: the platform had no

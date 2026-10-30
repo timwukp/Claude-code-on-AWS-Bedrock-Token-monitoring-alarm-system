@@ -13,6 +13,7 @@ import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lakeformation from 'aws-cdk-lib/aws-lakeformation';
+import * as athenaCfn from 'aws-cdk-lib/aws-athena';
 import * as datazone from 'aws-cdk-lib/aws-datazone';
 import { Construct } from 'constructs';
 import { EnvConfig } from '../config';
@@ -48,6 +49,8 @@ export interface LakehouseSilverProps {
  * reaches history without a replay.
  */
 export class LakehouseSilver extends Construct {
+  /** Dedicated Athena workgroup (SSE_S3 results) — see the note where it is created. */
+  public readonly workgroupName: string;
   public readonly silverTables: Record<string, s3tables.CfnTable> = {};
   public readonly jobsRole: iam.Role;
   public readonly sfnRole: iam.Role;
@@ -114,9 +117,28 @@ export class LakehouseSilver extends Construct {
       resources: [tableBucket.attrTableBucketArn, `${tableBucket.attrTableBucketArn}/*`],
     }));
     both(new iam.PolicyStatement({ actions: ['lakeformation:GetDataAccess'], resources: ['*'] }));
+    // Athena INSERT/MERGE into S3 Tables fails with INTERNAL_ERROR_QUERY_ENGINE when the workgroup's
+    // result encryption is SSE_KMS (dev, 2026-10-30: identical statement succeeded under SSE_S3 and in
+    // `primary`). The dashboard's KMS workgroup stays as it is; lakehouse jobs get their own.
+    const lakehouseWorkgroup = new athenaCfn.CfnWorkGroup(this, 'LakehouseWorkgroup', {
+      name: `tums-lakehouse-${cfg.env}`,
+      recursiveDeleteOption: true,
+      workGroupConfiguration: {
+        enforceWorkGroupConfiguration: true, // a job cannot redirect its own output or drop encryption
+        // 50 GiB per query: the 90-day attribution MERGE reads bronze + silver; today's whole lakehouse is
+        // far below this, and a runaway join should fail rather than bill.
+        bytesScannedCutoffPerQuery: 50 * 1024 * 1024 * 1024,
+        resultConfiguration: {
+          outputLocation: `s3://${athena.resultsBucket.bucketName}/lakehouse/`,
+          // SSE_S3, not KMS: Athena writes to S3 Tables fail under SSE_KMS; silver results carry no bodies.
+          encryptionConfiguration: { encryptionOption: 'SSE_S3' },
+        },
+      },
+    });
+    this.workgroupName = lakehouseWorkgroup.name!;
     both(new iam.PolicyStatement({
       actions: ['athena:StartQueryExecution', 'athena:GetQueryExecution', 'athena:GetQueryResults', 'athena:StopQueryExecution', 'athena:GetWorkGroup'],
-      resources: [`arn:aws:athena:${cfg.region}:${cfg.account}:workgroup/${athena.workgroupName}`],
+      resources: [`arn:aws:athena:${cfg.region}:${cfg.account}:workgroup/${lakehouseWorkgroup.name}`],
     }));
     both(new iam.PolicyStatement({
       actions: ['athena:GetDataCatalog', 'athena:ListDataCatalogs'],
@@ -147,8 +169,8 @@ export class LakehouseSilver extends Construct {
     const athenaEnv = {
       TABLE_BUCKET: tableBucketName,
       CATALOG: catalog,
-      ATHENA_WORKGROUP: athena.workgroupName,
-      ATHENA_OUTPUT: `s3://${athena.resultsBucket.bucketName}/results/`,
+      ATHENA_WORKGROUP: lakehouseWorkgroup.name!,
+      ATHENA_OUTPUT: `s3://${athena.resultsBucket.bucketName}/lakehouse/`,
       SILVER_DATABASE: 'silver',
     };
     const fn = (idName: string, file: string, env: Record<string, string>, timeoutMin: number): lambda.Function => {
@@ -192,9 +214,9 @@ export class LakehouseSilver extends Construct {
     const athenaTask = (idName: string, file: string) => new tasks.AthenaStartQueryExecution(this, idName, {
       queryString: substitute(fs.readFileSync(path.join(sqlDir, file), 'utf8')),
       integrationPattern: sfn.IntegrationPattern.RUN_JOB,
-      workGroup: athena.workgroupName,
+      workGroup: lakehouseWorkgroup.name!,
       queryExecutionContext: { catalogName: catalog, databaseName: 'silver' },
-      resultConfiguration: { outputLocation: { bucketName: athena.resultsBucket.bucketName, objectKey: 'results/silver' } },
+      resultConfiguration: { outputLocation: { bucketName: athena.resultsBucket.bucketName, objectKey: 'lakehouse/silver' } },
       resultPath: `$.${file.replace(/\W/g, '_')}`,
     });
     let first: sfn.IChainable | undefined;
