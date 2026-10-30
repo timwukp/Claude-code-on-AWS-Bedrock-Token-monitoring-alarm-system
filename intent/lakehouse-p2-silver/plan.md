@@ -43,3 +43,36 @@ section), `docs/test-reports/feature-49-lakehouse-p2-silver.md` + index row.
 - Trino MERGE on S3 Tables: first live run may surface type mismatches the EXPLAIN could not (silver tables absent in dev
   before deploy) — the SFN fails loudly and the SQL is re-runnable.
 - The legacy aggregator orders metadata before identity; silver follows rule C — documented, measured by the verify script.
+
+## Full source file list (every changed .ts/.py/.sh, for the CI gate)
+- `backend/lambdas/lakehouse/adapters/anthropic.ts`
+- `backend/lambdas/lakehouse/adapters/converse.ts`
+- `backend/lambdas/lakehouse/adapters/index.ts`
+- `backend/lambdas/lakehouse/adapters/openai.ts`
+- `backend/lambdas/lakehouse/adapters/otel.ts`
+- `backend/lambdas/lakehouse/adapters/types.ts`
+- `backend/lambdas/lakehouse/adapters/vendors.ts`
+- `backend/lambdas/lakehouse/athena-writer.ts`
+- `backend/lambdas/lakehouse/canonical.test.ts`
+- `backend/lambdas/lakehouse/canonical.ts`
+- `backend/lambdas/lakehouse/dim-model-refresh.test.ts`
+- `backend/lambdas/lakehouse/dim-model-refresh.ts`
+- `backend/lambdas/lakehouse/generated.test.ts`
+- `backend/lambdas/lakehouse/generated/row-types.ts`
+- `backend/lambdas/lakehouse/otel-span.ts`
+- `backend/lambdas/lakehouse/quality-gate.test.ts`
+- `backend/lambdas/lakehouse/quality-gate.ts`
+- `backend/lambdas/lakehouse/registry-snapshot.test.ts`
+- `backend/lambdas/lakehouse/registry-snapshot.ts`
+- `backend/lambdas/lakehouse/sql-contract.test.ts`
+- `backend/lambdas/lakehouse/transform.test.ts`
+- `backend/lambdas/lakehouse/transform.ts`
+- `infra/bin/infra.ts`
+- `infra/lib/config/types.ts`
+- `infra/lib/stacks/lakehouse-silver.ts`
+- `infra/lib/stacks/lakehouse-stack.ts`
+- `infra/lib/stacks/logging-stack.ts`
+- `infra/test/lakehouse-stack.test.ts`
+- `infra/test/logging-stack.test.ts`
+- `infra/test/synth.ts`
+- `scripts/verify-lakehouse.ts`
