@@ -14,7 +14,7 @@
 3. `spec/lakehouse/sql/silver_20_attribution_merge.sql`, `silver_21_attribution_merge_90d.sql`, `silver_30_bill_daily.sql`, `silver_40_metrics_hourly.sql`, `silver_50_otel_dedupe_merge.sql`, `silver_51_otel_dedupe_delete.sql`, `quality_60_tokens_nonnegative.sql`, `quality_61_model_key_present.sql`, `quality_62_attribution_enum.sql`, `quality_63_no_body_columns.sql`, `quality_64_dedupe_complete.sql`, `README.md` — silver derivation and gates.
 4. `backend/scripts/gen-lakehouse-ddl.ts` — silver support.
 5. `backend/lambdas/lakehouse/canonical.ts` — canonical row + value order.
-6. `backend/lambdas/lakehouse/adapters/*.ts` (+ `*.test.ts`, `fixtures/`) — anthropic, openai, converse, meta, mistral, cohere, ai21, titan-embeddings, generic, otel, index.
+6. `backend/lambdas/lakehouse/adapters/index.ts`, `backend/lambdas/lakehouse/adapters/types.ts`, `backend/lambdas/lakehouse/adapters/anthropic.ts`, `backend/lambdas/lakehouse/adapters/openai.ts`, `backend/lambdas/lakehouse/adapters/converse.ts`, `backend/lambdas/lakehouse/adapters/vendors.ts` (meta, mistral, cohere, ai21, titan-embeddings, generic), `backend/lambdas/lakehouse/adapters/otel.ts` — vendor adapters; golden fixtures under `backend/lambdas/lakehouse/fixtures/adapters/`.
 7. `backend/lambdas/lakehouse/transform.ts` (+ test) — silver path, adapter routing, attribution best-effort.
 8. `backend/lambdas/lakehouse/dim-model-refresh.ts` (+ test) — `silver.dim_model`.
 9. `backend/lambdas/lakehouse/registry-snapshot.ts` (+ test) — `silver.project_registry`.
