@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Date:** 2026-10-30
 - **Accepted-by:** Tim WU
-- **Status:** accepted
+- **Status:** shipped
 
 ## Problem
 After the P2 deploy every silver job failed with `INTERNAL_ERROR_QUERY_ENGINE`: Athena `INSERT`/`MERGE` into S3 Tables

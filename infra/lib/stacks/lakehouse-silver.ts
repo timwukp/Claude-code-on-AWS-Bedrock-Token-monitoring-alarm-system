@@ -117,9 +117,11 @@ export class LakehouseSilver extends Construct {
       resources: [tableBucket.attrTableBucketArn, `${tableBucket.attrTableBucketArn}/*`],
     }));
     both(new iam.PolicyStatement({ actions: ['lakeformation:GetDataAccess'], resources: ['*'] }));
-    // Athena INSERT/MERGE into S3 Tables fails with INTERNAL_ERROR_QUERY_ENGINE when the workgroup's
-    // result encryption is SSE_KMS (dev, 2026-10-30: identical statement succeeded under SSE_S3 and in
-    // `primary`). The dashboard's KMS workgroup stays as it is; lakehouse jobs get their own.
+    // Athena INSERT/MERGE into a KMS-encrypted S3 Tables bucket fails with INTERNAL_ERROR_QUERY_ENGINE
+    // whenever the workgroup sets an explicit result EncryptionConfiguration (SSE_S3 or SSE_KMS); with
+    // no explicit setting the same statements succeed and the result objects still inherit the results
+    // bucket's default KMS encryption (dev, 2026-10-30, four controlled experiments). The dashboard's
+    // workgroup stays as it is; lakehouse jobs get their own.
     const lakehouseWorkgroup = new athenaCfn.CfnWorkGroup(this, 'LakehouseWorkgroup', {
       name: `tums-lakehouse-${cfg.env}`,
       recursiveDeleteOption: true,
@@ -128,11 +130,8 @@ export class LakehouseSilver extends Construct {
         // 50 GiB per query: the 90-day attribution MERGE reads bronze + silver; today's whole lakehouse is
         // far below this, and a runaway join should fail rather than bill.
         bytesScannedCutoffPerQuery: 50 * 1024 * 1024 * 1024,
-        resultConfiguration: {
-          outputLocation: `s3://${athena.resultsBucket.bucketName}/lakehouse/`,
-          // SSE_S3, not KMS: Athena writes to S3 Tables fail under SSE_KMS; silver results carry no bodies.
-          encryptionConfiguration: { encryptionOption: 'SSE_S3' },
-        },
+        // No encryptionConfiguration on purpose (see above); the results bucket encrypts with the data key by default.
+        resultConfiguration: { outputLocation: `s3://${athena.resultsBucket.bucketName}/lakehouse/` },
       },
     });
     this.workgroupName = lakehouseWorkgroup.name!;
