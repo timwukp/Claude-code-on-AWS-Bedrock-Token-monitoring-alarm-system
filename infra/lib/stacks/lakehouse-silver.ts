@@ -124,9 +124,13 @@ export class LakehouseSilver extends Construct {
       name: `tums-lakehouse-${cfg.env}`,
       recursiveDeleteOption: true,
       workGroupConfiguration: {
-        enforceWorkGroupConfiguration: true,
+        enforceWorkGroupConfiguration: true, // a job cannot redirect its own output or drop encryption
+        // 50 GiB per query: the 90-day attribution MERGE reads bronze + silver; today's whole lakehouse is
+        // far below this, and a runaway join should fail rather than bill.
+        bytesScannedCutoffPerQuery: 50 * 1024 * 1024 * 1024,
         resultConfiguration: {
           outputLocation: `s3://${athena.resultsBucket.bucketName}/lakehouse/`,
+          // SSE_S3, not KMS: Athena writes to S3 Tables fail under SSE_KMS; silver results carry no bodies.
           encryptionConfiguration: { encryptionOption: 'SSE_S3' },
         },
       },

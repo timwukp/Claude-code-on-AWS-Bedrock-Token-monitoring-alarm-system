@@ -357,6 +357,7 @@ describe('LakehouseStack (silver)', () => {
       Name: `tums-lakehouse-${cfg.env}`,
       WorkGroupConfiguration: Match.objectLike({
         EnforceWorkGroupConfiguration: true,
+        BytesScannedCutoffPerQuery: 50 * 1024 * 1024 * 1024,
         ResultConfiguration: Match.objectLike({ EncryptionConfiguration: { EncryptionOption: 'SSE_S3' } }),
       }),
     });

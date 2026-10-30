@@ -171,7 +171,9 @@ delete them (they are empty) before retrying, or CloudFormation will report the 
 **Athena writes to S3 Tables need an SSE_S3 workgroup.** `INSERT`/`MERGE` into the federated catalog fail with
 `INTERNAL_ERROR_QUERY_ENGINE` when the workgroup enforces SSE_KMS result encryption (controlled experiment, 2026-10-30:
 same statement, SSE_S3 → SUCCEEDED, SSE_KMS → internal error; reads and no-op UPDATE/DELETE pass either way). The jobs
-therefore run in `tums-lakehouse-<env>` (SSE_S3); do not point them at the dashboard's KMS workgroup.
+therefore run in `tums-lakehouse-<env>` (SSE_S3, enforced configuration so a job cannot redirect its output, 50 GiB
+bytes-scanned cutoff per query); SSE_S3 is acceptable there because silver rows and the job results carry no request or
+response bodies. Do not point them at the dashboard's KMS workgroup.
 
 **First deploy order** (cross-stack references): `Tums-<env>-Automation` → `Data` → `Lakehouse` → `Logging`
 (adds the CloudWatch destination; needs the log group and bodies bucket from Lakehouse) → `Etl` → `Api`.
