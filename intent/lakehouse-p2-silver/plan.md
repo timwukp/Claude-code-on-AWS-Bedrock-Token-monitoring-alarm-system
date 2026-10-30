@@ -44,7 +44,7 @@ section), `docs/test-reports/feature-49-lakehouse-p2-silver.md` + index row.
   before deploy) — the SFN fails loudly and the SQL is re-runnable.
 - The legacy aggregator orders metadata before identity; silver follows rule C — documented, measured by the verify script.
 
-## Full source file list (every changed .ts/.py/.sh, for the CI gate)
+## Full file list (every changed non-doc file, for the CI gate)
 - `backend/lambdas/lakehouse/adapters/anthropic.ts`
 - `backend/lambdas/lakehouse/adapters/converse.ts`
 - `backend/lambdas/lakehouse/adapters/index.ts`
@@ -57,6 +57,30 @@ section), `docs/test-reports/feature-49-lakehouse-p2-silver.md` + index row.
 - `backend/lambdas/lakehouse/canonical.ts`
 - `backend/lambdas/lakehouse/dim-model-refresh.test.ts`
 - `backend/lambdas/lakehouse/dim-model-refresh.ts`
+- `backend/lambdas/lakehouse/fixtures/adapters/ai21/invoke/expected.json`
+- `backend/lambdas/lakehouse/fixtures/adapters/ai21/invoke/record.json`
+- `backend/lambdas/lakehouse/fixtures/adapters/amazon/embeddings/expected.json`
+- `backend/lambdas/lakehouse/fixtures/adapters/amazon/embeddings/record.json`
+- `backend/lambdas/lakehouse/fixtures/adapters/anthropic/converse/expected.json`
+- `backend/lambdas/lakehouse/fixtures/adapters/anthropic/converse/record.json`
+- `backend/lambdas/lakehouse/fixtures/adapters/anthropic/invoke-no-envelope-counts/expected.json`
+- `backend/lambdas/lakehouse/fixtures/adapters/anthropic/invoke-no-envelope-counts/record.json`
+- `backend/lambdas/lakehouse/fixtures/adapters/anthropic/invoke-stream/expected.json`
+- `backend/lambdas/lakehouse/fixtures/adapters/anthropic/invoke-stream/record.json`
+- `backend/lambdas/lakehouse/fixtures/adapters/anthropic/invoke/expected.json`
+- `backend/lambdas/lakehouse/fixtures/adapters/anthropic/invoke/record.json`
+- `backend/lambdas/lakehouse/fixtures/adapters/cohere/invoke/expected.json`
+- `backend/lambdas/lakehouse/fixtures/adapters/cohere/invoke/record.json`
+- `backend/lambdas/lakehouse/fixtures/adapters/meta/invoke/expected.json`
+- `backend/lambdas/lakehouse/fixtures/adapters/meta/invoke/record.json`
+- `backend/lambdas/lakehouse/fixtures/adapters/mistral/invoke/expected.json`
+- `backend/lambdas/lakehouse/fixtures/adapters/mistral/invoke/record.json`
+- `backend/lambdas/lakehouse/fixtures/adapters/openai/openai_chat/expected.json`
+- `backend/lambdas/lakehouse/fixtures/adapters/openai/openai_chat/record.json`
+- `backend/lambdas/lakehouse/fixtures/adapters/openai/openai_responses/expected.json`
+- `backend/lambdas/lakehouse/fixtures/adapters/openai/openai_responses/record.json`
+- `backend/lambdas/lakehouse/fixtures/adapters/unknown/invoke/expected.json`
+- `backend/lambdas/lakehouse/fixtures/adapters/unknown/invoke/record.json`
 - `backend/lambdas/lakehouse/generated.test.ts`
 - `backend/lambdas/lakehouse/generated/row-types.ts`
 - `backend/lambdas/lakehouse/otel-span.ts`
@@ -67,6 +91,8 @@ section), `docs/test-reports/feature-49-lakehouse-p2-silver.md` + index row.
 - `backend/lambdas/lakehouse/sql-contract.test.ts`
 - `backend/lambdas/lakehouse/transform.test.ts`
 - `backend/lambdas/lakehouse/transform.ts`
+- `backend/package-lock.json`
+- `backend/package.json`
 - `infra/bin/infra.ts`
 - `infra/lib/config/types.ts`
 - `infra/lib/stacks/lakehouse-silver.ts`
@@ -75,4 +101,23 @@ section), `docs/test-reports/feature-49-lakehouse-p2-silver.md` + index row.
 - `infra/test/lakehouse-stack.test.ts`
 - `infra/test/logging-stack.test.ts`
 - `infra/test/synth.ts`
+- `scripts/package.json`
 - `scripts/verify-lakehouse.ts`
+- `spec/lakehouse/generated/tables.json`
+- `spec/lakehouse/silver.adapter_audit.schema.json`
+- `spec/lakehouse/silver.bedrock_metrics_hourly.schema.json`
+- `spec/lakehouse/silver.bill_daily.schema.json`
+- `spec/lakehouse/silver.dim_model.schema.json`
+- `spec/lakehouse/silver.invocations.schema.json`
+- `spec/lakehouse/silver.project_registry.schema.json`
+- `spec/lakehouse/sql/quality_60_tokens_nonnegative.sql`
+- `spec/lakehouse/sql/quality_61_model_key_present.sql`
+- `spec/lakehouse/sql/quality_62_attribution_enum.sql`
+- `spec/lakehouse/sql/quality_63_no_body_columns.sql`
+- `spec/lakehouse/sql/quality_64_dedupe_complete.sql`
+- `spec/lakehouse/sql/silver_20_attribution_merge.sql`
+- `spec/lakehouse/sql/silver_21_attribution_merge_90d.sql`
+- `spec/lakehouse/sql/silver_30_bill_daily.sql`
+- `spec/lakehouse/sql/silver_40_metrics_hourly.sql`
+- `spec/lakehouse/sql/silver_50_otel_dedupe_merge.sql`
+- `spec/lakehouse/sql/silver_51_otel_dedupe_delete.sql`
