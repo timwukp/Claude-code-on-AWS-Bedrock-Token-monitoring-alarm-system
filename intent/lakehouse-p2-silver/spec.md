@@ -3,7 +3,7 @@
 - **Intent:** ./intent.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Status:** signed-off
+- **Status:** shipped
 
 ## 1. Spec (single source of truth)
 `spec/lakehouse/silver.{invocations,dim_model,bill_daily,bedrock_metrics_hourly,project_registry,adapter_audit}.schema.json`;

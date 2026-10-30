@@ -6,6 +6,11 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Fixed — silver jobs run in a dedicated SSE_S3 Athena workgroup (lakehouse-p2-athena-workgroup)
+- Athena `INSERT`/`MERGE` into S3 Tables fails with `INTERNAL_ERROR_QUERY_ENGINE` under an SSE_KMS workgroup (dev,
+  2026-10-30, controlled experiment); lakehouse jobs now use `tums-lakehouse-<env>` with SSE_S3 results. The dashboard's
+  KMS workgroup is unchanged. (PR TBD)
+
 ### Added — lakehouse silver: one vendor-neutral row per call, attribution recomputed from the registry (lakehouse-p2-silver)
 - `silver.invocations` (OpenTelemetry GenAI vocabulary + AWS cache/profile/route extensions, no bodies) is written by the
   transform Lambda through per-vendor adapters (Anthropic, OpenAI Responses/Chat, Converse, Meta, Mistral, Cohere, AI21,
