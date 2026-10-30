@@ -117,7 +117,7 @@ export function SettingsPage() {
                   <td><strong>{p.name}</strong> <span className="muted mono" style={{ fontSize: 12 }}>{p.projectId}</span></td>
                   <td className="muted">{p.costCenter ?? '—'}</td>
                   <td className="mono" style={{ fontSize: 12 }}>{p.repos.join(', ') || '—'}</td>
-                  <td className="num">{p.identityArns.length}</td>
+                  <td className="num">{p.identityArnCount ?? p.identityArns.length}</td>
                   <td className="num" style={{ whiteSpace: 'nowrap' }}>
                     <button className="btn-sm" onClick={() => editProject(p)} disabled={projBusy}>Edit</button>{' '}
                     <button className="btn-sm danger" onClick={() => deleteProject(p.projectId)} disabled={projBusy}>Remove</button>
@@ -162,7 +162,7 @@ export function SettingsPage() {
                 <tr key={r.repo}>
                   <td><strong>{r.repo}</strong></td>
                   <td className="mono">{r.defaultBranch}</td>
-                  <td className="muted">{r.addedBy}</td>
+                  <td className="muted">{r.addedBy ?? '—'}</td>
                   <td className="muted" title={r.lastSyncedAt ?? ''}>{fmtAgo(r.lastSyncedAt)}</td>
                   <td><span className={`badge ${STATUS_BADGE[r.status].cls}`} title={r.error ?? ''}>{STATUS_BADGE[r.status].text}</span></td>
                   <td className="num" style={{ whiteSpace: 'nowrap' }}>

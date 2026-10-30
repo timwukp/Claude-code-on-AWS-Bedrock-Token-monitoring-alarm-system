@@ -1,4 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -50,6 +52,7 @@ export class EtlStack extends cdk.Stack {
       // Exactly one run at a time: a timed-out run retried by Lambda while the next schedule fires would
       // ADD the same unmarked objects twice (feature-47 review). Retries come from the schedule, not Lambda.
       reservedConcurrentExecutions: 1,
+      logGroup: new logs.LogGroup(this, 'AggregatorFnLogs', { retention: logs.RetentionDays.THREE_MONTHS, removalPolicy: cdk.RemovalPolicy.DESTROY }),
       tracing: lambda.Tracing.ACTIVE,
       environment: {
         AGGREGATES_TABLE: tables.aggregates.tableName,
@@ -94,12 +97,20 @@ export class EtlStack extends cdk.Stack {
       memorySize: 512,
       tracing: lambda.Tracing.ACTIVE,
       environment: { AGGREGATES_TABLE: tables.aggregates.tableName, TENANTS_TABLE: tables.tenants.tableName, BILL_LOOKBACK_DAYS: '4' },
+      logGroup: new logs.LogGroup(this, 'BillCollectorFnLogs', { retention: logs.RetentionDays.THREE_MONTHS, removalPolicy: cdk.RemovalPolicy.DESTROY }),
     });
     tables.aggregates.grantReadWriteData(billCollectorFn);
     tables.tenants.grantReadData(billCollectorFn); // profile cache: price profile-ARN rows as their model
     billCollectorFn.addToRolePolicy(new iam.PolicyStatement({ actions: ['ce:GetCostAndUsage'], resources: ['*'] }));
     // Mantle counts per model per day are stored beside the bill (feature-46); CloudWatch metric reads take no resource scoping.
     billCollectorFn.addToRolePolicy(new iam.PolicyStatement({ actions: ['cloudwatch:GetMetricData', 'cloudwatch:ListMetrics'], resources: ['*'] }));
+    // An error in either daily/15-min job is silent otherwise (feature-49, audit #15): one alarm each, to the alert topic.
+    for (const [id, fn] of [['AggregatorErrors', aggregatorFn], ['BillCollectorErrors', billCollectorFn]] as const) {
+      fn.metricErrors({ period: cdk.Duration.minutes(15), statistic: 'Sum' })
+        .createAlarm(this, id, { threshold: 1, evaluationPeriods: 1, alarmDescription: `TUMS ${cfg.env}: ${id}`, treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING })
+        .addAlarmAction(new cwActions.SnsAction(alertTopic));
+    }
+
     new events.Rule(this, 'BillCollectorSchedule', {
       schedule: events.Schedule.cron({ hour: '6', minute: '30' }), // 06:30 UTC daily — after Cost Explorer's overnight refresh
       targets: [new targets.LambdaFunction(billCollectorFn)],

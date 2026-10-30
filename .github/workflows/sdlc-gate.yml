@@ -70,8 +70,17 @@ jobs:
           echo "base_sha=$(git merge-base "$base" HEAD || echo)" >> "$GITHUB_ENV"
 
       - name: Validate the SDLC artifact chain
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          python3 .sdlc/scripts/sdlc_ci_gate.py \
+          # Run the BASE branch's copy of the gate (feature-49): a PR that edits .sdlc/scripts/ must not be able to
+          # grade itself with its own script. Falls back to the PR copy only when there is no base (push to main).
+          GATE=.sdlc/scripts/sdlc_ci_gate.py
+          if [ -n "$BASE_REF" ] && git cat-file -e "origin/${BASE_REF}:.sdlc/scripts/sdlc_ci_gate.py" 2>/dev/null; then
+            mkdir -p "$RUNNER_TEMP/gate" && git show "origin/${BASE_REF}:.sdlc/scripts/sdlc_ci_gate.py" > "$RUNNER_TEMP/gate/sdlc_ci_gate.py"
+            GATE="$RUNNER_TEMP/gate/sdlc_ci_gate.py"; echo "using the base branch's gate script"
+          fi
+          python3 "$GATE" \
             --repo . \
             --changed-files-from changed-files.txt \
             --base-sha "${base_sha:-}"

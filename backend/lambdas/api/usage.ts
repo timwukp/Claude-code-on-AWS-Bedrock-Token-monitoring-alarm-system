@@ -1,7 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
-import { ok, serverError } from '../shared/response';
+import { ok, badRequest, serverError } from '../shared/response';
 import { getTenantId } from '../shared/tenant';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -16,10 +16,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const tenantId = getTenantId(event);
     // Treat missing OR empty query params as absent — an empty `to` would otherwise make the
     // DynamoDB BETWEEN have an upper bound < lower bound and throw a ValidationException (500).
-    const fromParam = event.queryStringParameters?.from;
-    const toParam = event.queryStringParameters?.to;
-    const from = fromParam ? fromParam : defaultFrom();
-    const to = toParam ? toParam : new Date().toISOString();
+    const range = usageRange(event.queryStringParameters?.from, event.queryStringParameters?.to);
+    if ('error' in range) return badRequest(range.error);
+    const { from, to } = range;
 
     // Aggregates are keyed pk=TENANT#<id>#USAGE, sk=<iso-bucket>.
     // A single Query returns at most 1 MB of items; follow LastEvaluatedKey so
@@ -73,4 +72,25 @@ function defaultFrom(): string {
   const d = new Date();
   d.setDate(d.getDate() - 7);
   return d.toISOString();
+}
+
+export const USAGE_MAX_DAYS = 90;
+
+/**
+ * The query window as ISO strings, or an error: both bounds must be valid ISO-8601 timestamps, from ≤ to, and the
+ * span ≤ 90 days. Unbounded or malformed bounds used to reach DynamoDB (every USAGE item loaded, or a
+ * ValidationException surfacing as 500) — feature-49, audit #18.
+ */
+export function usageRange(fromParam: string | undefined, toParam: string | undefined): { from: string; to: string } | { error: string } {
+  const parse = (v: string | undefined, dflt: () => string) => {
+    if (v === undefined || v === '') return dflt();
+    const t = Date.parse(v);
+    return Number.isFinite(t) && /^\d{4}-\d{2}-\d{2}/.test(v) ? new Date(t).toISOString() : null;
+  };
+  const from = parse(fromParam, defaultFrom);
+  const to = parse(toParam, () => new Date().toISOString());
+  if (from === null || to === null) return { error: 'from/to must be ISO-8601 timestamps (e.g. 2026-10-01T00:00:00Z)' };
+  if (from > to) return { error: 'from must not be after to' };
+  if (Date.parse(to) - Date.parse(from) > USAGE_MAX_DAYS * 86_400_000) return { error: `window must be at most ${USAGE_MAX_DAYS} days` };
+  return { from, to };
 }
