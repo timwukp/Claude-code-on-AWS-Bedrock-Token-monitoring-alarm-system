@@ -3,12 +3,12 @@
 - **Spec:** ./spec.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Accepted-for:** 7c06d3efe82fced66aa68c743bb6e4878f8fba8f
+- **Accepted-for:** 2ab3abf267dc0a5293ab4beb2f3cd7d3377b007f
 - **Status:** accepted
 
-`Accepted-for` is the tip of `main` after PR #114 (lakehouse-p2-athena-workgroup). PR #115 also rewrites
-`.sdlc/active`; whichever merges second rebases and re-binds `Accepted-for`. This chain does not touch the lakehouse
-chains' files, so that one line is the only overlap.
+`Accepted-for` is the tip of `main` after PRs #115–#120 merged (2026-11-27 14:04–14:07Z). The branch was cut from
+`7c06d3e` (post-#114) and approved there; #115 merged first and rewrote `.sdlc/active` and `CHANGELOG.md`, so `main` was
+merged into the branch (both changelog entries kept) and the owner re-confirmed the plan against this base.
 
 ## Files changed
 1. `ci-agent/qa_agent.py`, `ci-agent/test_agents.py`
@@ -16,7 +16,8 @@ chains' files, so that one line is the only overlap.
 3. Docs: `AGENTS.md` (QA loop rule 4), `README.md` (QA section), `CHANGELOG.md`,
    `docs/test-reports/feature-50-qa-persona-split.md` (new), `docs/test-reports/README.md`
 4. SDLC: `intent/qa-persona-split/intent.md`, `intent/qa-persona-split/spec.md`, `intent/qa-persona-split/plan.md`,
-   `.sdlc/active`
+   `.sdlc/active` (handover from `lakehouse-p2-workgroup-encryption`), `intent/lakehouse-p2-workgroup-encryption/intent.md`,
+   `intent/lakehouse-p2-workgroup-encryption/spec.md`, `intent/lakehouse-p2-workgroup-encryption/plan.md` (→ shipped; landed as #115)
 
 ## Order
 Owner creates the non-admin user and its secret, rotates the admin password (commands in the test report) → issue →

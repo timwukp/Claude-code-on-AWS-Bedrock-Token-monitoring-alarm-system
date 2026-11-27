@@ -352,15 +352,17 @@ describe('LakehouseStack (silver)', () => {
     expect(stmt).not.toContain(':*\",\":log-stream');
   });
 
-  it('runs lakehouse Athena jobs in a dedicated SSE_S3 workgroup (INSERT/MERGE into S3 Tables fails under SSE_KMS)', () => {
+  it('runs lakehouse Athena jobs in a dedicated workgroup with NO explicit result encryption (writes to a KMS S3 Tables bucket fail otherwise)', () => {
     template.hasResourceProperties('AWS::Athena::WorkGroup', {
       Name: `tums-lakehouse-${cfg.env}`,
       WorkGroupConfiguration: Match.objectLike({
         EnforceWorkGroupConfiguration: true,
         BytesScannedCutoffPerQuery: 50 * 1024 * 1024 * 1024,
-        ResultConfiguration: Match.objectLike({ EncryptionConfiguration: { EncryptionOption: 'SSE_S3' } }),
+        ResultConfiguration: Match.objectLike({ OutputLocation: Match.anyValue() }),
       }),
     });
+    const wg = Object.values(template.findResources('AWS::Athena::WorkGroup')).find((w: any) => w.Properties.Name === `tums-lakehouse-${cfg.env}`) as any;
+    expect(wg.Properties.WorkGroupConfiguration.ResultConfiguration.EncryptionConfiguration).toBeUndefined();
     const sm = Object.values(template.findResources('AWS::StepFunctions::StateMachine'))[0] as any;
     expect(JSON.stringify(sm.Properties.DefinitionString)).toContain(`tums-lakehouse-${cfg.env}`);
     expect(JSON.stringify(sm.Properties.DefinitionString)).not.toContain(`token-monitoring-${cfg.env}`);

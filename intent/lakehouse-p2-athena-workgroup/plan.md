@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** e6f1de647f0a362a330aa273efcd2cd47022f940
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #113 (hardening-2). Nothing else is in flight.
 

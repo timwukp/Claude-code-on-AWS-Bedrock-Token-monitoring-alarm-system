@@ -15,12 +15,17 @@ are grouped by development milestone rather than strict semver releases.
 - `audit_actions` checks every browser action in the harness stream. A violation (`readonly=violated`) or a login that
   is not its pass's persona (`persona=mismatch`) fails the new workflow step **Fail check if a QA pass broke the safety
   rules**; a pass the audit could not see is a warning, never a pass. Admin-pass artifacts go to
-  `<prefix>/admin-pass/`, outside the screenshot prefix the dashboard serves. (PR TBD)
+  `<prefix>/admin-pass/`, outside the screenshot prefix the dashboard serves. (PR #122)
+
+### Fixed — lakehouse workgroup sets no explicit result encryption (lakehouse-p2-workgroup-encryption)
+- Athena `INSERT`/`MERGE` into a KMS-encrypted S3 Tables bucket fails whenever the workgroup carries a result
+  `EncryptionConfiguration`; the lakehouse workgroup now sets none (results still inherit the results bucket's KMS default).
+  Experiment matrix in `docs/LAKEHOUSE.md`. (PR #115)
 
 ### Fixed — silver jobs run in a dedicated SSE_S3 Athena workgroup (lakehouse-p2-athena-workgroup)
 - Athena `INSERT`/`MERGE` into S3 Tables fails with `INTERNAL_ERROR_QUERY_ENGINE` under an SSE_KMS workgroup (dev,
   2026-10-30, controlled experiment); lakehouse jobs now use `tums-lakehouse-<env>` with SSE_S3 results. The dashboard's
-  KMS workgroup is unchanged. (PR TBD)
+  KMS workgroup is unchanged. (PR #114)
 ### Security — hardening 2: limits that bound cost, visibility that catches failure, a hard-stop that targets the right role (feature-49)
 - API Gateway stage throttled (20 rps / 40 burst; `POST /v1/queries` 2/5, `GET /v1/projects` 5/10) with JSON access logs;
   Athena workgroup `bytesScannedCutoffPerQuery` 10 GB; `/v1/usage` rejects non-ISO or > 90-day windows with 400.
