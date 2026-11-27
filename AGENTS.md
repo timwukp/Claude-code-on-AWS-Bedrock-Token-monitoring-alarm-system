@@ -62,7 +62,8 @@ A change is not "done" until all six pass.
 
 `.github/workflows/ui-qa-agent.yml` runs a UI QA agent against the deployed dev site on every
 frontend PR, then a Bug-Fix agent that patches and pushes onto the branch, re-triggering the loop.
-Three rules govern it. Each exists because its absence caused a specific, repeated failure.
+Four rules govern it. The first three exist because their absence caused a specific, repeated failure;
+the fourth because the dev site is shared.
 
 1. **The check's colour must match the report's verdict.** The QA step runs under
    `continue-on-error` — a non-zero exit there must not abort the fix loop — so a terminal step
@@ -81,6 +82,13 @@ Three rules govern it. Each exists because its absence caused a specific, repeat
    owning it: one `/anomalies` copy defect was reported four times before anyone wrote a chain for
    it. The bot names the recurrence in its summary; acting on it means opening a chain that names
    the file, not waiting for a plan that happens to cover it.
+4. **The QA agent never changes the shared dev app** (owner decision, 2026-11-27). A non-admin account
+   explores every page; the admin account only reads the admin pages in a separate pass. Both prompts
+   carry `SAFETY_RULES` (no Save/Remove/Submit-type control, no setting change, no non-GET request), and
+   `audit_actions` checks every browser action against them: a violation, or a login that is not the
+   persona its pass needs, reddens the check. Before this, the QA login was the app's only admin and the
+   prompt said "interact where sensible" on a page offering Remove. A new admin page goes into
+   `--admin-pages`; a test step that must write needs its own disposable data, not the shared app.
 
 ## Deploying (only when explicitly asked)
 

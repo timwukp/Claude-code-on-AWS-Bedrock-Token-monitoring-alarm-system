@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Date:** 2026-10-30
 - **Accepted-by:** Tim WU
-- **Status:** accepted
+- **Status:** shipped
 
 ## Problem
 #114 moved the silver jobs to a dedicated SSE_S3 workgroup; they still failed with `INTERNAL_ERROR_QUERY_ENGINE`. Four
