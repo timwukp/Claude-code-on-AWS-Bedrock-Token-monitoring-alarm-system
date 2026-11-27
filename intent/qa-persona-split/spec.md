@@ -21,7 +21,7 @@
    - STEP 4 JSON gains `persona_observed` (`admin` | `non-admin`).
    - `safe_stream(resp, tool_calls)` collects each `toolUse` block (start → input deltas → stop, plus a block a
      dropped stream left open). `audit_actions(calls, strict)` returns `readonly` = `violated` (write-type click; page
-     script or code that sends a non-GET request or clicks a write-type control; with `strict`, any click but Sign in,
+     script or code that sends a non-GET request or clicks a write-type control, the Sign in button excepted as for clicks; with `strict`, any click but Sign in,
      typing outside the sign-in fields, or any other action outside the read-only list) | `unobserved` (no browser
      action seen) | `ok`. Typed text, scripts and code are never copied into the report.
    - `merge_reports`: findings tagged `persona`, admin ids prefixed `admin-`; `overall` = FAIL if any finding, else
@@ -39,11 +39,12 @@
    `unreported`, no-op on empty outputs; `timeout-minutes` 120 → 150.
 
 ## Acceptance
-- Unit: `python3 -m unittest test_agents` — 31 tests (12 before), on Python 3.12 and 3.14; every new guard killed by
-  at least one test under mutation (22 of 22 mutants).
+- Unit: `python3 -m unittest test_agents` — 32 tests (12 before), on Python 3.12 and 3.14; every new guard killed by
+  at least one test under mutation (24 of 24 mutants).
 - Live (one `workflow_dispatch` run of this branch against the dev app): the viewer pass explores all 10 pages with
   `persona_check: ok`; the admin pass visits Settings with `persona_check: ok` and `readonly: ok`, and its action trail
-  holds no click after Sign in; the API's access log shows no POST/PUT/PATCH/DELETE during the run.
+  holds no click after Sign in; the registry and DORA repository data are unchanged across the run and the DORA collector
+  does not start (the dev API stage has no access log to read).
 
 ## Out of scope
 See the intent's Non-goals.

@@ -103,6 +103,17 @@ class ReadOnlyAuditTest(unittest.TestCase):
             self.assertEqual(audit_actions([browser("navigate", url="u")] + [call], strict=False)["readonly"],
                              "violated", call)
 
+    def test_a_scripted_sign_in_click_is_not_a_write(self):
+        # Verbatim from the first live run (dispatch 46007195822), where it was a false violation.
+        signin = ("window.__bs=[];const b=document.querySelector('button[type=submit]');new MutationObserver(()=>"
+                  "window.__bs.push(b.disabled+':'+b.innerText)).observe(b,{attributes:true,childList:true,"
+                  "characterData:true,subtree:true});b.click();'clicked'")
+        self.assertEqual(audit_actions([browser("evaluate", script=signin)], strict=False)["readonly"], "ok")
+        both = "document.querySelector('button[type=submit]'); [...document.querySelectorAll('button')].find(b => b.innerText === 'Save project').click()"
+        self.assertEqual(audit_actions([browser("evaluate", script=both)], strict=False)["readonly"], "violated")
+        self.assertEqual(audit_actions(ADMIN_LOGIN + [browser("evaluate", script=signin)], strict=True)["readonly"],
+                         "violated")  # the admin pass may not run scripts at all
+
     def test_reading_and_uploading_artifacts_is_not_a_violation(self):
         calls = [browser("navigate", url="u"),
                  browser("evaluate", script="document.querySelector('main').innerText"),

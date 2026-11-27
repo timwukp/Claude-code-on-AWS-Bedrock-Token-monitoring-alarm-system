@@ -266,8 +266,13 @@ def audit_actions(calls: list, strict: bool) -> dict:
         trail.append({"action": kind, "target": target if kind in ("click", "type", "navigate", "press_key") else ""})
         if kind == "click" and WRITE_CONTROL.search(target) and not SIGN_IN.search(target):
             violations.append(f"click on a write-type control: {target}")
-        elif kind in ("evaluate", "execute_cdp") and (NON_GET.search(script)
-                                                     or (CLICK_IN_SCRIPT.search(script) and WRITE_CONTROL.search(script))):
+        # The sign-in exemption applies to scripts too: the first live run (dispatch 46007195822) flagged
+        # `document.querySelector('button[type=submit]') … b.click()` — the viewer re-checking the Sign in
+        # button's loading state — because "submit" is a write word. A script naming a real write control
+        # beside the sign-in button is still caught: only the sign-in reference is removed before matching.
+        elif kind in ("evaluate", "execute_cdp") and (
+                NON_GET.search(script)
+                or (CLICK_IN_SCRIPT.search(script) and WRITE_CONTROL.search(SIGN_IN.sub(" ", script)))):
             violations.append(f"{kind}: script that clicks a write-type control or sends a non-GET request")
         elif strict:
             if kind == "click" and not SIGN_IN.search(target):
