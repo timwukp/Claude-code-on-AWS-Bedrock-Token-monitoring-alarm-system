@@ -3,7 +3,7 @@
 - **Intent:** ./intent.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Status:** signed-off
+- **Status:** shipped
 
 `LakehouseSilver` creates `AWS::Athena::WorkGroup tums-lakehouse-<env>` (enforced, SSE_S3, output `s3://<results>/lakehouse/`);
 jobs roles get Athena actions on it; the SFN tasks and the Lambdas' `ATHENA_WORKGROUP`/`ATHENA_OUTPUT` use it; scripts
