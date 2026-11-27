@@ -6,6 +6,17 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Security — the UI QA agent never explores the shared dev app as an admin (feature-50, qa-persona-split)
+- The QA login was the app's only admin, and STEP 2 said "interact where sensible" on a Settings page offering Save /
+  Edit / Remove. A non-admin account now explores every page (the API refuses it all admin writes), and the admin
+  account only reads `--admin-pages` (default `settings`) in a separate session, by URL, without clicking after sign-in.
+- Both prompts carry `SAFETY_RULES`: no Save/Submit/Add/Edit/Remove/Delete/Sync-type control, no setting change, no
+  POST/PUT/PATCH/DELETE from browser, page script, code interpreter or shell.
+- `audit_actions` checks every browser action in the harness stream. A violation (`readonly=violated`) or a login that
+  is not its pass's persona (`persona=mismatch`) fails the new workflow step **Fail check if a QA pass broke the safety
+  rules**; a pass the audit could not see is a warning, never a pass. Admin-pass artifacts go to
+  `<prefix>/admin-pass/`, outside the screenshot prefix the dashboard serves. (PR TBD)
+
 ### Fixed — silver jobs run in a dedicated SSE_S3 Athena workgroup (lakehouse-p2-athena-workgroup)
 - Athena `INSERT`/`MERGE` into S3 Tables fails with `INTERNAL_ERROR_QUERY_ENGINE` under an SSE_KMS workgroup (dev,
   2026-10-30, controlled experiment); lakehouse jobs now use `tums-lakehouse-<env>` with SSE_S3 results. The dashboard's

@@ -387,6 +387,12 @@ re-triggers the loop — until the QA agent reports zero blocking findings (goal
 two consecutive rounds make no progress (stall breaker → human hand-off), or an absolute
 round fuse blows.
 
+The dashboard it tests is a shared dev deployment, so the agent explores it as a **non-admin**
+user and checks the admin-only pages in a separate **read-only** admin pass. Both passes are
+forbidden to click Save/Remove-type controls or send non-GET requests, and every browser action
+is audited from the agent's stream: a violation turns the check red
+([`ci-agent/qa_agent.py`](./ci-agent/qa_agent.py), `SAFETY_RULES` / `audit_actions`).
+
 [PR #30](https://github.com/timwukp/Claude-code-on-AWS-Bedrock-Token-monitoring-alarm-system/pull/30)
 is the first full convergence, and every round is preserved as a PR comment with a per-finding
 reconciliation table (`FIXED` / `STILL_FAILING`):

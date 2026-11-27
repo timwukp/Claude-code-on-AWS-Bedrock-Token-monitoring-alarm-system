@@ -6,6 +6,10 @@ name: UI QA Agent (AgentCore)
 # every page, and reports findings. If it finds blocking bugs, a second Harness (Bug-Fix Agent)
 # root-causes them against the repo source, patches, and pushes the fix onto the PR branch —
 # which re-triggers this workflow, closing the loop until the QA run is green.
+#
+# The deployed site is a SHARED dev app, so the QA agent never explores it as an admin: a
+# non-admin account explores every page, and the admin account only reads the admin pages in a
+# separate pass (ci-agent/qa_agent.py, SAFETY_RULES and audit_actions).
 
 on:
   pull_request:
@@ -99,9 +103,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     if: github.actor != 'dependabot[bot]'
-    # Must cover: deploy (~3-8m) + QA invoke (harness allows 60m) + structured pass + bugfix
-    # (up to 30m). Sized for fable-5-class models that use their full thinking budget.
-    timeout-minutes: 120
+    # Must cover: deploy (~3-8m) + QA invoke (harness allows 60m) + structured pass + the admin
+    # read-only pass (one page; same 60m harness cap, minutes in practice) + bugfix (up to 30m).
+    # Sized for fable-5-class models that use their full thinking budget.
+    timeout-minutes: 150
     permissions:
       id-token: write        # OIDC → assume the AWS role
       contents: write        # the auto-fix commit onto the PR branch (main is ruleset-protected: PR + checks required)
@@ -131,6 +136,14 @@ jobs:
       # each ended GREEN while their report said `overall: FAIL`, so six green checks invited a merge
       # of a failing report. Switching to BLOCKING is a one-word change here, nothing else.
       QA_RED_ON: FAIL
+      # QA personas (owner decision 2026-11-27). The login used to be an admin of the app, on a
+      # Settings page that offers Save / Edit / Remove. Now a NON-admin account explores every page
+      # (the API refuses it every admin write), and the admin account is used only for a read-only
+      # pass over the admin pages. Each secret holds {"url","email","password"}; both names must
+      # match the harness execution role's `token-monitor-demo/login-creds-*` read grant.
+      # QA_ADMIN_SECRET: '' skips the admin pass.
+      QA_VIEWER_SECRET: token-monitor-demo/login-creds-viewer
+      QA_ADMIN_SECRET: token-monitor-demo/login-creds
     steps:
       # Trusted tooling: ci-agent/, .github/scripts/, .sdlc/ from the BASE branch.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -188,7 +201,12 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           # `set -o pipefail` so a non-zero qa_agent exit isn't masked by `tee`. The agent also
-          # writes blocking=/findings= to $GITHUB_OUTPUT, which is what the Bug-Fix stage gates on.
+          # writes blocking=/findings= to $GITHUB_OUTPUT, which is what the Bug-Fix stage gates on,
+          # and readonly=/persona= for the safety check below.
+          # --secret-id is passed explicitly (not left to the env default) because ci-agent/ is the
+          # BASE branch's copy: an agent that predates the persona split still understands
+          # --secret-id, so even that run signs in as the non-admin. QA_ADMIN_SECRET reaches the
+          # admin pass through the environment, which an older agent ignores instead of failing on.
           set -o pipefail
           # Reconciliation: if a previous round left a report in S3, fetch it so the agent
           # explicitly re-verifies each prior finding (FIXED / STILL_FAILING) besides exploring.
@@ -197,6 +215,7 @@ jobs:
           python ci-agent/qa_agent.py \
             --harness-arn "$HARNESS_ARN" \
             --url "${INPUT_URL:-$TARGET_URL}" \
+            --secret-id "$QA_VIEWER_SECRET" \
             --run-prefix "pr-${PR_NUMBER:-manual}" \
             --prior-report prior-report.json \
             --out qa-report.json | tee qa-output.txt
@@ -368,7 +387,10 @@ jobs:
             const bugfix = read('bugfix-summary.md');
             const icon = (report.overall === 'PASS' || findings.length === 0) ? '✅' : '❌';
             const rows = findings.map(f =>
-              `| ${f.severity} | ${f.page} | ${f.summary} |`).join('\n');
+              `| ${f.severity} | ${f.page}${f.persona === 'admin' ? ' (admin pass)' : ''} | ${f.summary} |`).join('\n');
+            // One line per persona pass: what it covered and whether it kept to the read-only rules.
+            const passes = (report.passes || []).map(p =>
+              `${p.persona}: ${p.pages_tested ?? '?'} page(s), read-only ${p.readonly === 'ok' ? '✅' : (p.readonly === 'violated' ? '❌ VIOLATED' : '⚠️ ' + p.readonly)}, persona ${p.persona_check === 'ok' ? '✅' : '⚠️ ' + p.persona_check}`).join(' · ');
             const rec = report.reconciliation || [];
             const recRows = rec.map(r =>
               `| ${r.id} | ${r.summary} | ${r.status === 'FIXED' ? '✅ FIXED' : '❌ ' + (r.status || 'STILL_FAILING')} |`).join('\n');
@@ -378,6 +400,7 @@ jobs:
             const header = [
               `## ${icon} UI QA Agent — ${findings.length} finding(s)`,
               `**Target:** \`${target}\` · **Overall:** ${report.overall || 'n/a'} · **Auto-fix rounds:** ${rounds}`,
+              passes ? `**Passes:** ${passes}` : '',
               findings.length ? `\n| Severity | Page | Finding |\n|---|---|---|\n${rows}` : '\nNo blocking issues found. 🎉',
               recBlock,
             ].join('\n');
@@ -414,6 +437,30 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner, repo: context.repo.repo, body,
             });
+
+      # ── A QA pass must not have changed the shared app ──────────────────────
+      # qa_agent.py audits every browser action each pass took (audit_actions). `violated` = a click
+      # on a write-type control, a non-GET request, or - in the admin pass - anything beyond sign-in
+      # and reading; `mismatch` = the account was not the persona the pass needs (e.g. the viewer
+      # secret holds an admin). Either is red whatever the findings say. The audit is a tripwire,
+      # not a proof, so `unobserved` / `unreported` are warnings, never a pass. Empty outputs mean the
+      # base agent predates the split: nothing to check.
+      - name: Fail check if a QA pass broke the safety rules
+        if: always()
+        env:
+          READONLY: ${{ steps.qa.outputs.readonly }}
+          PERSONA: ${{ steps.qa.outputs.persona }}
+        run: |
+          fail=0
+          case "$READONLY" in
+            violated) echo "::error::A QA pass broke the read-only rules - see the '✗' lines in the Run UI QA Agent log and check the shared dev app for changes."; fail=1;;
+            unobserved) echo "::warning::The read-only audit saw no browser actions in at least one pass, so it could not check that pass.";;
+          esac
+          case "$PERSONA" in
+            mismatch) echo "::error::A QA login is not the persona its pass needs (viewer must be non-admin, admin must be admin). Fix the secrets before the next run."; fail=1;;
+            unreported) echo "::warning::At least one QA pass did not report which persona it saw.";;
+          esac
+          exit "$fail"
 
       - name: Fail check if the loop stalled (zero progress twice)
         if: steps.qa.outputs.blocking == 'true' && fromJSON(steps.stall.outputs.stalls) >= 2
