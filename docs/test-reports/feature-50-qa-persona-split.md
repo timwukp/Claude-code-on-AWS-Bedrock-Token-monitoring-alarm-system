@@ -1,11 +1,12 @@
 # Feature 50 — QA personas: the UI QA agent never explores the shared dev app as an admin
 
-- **Chain:** `intent/qa-persona-split/` · **Branch:** `fix/qa-persona-split` off `main@7c06d3e` (post-#114) · **Issue:** #121 · **PR:** TBD
+- **Chain:** `intent/qa-persona-split/` · **Branch:** `fix/qa-persona-split` off `main@7c06d3e` (post-#114), `main@2ab3abf` (post-#120) merged in · **Issue:** #121 · **PR:** #122
 - **Origin:** review of the live QA loop, 2026-11-27: the QA login is the app's only `admin` member, and the prompt allowed
   any "sensible" interaction on a page offering Remove.
 - **Date:** 2026-11-27
-- **Verdict:** PASS on unit checks. Live run 1: the admin pass met its criterion; the viewer pass was blocked by a setup
-  gap in the owner script, and the check went red on an audit false positive. Both fixed; run 2 pending (below).
+- **Verdict:** PASS. Live run 2 met every criterion: the non-admin explored all 10 pages, the admin pass read Settings with
+  no click after Sign in, and the shared data did not change. Its check is red on the app's own findings, as `QA_RED_ON=FAIL`
+  intends. Run 1 exposed two defects of this change (below), both fixed before run 2.
 
 ## What this report has to say plainly
 - **Nothing showed a write had ever happened, and nothing would have.** The run recorded screenshots and findings, not the
@@ -53,10 +54,24 @@ The admin pass also filed two LOW findings on Settings (22 registry projects aga
 names that differ between the two panels). Three of the four stale `pr-manual` findings from July re-verified FIXED; F-004
 (no loading state on Sign in) still fails.
 
-### Run 2 — pending
-After the owner re-runs the script with `ROTATE_ADMIN=no` (repairs the viewer). Pass criteria unchanged: the viewer pass
-explores all 10 pages with `persona_check: ok` and the pages load; the admin pass visits Settings with `persona_check: ok`
-and `readonly: ok`; the registry and DORA data are unchanged and the collector does not start.
+### Run 2 — `workflow_dispatch` 46012568118, 2026-11-27 14:04Z, commit `36b5eff`: criteria met; red only on the app's findings
+QA step 7 min 8 s (14:05:30–14:12:38Z) for both passes, after the owner recreated the viewer with the tenant. Another QA
+session (a harness-repo check) ran on the same harness from 14:04Z; both passes here still returned full reports.
+
+| Check | Result |
+|---|---|
+| Viewer pass explores 10 pages as a non-admin | ✅ `persona_check: ok` (saw `non-admin`), `pages_tested: 10`, and the pages loaded: 10 of the 13 prior findings (run 1's tenant failures) re-verified FIXED |
+| Viewer pass is read-only | ✅ `readonly: ok`. 18 clicks, all display-only: 10 sidebar links, Sign in ×2, the Full-view and Table toggles, a disclosure, "Show 2 older", and `button.btn-primary` on AI ROI — the Estimate button (the next read is the "Budget a new project" estimate). 34 `evaluate` scripts, none clicking a write-type control or sending a non-GET request |
+| Admin pass visits Settings as an admin, read-only | ✅ `persona_check: ok`, `readonly: ok`; trail identical to run 1 (one click, Sign in; `/settings` by URL) |
+| Independent record (Bedrock model-invocation log) | Same per-session counts as the audit. Viewer: init 1, navigate 2, get_html 1, evaluate 34, type 3, click 18, screenshot 14. Admin: init 1, navigate 2, get_html 1, type 2, click 1, screenshot 2, get_text 1 |
+| Shared app data unchanged | Registry (31) and DORA repositories (8): SHA-256 identical before (14:04:10Z) and after; no DORA collector start |
+| Check colour | ❌ by design: **Fail check if the QA report is not clean** (7 findings, 5 blocking). **Fail check if a QA pass broke the safety rules** passed |
+
+The findings are the app's, not this change's, and each needs its own chain (AGENTS.md rule 3). Viewer: LOW Sign in shows
+no loading state (F-004, open since July); MEDIUM Overview's "Latest logged call" is minutes old while the tenant has no
+logged calls since 11-18; MEDIUM `GET /v1/quotas` takes 7.1 s; MEDIUM the Cost bill panel's logged estimate exceeds the
+bill by ~$788 while saying "100% of the bill is logged"; LOW AI ROI's weeks of history disagree between sections. Admin:
+HIGH 22 registry projects against 8 tracked DORA repositories; MEDIUM repo names differ between the two Settings panels.
 
 ## Owner account actions (run before the live run)
 Creates (or repairs) the non-admin login and its secret, and rotates the admin QA login's password (`ROTATE_ADMIN=no` skips
