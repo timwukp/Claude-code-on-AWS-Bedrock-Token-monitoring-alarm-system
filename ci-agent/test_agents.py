@@ -174,6 +174,24 @@ class PersonaTest(unittest.TestCase):
         self.assertIn("READ-ONLY ADMIN CHECK", admin)
         self.assertNotIn("Explore every page", admin)
 
+    def test_prompts_send_aws_calls_through_shell_not_the_code_interpreter(self):
+        # The AWS-managed code interpreter has no AWS credentials; `shell` has the harness role.
+        # STEP 0 used to say "use the code interpreter" and "never echo the password": every pass
+        # then made a failing code_interpreter call, and the second rule cannot be kept, because
+        # the browser's type action needs the password in the model's context.
+        kw = dict(region="us-east-1", secret_id="s", bucket="b", run_prefix="pr-1")
+        for p in (build_prompt("viewer", **kw), build_prompt("admin", admin_pages=["https://app.example/settings"], **kw)):
+            step0 = p[p.index("STEP 0"):p.index("STEP 1")]
+            step3 = p[p.index("STEP 3"):p.index("STEP 4")]
+            self.assertIn("run from `shell`", step0)
+            self.assertIn("get_secret_value", step0)
+            self.assertIn("from `shell`", step3)
+            self.assertIn("s3://b/pr-1/", step3)
+            for part in (step0, step3):
+                self.assertNotRegex(part, r"(?i)(use|with) the code interpreter")
+            self.assertNotIn("never echo the password", step0)
+            self.assertIn("Don't repeat it anywhere else", step0)
+
 
 def a_pass(persona, report, readonly="ok"):
     return {"persona": persona, "persona_expected": "admin" if persona == "admin" else "non-admin",

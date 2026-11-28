@@ -6,6 +6,15 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Fixed — the QA prompt sends AWS calls through `shell` and gives a login step the agent can follow (feature-52, qa-prompt-matches-skill)
+- STEP 0 told the agent to read the login secret with the code interpreter, which has no AWS credentials. Every pass
+  made one failing code_interpreter call before reading it from `shell`. STEP 0 now says `shell`.
+- STEP 0 also said "never print the password … keep it in variables". That cannot hold, because the browser's `type`
+  action needs the password in the model's context. It now says, as the ui-testing skill does, that the password passes
+  through the context once and is repeated nowhere else.
+- STEP 3 told the agent to upload the artifacts with the code interpreter; it now says `shell`.
+- A unit test keeps both prompts from sending AWS calls to the code interpreter. (PR #132)
+
 ### Security — QA CI boundaries stated as they are; the QA logins go only to allowed origins (feature-51, qa-ci-boundaries)
 - `ui-qa-agent.yml`, `SECURITY.md` and the feature-47 report described boundaries that were not in effect: a same-repo PR
   does change this workflow for its own run (`pull_request` uses the PR's merge commit), and none of the three "Phase 0"
