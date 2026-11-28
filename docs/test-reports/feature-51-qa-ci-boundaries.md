@@ -1,9 +1,9 @@
 # Feature 51 — QA CI boundaries: say what the pipeline really protects; QA logins only on allowed origins
 
-- **Chain:** `intent/qa-ci-boundaries/` · **Branch:** `fix/qa-ci-boundaries` off `main@2928e2a` (post-#122) · **Issue:** #129 · **PR:** TBD
+- **Chain:** `intent/qa-ci-boundaries/` · **Branch:** `fix/qa-ci-boundaries` off `main@2928e2a` (post-#122) · **Issue:** #129 · **PR:** #130
 - **Origin:** review of the CI loop, 2026-11-27/28, after feature-50
 - **Date:** 2026-11-28
-- **Verdict:** PASS on unit checks; live refusal run pending.
+- **Verdict:** PASS — unit checks, and a live refusal run with no login and no agent call.
 
 ## What this report has to say plainly
 - **The documented boundary was stronger than the real one, in four places.** The workflow said a PR cannot change it for
@@ -40,10 +40,21 @@
 | Workflow YAML parse; SDLC gate against `main@2928e2a` | PASS |
 
 ## Live verification
-Pending: one `workflow_dispatch` of this branch with a URL off the allow-list. Pass: the QA step logs
-`::error::UI QA refused to start: target URL … is not on an allowed origin`, the job log shows no harness invoke and no
-`stream` output, the run is red, and no Bug-Fix stage runs. No login happens, so it neither costs a QA run nor puts a
-password in the invocation log.
+**`workflow_dispatch` 46087982767, 2026-11-28 00:27Z, commit `faf7be4`, `url` = `https://qa-allowlist-refusal.invalid/`**
+(a reserved TLD, so even a failed guard could not have reached a real host). `QA_URL_ALLOWLIST` is unset, so the allowed
+origin was the `TARGET_URL` origin.
+
+| Check | Result |
+|---|---|
+| Refused before any harness call | ✅ `::error::UI QA refused to start: target URL 'https://qa-allowlist-refusal.invalid/' is not on an allowed origin (…)`; the QA step ran 1 s (a real run takes minutes) |
+| No agent session, no login | ✅ 0 occurrences each of the session banner, `===== viewer pass`, `===== admin pass`, `stream failed` |
+| Nothing published to S3 | ✅ 0 `published report to` lines |
+| Check colour | ✅ red: the QA step exits 2, **Fail check if the QA report is not clean** reports UNKNOWN; **Fail check if a QA pass broke the safety rules** passes (no `readonly`/`persona` outputs to judge) |
+| No Bug-Fix stage | ✅ skipped (dispatch, and `blocking=false`) |
+
+The run's deploy step re-synced this branch's frontend to the dev site first; PR #130 changes no frontend code, so it is
+the build that was already live. The PR's own `pull_request` run (46087909716, base-branch agent, which signs in) was
+cancelled before its `qa` job ran any step.
 
 ## Still open (owner)
 Phase 0 — the three settings above. Applying the ruleset with the four checks (not `qa`, which every run reddens while

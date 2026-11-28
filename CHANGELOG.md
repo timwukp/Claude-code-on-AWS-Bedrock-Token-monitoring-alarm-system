@@ -13,7 +13,7 @@ are grouped by development milestone rather than strict semver releases.
   account-level S3 Public Access Block) is applied. The text now says so and names Phase 0 as an open owner action.
 - `qa_agent.py` refuses, before any harness call, a target URL whose origin is not in `QA_URL_ALLOWLIST` (empty = the
   `TARGET_URL` origin) and admin pages off the target's origin. A refusal is red (UNKNOWN), starts no Bug-Fix stage and
-  publishes nothing. The manual run's `url` input is optional and defaults to `TARGET_URL`. (PR TBD)
+  publishes nothing. The manual run's `url` input is optional and defaults to `TARGET_URL`. (PR #130)
 
 ### Security — the UI QA agent never explores the shared dev app as an admin (feature-50, qa-persona-split)
 - The QA login was the app's only admin, and STEP 2 said "interact where sensible" on a Settings page offering Save /
