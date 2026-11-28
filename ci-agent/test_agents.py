@@ -16,7 +16,8 @@ sys.modules["botocore.config"].Config = object  # type: ignore[attr-defined]
 sys.modules["boto3"].client = lambda *a, **k: None  # type: ignore[attr-defined]
 
 from qa_agent import (  # noqa: E402
-    audit_actions, build_prompt, extract_json, merge_reports, normalize_report, persona_check, safe_stream,
+    allowed_origins, audit_actions, build_prompt, extract_json, merge_reports, normalize_report, origin_of,
+    persona_check, safe_stream, target_problem,
 )
 from bugfix_agent import diff_is_confined, diff_paths, extract_diff  # noqa: E402
 
@@ -213,7 +214,7 @@ def tool_events(*calls):
 class FakeHarness:
     """Stands in for boto3's bedrock-agentcore and s3 clients; records what main() asked for."""
     def __init__(self, admin_calls):
-        self.invocations, self.admin_calls = [], admin_calls
+        self.invocations, self.admin_calls, self.uploads = [], admin_calls, 0
 
     def invoke_harness(self, **kw):
         self.invocations.append(kw)
@@ -225,11 +226,12 @@ class FakeHarness:
         return {"stream": list(tool_events(*calls)) + [{"contentBlockDelta": {"contentBlockIndex": 0, "delta": {"text": text}}}]}
 
     def upload_file(self, *a):
-        pass
+        self.uploads += 1
 
 
 class MainTwoPassTest(unittest.TestCase):
-    def run_main(self, admin_calls, extra=()):
+    def run_main(self, admin_calls, extra=(), origins="https://app.example", env=None):
+        """origins=None passes no --allowed-origins; env sets (value) or clears (None) variables for the run."""
         import qa_agent
         import tempfile
         fake = FakeHarness(admin_calls)
@@ -239,20 +241,23 @@ class MainTwoPassTest(unittest.TestCase):
             json.dump({"findings": [{"id": "F-01", "summary": "viewer thing", "severity": "LOW"},
                                     {"id": "admin-F-02", "summary": "admin thing", "severity": "LOW", "persona": "admin"}]}, f)
         out, gho = os.path.join(d, "r.json"), os.path.join(d, "gho")
-        argv, client, cfg, env = sys.argv, qa_agent.boto3.client, qa_agent.BotoConfig, os.environ.get("GITHUB_OUTPUT")
-        sys.argv = ["qa_agent.py", "--harness-arn", "arn", "--url", "https://app.example", "--out", out,
-                    "--prior-report", prior, "--run-prefix", "pr-7", *extra]
+        argv, client, cfg = sys.argv, qa_agent.boto3.client, qa_agent.BotoConfig
+        flags_env = {"GITHUB_OUTPUT": gho, "QA_URL_ALLOWLIST": None, "TARGET_URL": None, **(env or {})}
+        saved = {k: os.environ.get(k) for k in flags_env}
+        url_args = [] if any(a == "--url" for a in extra) else ["--url", "https://app.example"]
+        sys.argv = ["qa_agent.py", "--harness-arn", "arn", *url_args, "--out", out,
+                    "--prior-report", prior, "--run-prefix", "pr-7",
+                    *([] if origins is None else ["--allowed-origins", origins]), *extra]
         qa_agent.boto3.client, qa_agent.BotoConfig = (lambda *a, **k: fake), (lambda **k: None)
-        os.environ["GITHUB_OUTPUT"] = gho
+        for k, v in flags_env.items():
+            os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
         try:
             with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-                qa_agent.main()
+                self.rc = qa_agent.main()
         finally:
             sys.argv, qa_agent.boto3.client, qa_agent.BotoConfig = argv, client, cfg
-            if env is None:
-                os.environ.pop("GITHUB_OUTPUT", None)
-            else:
-                os.environ["GITHUB_OUTPUT"] = env
+            for k, v in saved.items():
+                os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
         with open(gho) as g, open(out) as r:
             return fake, json.load(r), dict(line.split("=", 1) for line in g.read().split())
 
@@ -290,6 +295,56 @@ class MainTwoPassTest(unittest.TestCase):
         fake, report, _ = self.run_main(ADMIN_READ, extra=("--admin-secret-id", ""))
         self.assertEqual(len(fake.invocations), 1)
         self.assertEqual([p["persona"] for p in report["passes"]], ["viewer"])
+
+
+class TargetAllowListTest(unittest.TestCase):
+    def test_origin_normalisation(self):
+        self.assertEqual(origin_of("https://App.Example/x?y=1"), "https://app.example:443")
+        self.assertEqual(origin_of("https://app.example:443/"), "https://app.example:443")
+        self.assertEqual(origin_of("http://app.example"), "http://app.example:80")
+        for bad in ("", "app.example", "ftp://app.example", "javascript:alert(1)", "https://", "https://app.example:99999"):
+            self.assertEqual(origin_of(bad), "", bad)
+
+    def test_only_an_empty_list_falls_back_to_the_target(self):
+        self.assertEqual(allowed_origins("", "https://dev.example/"), {"https://dev.example:443"})
+        self.assertEqual(allowed_origins("https://a.example, https://b.example:8443", "https://dev.example"),
+                         {"https://a.example:443", "https://b.example:8443"})
+        self.assertEqual(allowed_origins("not-a-url", "https://dev.example"), set())  # a typo allows nothing
+        self.assertEqual(allowed_origins("", ""), set())
+
+    def test_target_problem(self):
+        ok = {"https://app.example:443"}
+        self.assertIsNone(target_problem("https://app.example/", ["https://app.example/settings"], ok))
+        self.assertIn("not on an allowed origin", target_problem("https://your-app.example.com/", [], ok))
+        self.assertIn("not on an allowed origin", target_problem("http://app.example/", [], ok))  # scheme counts
+        self.assertIn("admin page", target_problem("https://app.example/", ["https://evil.example/settings"], ok))
+        self.assertIn("no allowed origin", target_problem("https://app.example/", [], set()))
+
+
+class MainRefusesOffListTargetTest(MainTwoPassTest):
+    def assert_refused(self, fake, report, flags, why):
+        self.assertEqual(self.rc, 2)
+        self.assertEqual(fake.invocations, [])  # no harness call: the agent never saw a login
+        self.assertEqual(fake.uploads, 0)       # the prior report in S3 is left as it was
+        self.assertEqual(report["overall"], "UNKNOWN")
+        self.assertIn(why, report["note"])
+        self.assertEqual({k: flags[k] for k in ("overall", "blocking")}, {"overall": "UNKNOWN", "blocking": "false"})
+        self.assertNotIn("readonly", flags)     # the safety step has nothing to judge
+
+    def test_a_url_off_the_list_is_refused_before_any_harness_call(self):
+        self.assert_refused(*self.run_main(ADMIN_READ, extra=("--url", "https://evil.example/")), "not on an allowed origin")
+
+    def test_no_list_and_no_target_url_fails_closed(self):
+        self.assert_refused(*self.run_main(ADMIN_READ, origins=None), "no allowed origin")
+
+    def test_an_off_origin_admin_page_is_refused(self):
+        self.assert_refused(*self.run_main(ADMIN_READ, extra=("--admin-pages", "https://evil.example/settings")),
+                            "admin page")
+
+    def test_the_env_list_and_the_target_url_fallback_both_admit_the_target(self):
+        for env in ({"QA_URL_ALLOWLIST": "https://app.example"}, {"TARGET_URL": "https://app.example/"}):
+            fake, report, flags = self.run_main(ADMIN_READ, origins=None, env=env)
+            self.assertEqual((len(fake.invocations), flags["overall"]), (2, "PASS"), env)
 
 
 DIFF_ONE = "--- a/frontend/src/pages/X.tsx\n+++ b/frontend/src/pages/X.tsx\n@@ -1 +1 @@\n-a\n+b\n"

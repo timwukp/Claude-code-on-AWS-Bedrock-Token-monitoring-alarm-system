@@ -17,6 +17,11 @@ response stream (audit_actions): a write-type click or a non-GET request reddens
 Usage:
     python qa_agent.py --harness-arn <ARN> --url https://... [--secret-id <name>]
                        [--admin-secret-id <name>] [--admin-pages settings] [--out qa-report.json]
+                       [--allowed-origins https://dev.example.com]
+
+The agent signs in wherever --url points, so --url must be on an allowed origin
+(--allowed-origins / QA_URL_ALLOWLIST, else TARGET_URL's origin); anything else is refused
+before a harness is called.
 
 Env / defaults suit the Token Monitoring demo; override with flags for other targets.
 """
@@ -28,7 +33,7 @@ import secrets
 import sys
 import time
 from collections import Counter
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 import boto3
 from botocore.config import Config as BotoConfig
@@ -283,6 +288,44 @@ def audit_actions(calls: list, strict: bool) -> dict:
                 violations.append(f"admin pass used a browser action outside its read-only list: {kind}")
     return {"readonly": "violated" if violations else ("ok" if trail else "unobserved"),
             "violations": violations[:20], "actions": dict(counts), "trail": trail[:80] if strict else None}
+
+
+# ── Where the agent may sign in ──────────────────────────────────────────────────────────────
+# The agent types the QA logins into whatever page --url names, so the URL decides where the
+# credentials go. A manual dispatch takes that URL as free text. An allow-list of origins, checked
+# before any harness call, keeps a typo, a placeholder or a production URL from receiving them.
+# Repository writers can still change the workflow itself; this guards mistakes, not insiders.
+def origin_of(url) -> str:
+    """`scheme://host:port` with the default port made explicit; '' for anything but http(s)."""
+    try:
+        u = urlparse(str(url or "").strip())
+        port = u.port
+    except ValueError:  # e.g. a port out of range
+        return ""
+    if u.scheme not in ("http", "https") or not u.hostname:
+        return ""
+    return f"{u.scheme}://{u.hostname}:{port or (443 if u.scheme == 'https' else 80)}"  # urlparse lowercases hostname
+
+
+def allowed_origins(raw, fallback_url) -> set:
+    """Origins from a comma-separated list. Only an EMPTY list falls back to fallback_url's origin:
+    a list that is set but holds no valid origin allows nothing, so a typo in it fails closed."""
+    if str(raw or "").strip():
+        return {o for o in (origin_of(x) for x in str(raw).split(",") if x.strip()) if o}
+    return {origin_of(fallback_url)} - {""}
+
+
+def target_problem(url, admin_pages, origins) -> str | None:
+    """Why this run must not start, or None. Admin pages must stay on the target's own origin."""
+    if not origins:
+        return "no allowed origin is configured (set QA_URL_ALLOWLIST, or TARGET_URL as the default)"
+    origin = origin_of(url)
+    if origin not in origins:
+        return f"target URL {url!r} is not on an allowed origin ({', '.join(sorted(origins))})"
+    off = [p for p in admin_pages if origin_of(p) != origin]
+    if off:
+        return f"admin page(s) not on the target's origin: {', '.join(off)}"
+    return None
 
 
 def persona_check(expected: str, observed) -> str:
@@ -580,6 +623,20 @@ def merge_reports(passes: list) -> dict:
     return merged
 
 
+def refuse_target(out_path: str, problem: str) -> int:
+    """Stop before any harness call. The report is UNKNOWN (the workflow reddens on it), nothing is
+    published to S3 (the next round's prior report stays as it was), and no Bug-Fix stage starts."""
+    print(f"::error::UI QA refused to start: {problem}", flush=True)
+    with open(out_path, "w") as f:
+        json.dump({"overall": "UNKNOWN", "pages_tested": 0, "findings": [],
+                   "note": f"refused before any harness call: {problem}"}, f, indent=2)
+    gho = os.environ.get("GITHUB_OUTPUT")
+    if gho:
+        with open(gho, "a") as f:
+            f.write("overall=UNKNOWN\nblocking=false\nprogress=true\nfixed=0\nfindings=0\n")
+    return 2
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Run the UI QA agent stage")
     ap.add_argument("--harness-arn", default=DEFAULT_HARNESS)
@@ -590,6 +647,9 @@ def main() -> int:
                     help="Login secret of the admin persona for the read-only pass; '' skips that pass.")
     ap.add_argument("--admin-pages", default=DEFAULT_ADMIN_PAGES,
                     help="Comma-separated paths, relative to --url, that the admin pass reads.")
+    ap.add_argument("--allowed-origins", default=os.environ.get("QA_URL_ALLOWLIST", ""),
+                    help="Comma-separated origins --url may be on (default env QA_URL_ALLOWLIST; "
+                         "when empty, the origin of env TARGET_URL).")
     ap.add_argument("--region", default=REGION)
     ap.add_argument("--bucket", default=DEFAULT_BUCKET)
     ap.add_argument("--run-prefix", default="run-latest")
@@ -603,6 +663,10 @@ def main() -> int:
     session_id = args.session_id or f"qa-ci-{secrets.token_hex(16)}"
     base_url = args.url if args.url.endswith("/") else args.url + "/"
     admin_pages = [urljoin(base_url, p.strip().lstrip("/")) for p in args.admin_pages.split(",") if p.strip()]
+    problem = target_problem(args.url, admin_pages,
+                             allowed_origins(args.allowed_origins, os.environ.get("TARGET_URL", "")))
+    if problem:
+        return refuse_target(args.out, problem)
 
     # Reconciliation: a prior round's findings must each be explicitly re-verified, so the
     # auto-fix loop converges observably instead of relying on a fresh exploration to

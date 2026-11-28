@@ -18,6 +18,11 @@
   build`, its `ci-agent/*.py` and its redactor with OIDC credentials and a `contents: write` token, while `main` had no pull-request
   requirement. Now the PR is built with no permissions, and everything that runs with credentials comes from the base branch.
   The owner also tightened the role's OIDC trust, the `main` ruleset and the account-level S3 Public Access Block (Phase 0).
+  **Correction (2026-11-27, feature-51):** that sentence was not true. The ruleset has blocked only deletion and force-push in
+  every version since it was created; the role's trust still accepts any ref of this repository (and the Harness repository),
+  with no trust change recorded in CloudTrail's 90 days; the account-level Public Access Block flags are all off. The
+  "Phase 0 (owner)" row below stayed TBD, and `intent/hardening-1-pipeline-and-isolation/plan.md`'s "that token cannot land
+  code anywhere but the PR branch" rested on the ruleset. Phase 0 is still open.
 - **The QA verdict was the agent's word.** Page text in the monitored account is written by Bedrock callers; an agent that read
   "overall: PASS" there and repeated it kept the check green with findings attached. The verdict is now derived from the findings.
   The bug-fix agent's diff was applied to every file it named — including, potentially, the redactor — while only one was checked;

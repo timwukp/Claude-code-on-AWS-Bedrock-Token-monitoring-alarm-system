@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** 2ab3abf267dc0a5293ab4beb2f3cd7d3377b007f
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PRs #115–#120 merged (2026-11-27 14:04–14:07Z). The branch was cut from
 `7c06d3e` (post-#114) and approved there; #115 merged first and rewrote `.sdlc/active` and `CHANGELOG.md`, so `main` was
