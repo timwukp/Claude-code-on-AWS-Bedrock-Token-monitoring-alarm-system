@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Date:** 2026-11-27
 - **Accepted-by:** Tim WU
-- **Status:** accepted
+- **Status:** shipped
 
 ## Problem
 The UI QA agent signs in with the only member of the app's `admin` Cognito group. Settings is admin-only and offers

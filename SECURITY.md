@@ -32,9 +32,19 @@ completion text**. Treat all deployments as handling sensitive data.
   deploys and runs the agents from the base branch's tooling. The QA verdict is derived from findings, never from
   the agent's own `overall`; the bug-fix agent's diff is confined to the one file it was asked about and may not
   touch `.github/`, `infra/`, `.sdlc/`, `ci-agent/`, `intent/`, `spec/`, `scripts/`. Actions are pinned by SHA.
-- **Repository and account settings this code relies on (owner-maintained):** `main` ruleset requiring a pull
-  request and the `backend`/`frontend`/`infra`/`sdlc-gate` checks with no bypass; the GitHub Actions role's OIDC
-  trust limited to this repository's pull requests and `main`; account-level S3 Public Access Block on.
+- **Repository and account settings this code relies on (owner-maintained).** None of the three is in effect
+  (verified 2026-11-27, feature-51); each is an open owner action, planned as "Phase 0" of feature-47:
+  - `main` ruleset requiring a pull request and the `backend`/`frontend`/`infra`/`sdlc-gate` checks with no
+    bypass. **Not applied:** every version of the ruleset (2026-06-05 → 2026-07-28) blocks only deletion and
+    force-push, so a writer can push to `main` and a red check does not block a merge.
+  - The GitHub Actions role's OIDC trust limited to this repository's pull requests and `main`. **Not applied:**
+    the trust accepts any ref and event of this repository and of the Harness repository; CloudTrail records no
+    trust-policy change in the last 90 days.
+  - Account-level S3 Public Access Block on. **Not applied:** all four account-level flags are off (the QA
+    reports bucket has its own bucket-level block).
+- **The QA agent signs in only on an allowed origin** (feature-51). `ci-agent/qa_agent.py` refuses, before any
+  harness call, a target URL whose origin is not in `QA_URL_ALLOWLIST` (empty = the origin of `TARGET_URL`),
+  so a manual run's free-text URL cannot send the QA logins to a typo, a placeholder or production.
 - **Browser:** CloudFront sends HSTS, `X-Content-Type-Options`, `X-Frame-Options: DENY`, a referrer policy and a
   Content-Security-Policy (report-only until `frontend.cspEnforce` is set); Cognito tokens live in `sessionStorage`
   with a 1-hour id token and a 1-day refresh token; CORS origins must be configured outside `dev`.

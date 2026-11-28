@@ -3,7 +3,7 @@
 - **Intent:** ./intent.md
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
-- **Status:** signed-off
+- **Status:** shipped
 
 ## Behaviour
 1. `ci-agent/qa_agent.py` — two passes, each its own harness session:

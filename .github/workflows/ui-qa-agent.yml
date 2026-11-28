@@ -20,9 +20,9 @@ on:
   workflow_dispatch:
     inputs:
       url:
-        description: 'Target URL to test'
-        required: true
-        default: 'https://your-app.example.com/'
+        description: 'Target URL to test. Empty = vars.TARGET_URL. Its origin must be in vars.QA_URL_ALLOWLIST (empty = the origin of TARGET_URL), or the run is refused before any agent call.'
+        required: false
+        default: ''
 
 # One qa run per PR at a time, latest commit wins. Two pushes 29 s apart on #64 ran concurrently
 # against the same site and harness: one run was terminated mid-exploration, the other's invoke
@@ -34,8 +34,11 @@ concurrency:
 
 # Trust boundary (feature-47, security audit #1): everything that runs with AWS credentials or a write
 # token below is checked out from the PR's BASE branch. The PR's own code is only ever (a) built in a
-# job with no permissions and no secrets, and (b) read as data by the agents. A PR can therefore not
-# change this workflow, the agents, or the redactor for its own run.
+# job with no permissions and no secrets, and (b) read as data by the agents. A PR therefore cannot
+# change the agents (ci-agent/), the redactor (.github/scripts/) or the SDLC tooling for its own run.
+# It CAN change this workflow file for its own run: a `pull_request` run uses the workflow from the
+# PR's merge commit (GITHUB_SHA). So this boundary stops a PR's code, not a same-repo PR author, who is
+# trusted (a fork's PR gets no OIDC token and no secrets).
 permissions:
   contents: read
 
@@ -109,7 +112,10 @@ jobs:
     timeout-minutes: 150
     permissions:
       id-token: write        # OIDC → assume the AWS role
-      contents: write        # the auto-fix commit onto the PR branch (main is ruleset-protected: PR + checks required)
+      contents: write        # the auto-fix commit onto the PR branch
+      # NB: main's ruleset blocks only deletion and force-push. It requires no PR and no checks (verified
+      # 2026-11-27; the "Phase 0" ruleset that SECURITY.md lists is not applied), so this token could also
+      # push to main. The push step below names the PR branch only.
       pull-requests: write   # post the results comment
     env:
       # Account ID comes from a repo secret (Settings → Secrets → Actions → AWS_ACCOUNT_ID),
@@ -144,6 +150,10 @@ jobs:
       # QA_ADMIN_SECRET: '' skips the admin pass.
       QA_VIEWER_SECRET: token-monitor-demo/login-creds-viewer
       QA_ADMIN_SECRET: token-monitor-demo/login-creds
+      # Where the agent may sign in (ci-agent/qa_agent.py `target_problem`): comma-separated origins.
+      # Empty = the origin of TARGET_URL only. A manual run whose url is elsewhere is refused before any
+      # harness call, so a typo or a production URL never receives the QA logins.
+      QA_URL_ALLOWLIST: ${{ vars.QA_URL_ALLOWLIST }}
     steps:
       # Trusted tooling: ci-agent/, .github/scripts/, .sdlc/ from the BASE branch.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

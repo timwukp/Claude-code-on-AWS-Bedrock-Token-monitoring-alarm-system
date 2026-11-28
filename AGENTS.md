@@ -89,6 +89,8 @@ the fourth because the dev site is shared.
    persona its pass needs, reddens the check. Before this, the QA login was the app's only admin and the
    prompt said "interact where sensible" on a page offering Remove. A new admin page goes into
    `--admin-pages`; a test step that must write needs its own disposable data, not the shared app.
+   It also signs in only on an allowed origin: `QA_URL_ALLOWLIST` (empty = the `TARGET_URL` origin). A
+   manual run aimed anywhere else is refused before any harness call (feature-51).
 
 ## Deploying (only when explicitly asked)
 
