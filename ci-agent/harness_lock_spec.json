@@ -1,0 +1,40 @@
+{
+  "spec": "ui-qa-harness-lock",
+  "version": 1,
+  "purpose": "One signed-in UI QA run at a time on the shared UI harness and the shared QA logins. It coordinates orchestrators (CI qa_agent.py, the Ops Console's Run QA); it is not a security boundary: the harness execution role can write the bucket.",
+  "bucket": "the QA reports bucket (qa_agent.py --bucket, env QA_BUCKET)",
+  "key": "locks/ui-harness.json",
+  "contentType": "application/json",
+  "leaseFields": [
+    "owner",
+    "runId",
+    "acquiredAt",
+    "expiresAt"
+  ],
+  "fieldRules": {
+    "owner": "who holds it: 'ci:<GITHUB_RUN_ID>', 'ops-console:<batch id>' or 'manual'",
+    "runId": "the holder's run or session id; the reset broker checks it",
+    "acquiredAt": "UTC, timeFormat; set at acquire or takeover, never changed by a renewal",
+    "expiresAt": "UTC, timeFormat; the only expiry. S3 never deletes the object for us (lifecycle rules work in days)"
+  },
+  "timeFormat": "%Y-%m-%dT%H:%M:%SZ",
+  "ttlSeconds": 900,
+  "renewEverySeconds": 300,
+  "clockSkewSeconds": 30,
+  "pollSeconds": 30,
+  "rules": {
+    "acquire": "PutObject with IfNoneMatch='*'. Created: you hold it; keep the returned ETag. If the create gets 412/409 but the read then gets 404 (the holder just released), retry the create at once.",
+    "busy": "On 412 or 409, GetObject. If now < expiresAt + clockSkewSeconds, the lock is held: poll every pollSeconds until your wait ends, then stop before any harness call ('harness busy').",
+    "takeover": "If now >= expiresAt + clockSkewSeconds, or the body is not a lease with all leaseFields and valid times, PutObject with IfMatch=<the ETag you read>. 412/409/404 means someone else moved first: go back to busy.",
+    "renew": "Every renewEverySeconds, from a timer or thread so a long streaming invoke cannot outlive the lease: PutObject with IfMatch=<your ETag>, the same acquiredAt and a new expiresAt = now + ttlSeconds. 412/409/404 means the lease is lost. Any other error is retried next beat, but if no renewal has succeeded for ttlSeconds - clockSkewSeconds the lease counts as lost all the same: another run may already hold it.",
+    "release": "DeleteObject with IfMatch=<your ETag>. 412/409/404 means it is no longer yours: delete nothing.",
+    "checkBeforeEachStep": "Before every signed-in step (each QA pass, each reset-broker call), check the lease is not lost. Once lost: start no further step, and report the run UNKNOWN.",
+    "etagOwnership": "Whoever holds the latest ETag owns renew and release. The ETag changes on every create, takeover and renewal, so an async holder (e.g. a worker the Ops Console's Run QA starts) must carry the latest ETag forward and use only that one."
+  },
+  "exampleLease": {
+    "owner": "ci:46095395589",
+    "runId": "qa-ci-0123456789abcdef0123456789abcdef",
+    "acquiredAt": "2026-11-28T02:10:00Z",
+    "expiresAt": "2026-11-28T02:25:00Z"
+  }
+}

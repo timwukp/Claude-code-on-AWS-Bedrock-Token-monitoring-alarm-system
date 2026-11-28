@@ -145,4 +145,16 @@ export interface EnvConfig {
     /** Create the CloudTrail trail + bucket (default true). Set false in accounts that already run an organisation trail. */
     readonly createTrail?: boolean;
   };
+  /**
+   * The QA reset broker (feature-53, QaBrokerStack): a new password for each QA login on every UI QA run. Omit it and
+   * the stack is not synthesised. Keep the real usernames in your untracked env file, not in example.env.json.
+   */
+  readonly qaBroker?: {
+    /** The role the UI QA workflow assumes (GitHub OIDC); it gets lambda:InvokeFunction on the broker, nothing else. */
+    readonly ciRoleName: string;
+    /** The bucket that holds the UI harness lease. Default: token-monitor-qa-reports-<account>. */
+    readonly lockBucketName?: string;
+    /** Request name (what the workflow passes, e.g. "viewer") -> the secret it rotates and the Cognito username. */
+    readonly logins: Record<string, { readonly secretName: string; readonly username: string }>;
+  };
 }

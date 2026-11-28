@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** b774f3f85dc7784b936a30fbdae236fd074b4dfc
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #130 (qa-ci-boundaries). The QA session wrote these two files last and has
 handed them over; it dropped its own PR for this change.

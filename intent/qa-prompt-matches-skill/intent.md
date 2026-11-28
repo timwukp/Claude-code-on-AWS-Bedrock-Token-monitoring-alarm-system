@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Date:** 2026-11-28
 - **Accepted-by:** Tim WU
-- **Status:** accepted
+- **Status:** shipped
 
 ## Problem
 `ci-agent/qa_agent.py` gives the UI QA agent three instructions the harness cannot carry out. The ui-testing skill

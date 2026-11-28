@@ -6,6 +6,17 @@ are grouped by development milestone rather than strict semver releases.
 
 ## [Unreleased]
 
+### Added — the QA reset broker as code: a CDK stack deployed before any workflow calls it (feature-53 part 1, qa-reset-broker-infra)
+- **`Tums-<env>-QaBroker`** (`infra/lib/stacks/qa-broker-stack.ts`), synthesised when the env file sets `qaBroker`. It
+  holds the `qa-login-reset` Lambda, its role (reset passwords in the dev pool only, write the two QA login secrets,
+  read the UI harness lease) and one invoke grant for the CI role. CDK assertion tests pin every action and resource.
+  The stack reuses AuthStack's existing pool-ARN export, so deploying it doesn't touch AuthStack.
+- **The Lambda ships four files:** the broker, the lease module and their specs (`ci-agent/`), with their own tests
+  (`test_broker`, `test_harness_lock`), now run by CI.
+- **`scripts/verify-qa-broker.sh`**, a read-only post-deploy check: IAM simulation, the function's state, and a
+  no-lease probe that writes nothing.
+- **Nothing calls the broker yet**, so merging and deploying this changes no QA run. (PR #134)
+
 ### Fixed — the QA prompt sends AWS calls through `shell` and gives a login step the agent can follow (feature-52, qa-prompt-matches-skill)
 - STEP 0 told the agent to read the login secret with the code interpreter, which has no AWS credentials. Every pass
   made one failing code_interpreter call before reading it from `shell`. STEP 0 now says `shell`.

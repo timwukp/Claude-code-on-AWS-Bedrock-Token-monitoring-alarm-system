@@ -37,7 +37,7 @@ jobs:
       - run: npm test --if-present
       - run: python3 -m unittest test_etl     # Fargate ETL pure logic, stdlib only
         working-directory: backend/analysis
-      - run: python3 -m unittest test_agents  # CI agents' pure logic (verdict rule, diff confinement), stdlib only
+      - run: python3 -m unittest test_agents test_broker test_harness_lock  # CI agents, the reset broker, the harness lease; stdlib only
         working-directory: ci-agent
 
   frontend:
