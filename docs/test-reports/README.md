@@ -68,3 +68,4 @@ PR; a feature is only PR-ready when all gates are green.
 > Two items are 🟡 in [`../ROADMAP.md`](../ROADMAP.md) — the live Budget Action freeze (#4/#5) and
 > the Fargate Parquet run (#8) — implemented and deploy-validated, with their live action
 > deliberately deferred (risk-managed). These are planned roadmap items, not defects.
+| QA reset broker as code: the `Tums-<env>-QaBroker` CDK stack, its role pinned by assertion tests; nothing calls it yet | #133 | [#134](https://github.com/timwukp/Claude-code-on-AWS-Bedrock-Token-monitoring-alarm-system/pull/134) | [feature-53a](./feature-53a-qa-reset-broker-infra.md) | PASS offline (deploy after merge) |

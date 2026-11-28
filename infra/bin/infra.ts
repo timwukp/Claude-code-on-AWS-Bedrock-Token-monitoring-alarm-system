@@ -13,6 +13,7 @@ import { DoraStack } from '../lib/stacks/dora-stack';
 import { ProjectsStack } from '../lib/stacks/projects-stack';
 import { FrontendStack } from '../lib/stacks/frontend-stack';
 import { LakehouseStack } from '../lib/stacks/lakehouse-stack';
+import { QaBrokerStack } from '../lib/stacks/qa-broker-stack';
 
 const app = new cdk.App();
 
@@ -56,6 +57,9 @@ new EtlStack(app, `${prefix}-Etl`, {
 });
 
 new FrontendStack(app, `${prefix}-Frontend`, { env, cfg, api: api.restApi, userPool: auth.userPool });
+
+// QA reset broker (feature-53): per-run passwords for the dev app's QA logins. Only where the env file sets qaBroker.
+if (cfg.qaBroker) new QaBrokerStack(app, `${prefix}-QaBroker`, { env, cfg, userPool: auth.userPool });
 
 cdk.Tags.of(app).add('project', 'token-usage-monitoring');
 cdk.Tags.of(app).add('environment', cfg.env);

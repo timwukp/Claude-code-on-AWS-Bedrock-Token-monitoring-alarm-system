@@ -12,6 +12,7 @@ import { AuthStack } from '../lib/stacks/auth-stack';
 import { DoraStack } from '../lib/stacks/dora-stack';
 import { ApiStack } from '../lib/stacks/api-stack';
 import { FrontendStack } from '../lib/stacks/frontend-stack';
+import { QaBrokerStack } from '../lib/stacks/qa-broker-stack';
 
 /** The tracked CI config — the same one `make synth` uses in CI, so tests see what CI sees. */
 export const cfg: EnvConfig = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'lib', 'config', 'ci.json'), 'utf8'));
@@ -47,7 +48,8 @@ export function synthApp(overrideCfg: EnvConfig = cfg, lakehouseOverrides: { sql
     dora: { collectorFn: dora.collectorFn, githubSecret: dora.githubSecret },
   });
   const frontend = new FrontendStack(app, 'T-Frontend', { env, cfg, api: api.restApi, userPool: auth.userPool });
-  return { app, network, data, automation, etl, lakehouse, logging, auth, dora, api, frontend };
+  const qaBroker = new QaBrokerStack(app, 'T-QaBroker', { env, cfg, userPool: auth.userPool });
+  return { app, network, data, automation, etl, lakehouse, logging, auth, dora, api, frontend, qaBroker };
 }
 
 /** Docker image asset sources recorded in a stack's asset manifest (platform lives there, not in the template). */

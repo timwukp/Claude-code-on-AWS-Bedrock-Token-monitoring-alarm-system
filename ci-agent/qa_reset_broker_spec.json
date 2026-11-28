@@ -1,0 +1,45 @@
+{
+  "spec": "qa-reset-broker",
+  "version": 1,
+  "purpose": "Per-run QA passwords. A small Lambda resets the two QA logins of the shared dev app, and only while the caller holds the UI harness lease (harness_lock_spec.json). Callers get lambda:InvokeFunction on it and nothing else; the broker alone holds the Cognito and Secrets Manager grants.",
+  "request": {
+    "action": "rotate",
+    "secret": "one of the keys of the deploy-time secret map, e.g. 'viewer' or 'admin'",
+    "runId": "the runId of the lease the caller holds",
+    "signOut": "boolean; true after a run, so tokens issued during it stop working too"
+  },
+  "secretMap": {
+    "source": "deploy configuration (env QA_BROKER_SECRET_MAP, JSON), never the request and never the secret's own content",
+    "shape": {"<name>": {"secretId": "<Secrets Manager id or ARN>", "username": "<Cognito username>"}}
+  },
+  "checkOrder": [
+    "lease: the lock object is a valid lease, its runId equals the request's runId, and now < expiresAt",
+    "secret: request.secret is a key of the secret map",
+    "policy: the generated password meets passwordPolicy (checked before any write)"
+  ],
+  "writeOrder": [
+    "PutSecretValue(SecretId, SecretString = current JSON with only 'password' replaced, VersionStages = ['AWSPENDING'])",
+    "AdminSetUserPassword(UserPoolId, Username = map username, Password, Permanent = true)",
+    "AdminUserGlobalSignOut(UserPoolId, Username) when signOut",
+    "UpdateSecretVersionStage(SecretId, VersionStage = 'AWSCURRENT', MoveToVersionId = new version, RemoveFromVersionId = old current version)"
+  ],
+  "atomicity": "A failure after PutSecretValue and before the stage move leaves AWSCURRENT on the old pair. The run that called is refused, and the next run's first rotate repairs it.",
+  "passwordPolicy": {
+    "length": 32,
+    "alphabet": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#%+-=_",
+    "requireUpper": true,
+    "requireLower": true,
+    "requireDigit": true,
+    "symbols": "!#%+-=_",
+    "requireSymbol": true,
+    "poolMinimum": 12
+  },
+  "response": {
+    "ok": {"ok": true, "versionId": "<the new AWSCURRENT version id>"},
+    "refused": {"ok": false, "error": "one of errors"}
+  },
+  "errors": ["bad-request", "no-lease", "lease-not-yours", "lease-expired", "unknown-secret", "policy", "write-failed"],
+  "forbidden": "The password never appears in a response, a log record, an exception's str or repr, or a trace. Errors carry only the step name and the AWS error code.",
+  "singleUse": "The password is single-use: the agent still sees it once (STEP 0 prints it for the browser's type action), so it lands in the invocation log and Memory events. Because every run rotates it before and after, any such copy no longer signs in once the run ends.",
+  "killSwitch": "QA_ROTATION=manual makes qa_agent.py skip the broker; the owner must then rotate by hand after each run. The default is QA_ROTATION=broker."
+}

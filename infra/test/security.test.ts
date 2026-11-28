@@ -167,7 +167,7 @@ describe('security invariants', () => {
   describe('IAM wildcards are confined to actions that cannot be scoped', () => {
     // Actions AWS documents as not resource-scopable, plus ecs:StopTask which CDK's EcsRunTask(.sync) integration emits on `*`. Anything else on `*` fails.
     const SCOPELESS = /^(cloudwatch:(GetMetricData|ListMetrics|GetMetricStatistics)|ce:GetCostAndUsage|servicequotas:ListServiceQuotas|bedrock:(ListInferenceProfiles|ListFoundationModels)|xray:(Put.*|GetSamplingRules|GetSamplingTargets)|ecr:GetAuthorizationToken|lakeformation:GetDataAccess|ecs:(DescribeTasks|StopTask)|sts:GetCallerIdentity|pricing:GetProducts)$/;
-    it.each(['api', 'etl', 'automation', 'dora'] as const)('%s: no write/admin action on Resource "*"', (s) => {
+    it.each(['api', 'etl', 'automation', 'dora', 'qaBroker'] as const)('%s: no write/admin action on Resource "*"', (s) => {
       const bad: string[] = [];
       const docs: Array<[string, any]> = []; // eslint-disable-line @typescript-eslint/no-explicit-any -- CloudFormation JSON
       for (const [id, p] of Object.entries(t(s).findResources('AWS::IAM::Policy'))) docs.push([id, (p as any).Properties.PolicyDocument]);

@@ -52,5 +52,18 @@
     "smusProjectId": "ciproject000000",
     "ownerPrincipalArn": "arn:aws:iam::123456789012:user/ci",
     "enableTransactionSearch": false
+  },
+  "qaBroker": {
+    "ciRoleName": "GitHubActionsUITestRole",
+    "logins": {
+      "viewer": {
+        "secretName": "token-monitor-demo/login-creds-viewer",
+        "username": "qa-viewer@example.test"
+      },
+      "admin": {
+        "secretName": "token-monitor-demo/login-creds",
+        "username": "qa-admin@example.test"
+      }
+    }
   }
 }
