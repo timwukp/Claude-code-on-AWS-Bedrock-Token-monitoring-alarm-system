@@ -4,7 +4,7 @@
 - **Author:** Claude (AI agent)
 - **Accepted-by:** Tim WU
 - **Accepted-for:** 2928e2aba73e7c9dd1bd3eeebc51bdaa0e2165ce
-- **Status:** accepted
+- **Status:** shipped
 
 `Accepted-for` is the tip of `main` after PR #122 (qa-persona-split). Nothing else is in flight on these files.
 

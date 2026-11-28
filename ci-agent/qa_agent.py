@@ -74,13 +74,19 @@ that other people use.
   from page JavaScript (evaluate, fetch), not from the code interpreter or a shell.
 - If a control you may not use looks broken, report what you see. Do not click it to find out."""
 
-LOGIN_STEPS = r"""STEP 0 — Credentials (never print the password):
-Use the code interpreter to read login creds from AWS Secrets Manager:
+LOGIN_STEPS = r"""STEP 0 — Credentials:
+Read the login from AWS Secrets Manager with boto3, run from `shell`. The shell has the harness
+execution role. The code interpreter is a separate sandbox with no AWS credentials
+(NoCredentialsError), so don't use it for this:
+    python3 - <<'EOF'
     import boto3, json
     s = boto3.client("secretsmanager", region_name="{region}")
     c = json.loads(s.get_secret_value(SecretId="{secret_id}")["SecretString"])
-    print(c["url"])   # print URL only
-Keep email/password in variables; never echo the password.
+    print(c["url"]); print(c["email"]); print(c["password"])
+    EOF
+The browser's type action needs the password itself, so it enters your context once, from this
+output. Don't repeat it anywhere else: not in your text, files, reports, findings, evidence,
+file names or the final JSON.
 
 STEP 1 — Login:
 Use the browser tool. Navigate to the URL, wait for the SPA to render the sign-in form
@@ -116,10 +122,11 @@ These pages list identity ARNs and e-mail addresses. Never copy them into your r
 them instead ("3 identity hints listed").
 If a page shows "Administrator access required", set "persona_observed" to "non-admin"."""
 
-REPORT_STEPS = r"""STEP 3 — Save artifacts with the code interpreter:
+REPORT_STEPS = r"""STEP 3 — Save artifacts from `shell` (it has the role; the code interpreter's sandbox has no AWS
+credentials and can't see this filesystem):
   - write /mnt/reports/test-report-latest.json and /mnt/reports/summary.md
   - upload everything under /mnt/reports (incl. screenshots/) to
-    s3://{bucket}/{run_prefix}/ preserving relative paths.
+    s3://{bucket}/{run_prefix}/ with boto3, preserving relative paths.
 
 STEP 4 — Final answer (CRITICAL — do this even if you run low on time/steps):
 You MUST end your reply with a single fenced ```json block containing ONLY this object:
